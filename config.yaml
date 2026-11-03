@@ -1,5 +1,5 @@
 github:
-  owner: ''
+  owner: Dengthlk
   repo: daily-paper-reader
 arxiv_paper_setting:
   mode: standard
@@ -25,3 +25,123 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
+  intent_profiles: [
+    {
+      "tag": "game-llm-rl",
+      "description": "重点方向：游戏中的大语言模型、视觉语言模型智能体与强化学习。关注游戏决策、长程规划、探索、记忆、技能学习、自博弈与多智能体协作对抗，以及游戏环境评测。覆盖 Minecraft、NetHack、Atari、StarCraft 等游戏环境；优先技术方法和实验，降低仅游戏内容生成、叙事生成或商业推荐的相关性。",
+      "enabled": true,
+      "paper_sources": [
+        "arxiv"
+      ],
+      "keywords": [
+        {
+          "keyword": "game-playing agents",
+          "keyword_cn": "游戏智能体",
+          "query": "game-playing agents"
+        },
+        {
+          "keyword": "language model game agents",
+          "keyword_cn": "语言模型游戏智能体",
+          "query": "language model game agents"
+        },
+        {
+          "keyword": "reinforcement learning games",
+          "keyword_cn": "游戏强化学习",
+          "query": "reinforcement learning games"
+        },
+        {
+          "keyword": "self-play",
+          "keyword_cn": "自博弈",
+          "query": "self-play"
+        },
+        {
+          "keyword": "vision language game agents",
+          "keyword_cn": "视觉语言游戏智能体",
+          "query": "vision language game agents"
+        },
+        {
+          "keyword": "multi-agent game learning",
+          "keyword_cn": "多智能体游戏学习",
+          "query": "multi-agent game learning"
+        }
+      ],
+      "intent_queries": [
+        {
+          "query": "How do large language model and vision language model agents plan, act, and learn in interactive game environments?",
+          "query_cn": "大语言模型与视觉语言模型智能体在交互式游戏中的规划、行动和学习"
+        },
+        {
+          "query": "Methods for training game agents with reinforcement learning, self-play, and multi-agent cooperation or competition.",
+          "query_cn": "用强化学习、自博弈与多智能体协作对抗训练游戏智能体"
+        },
+        {
+          "query": "Memory, exploration, world models, and skill learning for long-horizon decision making in games such as Minecraft, NetHack, Atari, and StarCraft.",
+          "query_cn": "游戏中长程决策的记忆、探索、世界模型与技能学习"
+        },
+        {
+          "query": "Benchmarks and evaluation of language model and reinforcement learning game agents for strategy, planning, generalization, and sample efficiency.",
+          "query_cn": "语言模型与强化学习游戏智能体的策略、规划、泛化和样本效率评测"
+        }
+      ],
+      "updated_at": "2026-11-03T06:44:49.854Z"
+    },
+    {
+      "tag": "rl-agents",
+      "description": "重点方向：强化学习与大模型智能体。关注强化学习算法、策略优化、奖励建模、可验证奖励、在线与离线学习，以及用于大语言模型智能体的多步决策、工具使用、规划和多智能体学习。优先有明确方法或实验贡献的研究。",
+      "enabled": true,
+      "paper_sources": [
+        "arxiv"
+      ],
+      "keywords": [
+        {
+          "keyword": "reinforcement learning",
+          "keyword_cn": "强化学习",
+          "query": "reinforcement learning"
+        },
+        {
+          "keyword": "large language model agents",
+          "keyword_cn": "大语言模型智能体",
+          "query": "large language model agents"
+        },
+        {
+          "keyword": "agentic reinforcement learning",
+          "keyword_cn": "智能体强化学习",
+          "query": "agentic reinforcement learning"
+        },
+        {
+          "keyword": "policy optimization",
+          "keyword_cn": "策略优化",
+          "query": "policy optimization"
+        },
+        {
+          "keyword": "reinforcement learning verifiable rewards",
+          "keyword_cn": "可验证奖励强化学习",
+          "query": "reinforcement learning verifiable rewards"
+        },
+        {
+          "keyword": "multi-agent reinforcement learning",
+          "keyword_cn": "多智能体强化学习",
+          "query": "multi-agent reinforcement learning"
+        }
+      ],
+      "intent_queries": [
+        {
+          "query": "Reinforcement learning methods for training large language model agents in multi-turn decision making, planning, and tool use.",
+          "query_cn": "用强化学习训练大模型智能体的多轮决策、规划与工具使用"
+        },
+        {
+          "query": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+          "query_cn": "语言模型策略优化、奖励建模、信用分配与可验证奖励强化学习"
+        },
+        {
+          "query": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+          "query_cn": "在线、离线及基于模型的强化学习在探索、样本效率、稳定性和泛化上的进展"
+        },
+        {
+          "query": "Multi-agent reinforcement learning and language model agents for collaborative or competitive sequential decision making.",
+          "query_cn": "多智能体强化学习和大模型智能体的协作与对抗序贯决策"
+        }
+      ],
+      "updated_at": "2026-11-03T06:44:49.862Z"
+    }
+  ]
