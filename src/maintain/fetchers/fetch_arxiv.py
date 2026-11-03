@@ -293,6 +293,7 @@ def fetch_category_in_windows(
     seen_ids: set[str],
     unique_papers: dict,
     split_on_error_depth: int = 1,
+    query_prefix: str | None = None,
 ) -> datetime | None:
     """
     按时间窗口抓取单个大类。
@@ -307,7 +308,8 @@ def fetch_category_in_windows(
         group_start(f"Fetch category: {category} (window {idx}/{len(windows)} {start_str}..{end_str})")
         log(f"🚀 Fetching category: {category} | window {idx}/{len(windows)} ...")
 
-        query = f"cat:{category}* AND submittedDate:[{start_str} TO {end_str}]"
+        prefix = query_prefix or f"cat:{category}*"
+        query = f"({prefix}) AND submittedDate:[{start_str} TO {end_str}]"
         search = arxiv.Search(
             query=query,
             max_results=None,
@@ -374,6 +376,7 @@ def fetch_category_in_windows(
                     seen_ids=seen_ids,
                     unique_papers=unique_papers,
                     split_on_error_depth=split_on_error_depth - 1,
+                    query_prefix=query_prefix,
                 )
                 cat_max_right = fetch_category_in_windows(
                     client=client,
@@ -382,11 +385,17 @@ def fetch_category_in_windows(
                     seen_ids=seen_ids,
                     unique_papers=unique_papers,
                     split_on_error_depth=split_on_error_depth - 1,
+                    query_prefix=query_prefix,
                 )
                 for candidate in (cat_max_left, cat_max_right):
                     if candidate and (max_published_new is None or candidate > max_published_new):
                         max_published_new = candidate
-            time.sleep(5)
+            else:
+                # An unavailable source is not a successful empty search. Do not
+                # advance crawl state or publish an empty daily report on errors.
+                raise RuntimeError(
+                    f"arXiv retrieval failed for {category} ({start_str}..{end_str})"
+                ) from e
         finally:
             group_end()
 
@@ -520,14 +529,19 @@ def fetch_all_domains_metadata_robust(
         num_retries=5
     )
 
+    # Optional query-scoped ingestion avoids downloading every scientific field
+    # when a personal fork uses arXiv directly rather than the shared database.
+    query_prefix = str((config.get("arxiv_paper_setting") or {}).get("fetch_query") or "").strip()
+    categories = ["subscription"] if query_prefix else CATEGORIES_TO_FETCH
     # 2. 遍历分类进行抓取
-    for category in CATEGORIES_TO_FETCH:
+    for category in categories:
         cat_max = fetch_category_in_windows(
             client=client,
             category=category,
             windows=windows,
             seen_ids=seen_ids,
             unique_papers=unique_papers,
+            query_prefix=query_prefix or None,
         )
         if cat_max and (max_published_new is None or cat_max > max_published_new):
             max_published_new = cat_max
