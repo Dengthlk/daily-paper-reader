@@ -1,0 +1,1021 @@
+Title: Action-Value Calibration via Continuation Sharing for Long-Horizon Agentic Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2610.37195v1
+
+Published Time: Wed, 28 Oct 2026 01:22:48 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Action-Value Calibration via Continuation Sharing for Long-Horizon Agentic Reinforcement Learning 
+
+Yingjian Chen 1,2 , Lang Zhou 1,2 , Zixin Zhao 1,2 , Pingfan Li 1,2 ,Weishi Zheng 1,2 , Zhilin Zhao 1,2 *1Sun Yat-sen University, 2Shenzhen Loop Area Institute 
+
+Abstract 
+
+Reinforcement learning for long-horizon agents relies on feedback from sequences of interactions, making credit assignment to indi-vidual actions difficult. Existing methods such as GiGPO compare actions at shared states to compute relative advantages, but estimate each action’s value from a single sampled con-tinuation. The resulting local credit remains sensitive to decisions made later in the trajec-tory. To address this problem, we propose 
+
+ConCal (Con tinuation Cal ibration), a recur-sive continuation-value estimator that incor-porates continuation evidence already present in a rollout batch. ConCal matches visits from the same task by their incoming state-action-state transitions, combines shared con-tinuation evidence with each visit’s own tran-sition estimate, and propagates calibrated val-ues backward to refine earlier action-value es-timates. This reduces dependence on individ-ual sampled continuations and mitigates local credit distortions without additional rollouts. Held-out return diagnostics show lower error in within-group value differences and higher agreement with reference action orderings than estimates based on individual continuations. With Qwen2.5-1.5B-Instruct, ConCal improves success rates over GiGPO by 3.39 and 5.86 percentage points on ALFWorld and WebShop, respectively. Our code is available at https: //github.com/Yingjian-Chen/ConCal .
+
+1 Introduction 
+
+Large language models (LLMs) (Achiam et al., 2023; Qwen et al., 2025) support agents that rea-son, invoke tools, and interact with external envi-ronments (Yao et al., 2023; Schick et al., 2023). In web navigation and embodied tasks (He et al., 2024; Ichter et al., 2023), agents execute sequences of ac-tions and adapt their decisions to changing observa-tions (Xi et al., 2025). Reinforcement learning (RL) 
+
+> *
+
+Corresponding author a. GRPO    
+
+> Same Credit
+> 𝑠ଵ 𝑠ଶ 𝑎ଵ 𝑎ଶ 𝑎௡
+
+b. GiGPO    
+
+> 𝑠ଵ
+> Wrong Action Later Recovery Own 𝝉 𝟏
+> Own 𝝉 𝒏
+> 𝑠ଵ
+
+c. OURS               
+
+> 𝑎 ଵ(ଵ) 𝑆 ଶ(ଵ) 𝑎 ଶ(ଵ) 𝑎 ௡(ଵ) 𝑎 ଵ(௡) 𝑎 ଶ(௡) 𝑎 ௡(௡) 𝑆 ଶ(௡)
+> Matched Visits
+> 𝑎 ଵ(ଵ) 𝑎 ଶ(ଵ) 𝑎 ௡(ଵ) 𝑎 ଶ(ଶ) 𝑎 ௡(ଶ) 𝑎 ଶ(ଷ) 𝑎 ௡(ଷ) 𝑎 ଵ(௡) 𝑎 ଶ(௡) 𝑎 ௡(௡) 𝑆 ଶ(ଵ)
+> 𝑆 ଶ(ଶ)
+> 𝑆 ଶ(ଷ)
+> 𝑆 ଶ(௡)
+> Own 𝝉 𝟏
+> Peer 𝝉 𝟐
+> Peer 𝝉 𝟑
+
+Figure 1: Comparison of credit assignment strategies. (a) GRPO assigns the same trajectory-level credit to all actions. (b) GiGPO compares actions at shared state anchors based on their own sampled returns. (c) Our proposed ConCal estimates local action values from con-tinuation evidence shared among matched visits across rollouts. Visits from the same task are matched by their preceding state, executed action, and current state. 
+
+trains these behaviors from task outcomes (Wei et al., 2025; Wang et al., 2025; Jin et al., 2025). A central challenge is to translate feedback on the full interaction into credit for individual decisions. Group-based RL estimates relative advantages from trajectories sampled for the same task. In trajectory-level GRPO (Shao et al., 2024), every action in a trajectory receives the same episode-relative advantage, as illustrated in Figure 1(a). GiGPO (Feng et al., 2025) introduces local compar-1arXiv:2610.37195v1 [cs.LG] 27 Oct 2026 0 1 2 3 4            
+
+> 2.771 1.349
+> Credit conflict (%) −51.3%
+> 0510 15
+> 11.26 4.30 −61.8%
+> WebShop
+> 00.2 0.4 0.6
+> 0.427 0.247 −42.2%
+> 025 50
+> 39.16 10.94 −72.1%
+> ALFWorld GiGPO ConCal (ours)
+> Centered-value MSE
+> WebShop ALFWorld
+
+Figure 2: Credit-conflict rates and centered-value MSE on WebShop and ALFWorld. Credit conflict (%) mea-sures the proportion of repeated-decision groups in which the same recorded decision receives both positive and negative local credit. Centered-value MSE mea-sures group-centered estimation error against held-out returns. For illustration, both estimators are evaluated on the same subset of 1,000 existing rollout trajectories from each benchmark. 
+
+isons by grouping actions at shared state anchors and comparing their discounted returns, as illus-trated in Figure 1(b). The comparison is local, but the value estimate for each action still comes from its own sampled continuation. Consequently, a low return does not distinguish a poor decision from a useful decision followed by later failure. Similarly, a high return does not identify which earlier deci-sions contributed to success. The credit conflicts in Figure 2 illustrate the variability of these esti-mates on subsets of WebShop (Yao et al., 2022) and ALFWorld (Shridhar et al., 2021) rollouts. State grouping determines which actions are compared, while continuation estimation determines the val-ues entering that comparison. The rollout batch also contains evidence beyond each individual continuation. Existing approaches reuse cross-trajectory structure through transition-level advantage averaging and graph-based credit estimation (Li et al., 2026; Cheng et al., 2026; Yao et al., 2026). For a given task, repeated transitions with the same starting state, executed action, and resulting state link that action to several observed continuations, as illustrated in Figure 1(c). The visits following these transitions provide shared ev-idence about subsequent returns, while each visit records a particular reward and successor within its own trajectory. A single pooled value removes these differences from the estimates assigned to matched visits. Our insight is to calibrate action values by combining shared continuation evidence with each visit’s own transition estimate and propa-gating the resulting estimates backward to earlier decisions. Accordingly, we propose Con tinuation 
+
+Cal ibration (ConCal ), a recursive estimator of continuation values. ConCal matches visits by their incoming state-action-state transitions and blends the transition estimate of each visit with the mean estimate of matched visits. This partial sharing retains a separate estimate for each visit. Recursive updates carry the calibrated continuation values backward along recorded trajectories, allowing earlier action-value estimates to incorporate evidence from other rollouts. Each action is evaluated from its own observed reward and the calibrated continuation value of its actual successor, without collecting additional rollouts. The illustrative held-out diagnostics in Figure 2 show lower error in relative values and greater local credit consistency than estimates based on individual continuations. In summary, our contributions are as follows: (1) Analysis of Local Credit Assignment. We ana-lyze the dependence of return-based local credit on individual sampled continuations through credit-conflict measurements and held-out relative-value diagnostics. (2) Calibrating Local Action Val-ues. We introduce ConCal, which combines shared continuation evidence from matched visits with each visit’s own transition estimate through recur-sive updates to refine local action-value estimates within the existing rollout batch. (3) Empirical Evaluation. With Qwen2.5-1.5B-Instruct, Con-Cal improves success rates over GiGPO by 3.39 and 5.86 percentage points on ALFWorld and Web-Shop, respectively, and achieves higher reported mean success rates than GraphGPO on both bench-marks. Ablations support recursive sharing and retention of individual transition estimates, while diagnostics examine relative-value magnitudes and action orderings. 
+
+2 Related Work 
+
+Reinforcement learning for language agents. 
+
+Reinforcement learning (RL) has been ap-plied to align language models with human preferences (Ouyang et al., 2022) and train agents through interaction with external environ-ments (Carta et al., 2023). Multi-turn RL enables agents to learn sequential decision-making from environment feedback (Zhou et al., 2024), with ap-2plications spanning device control (Bai et al., 2024), web navigation (Wei et al., 2025), and search-augmented reasoning (Jin et al., 2025). Recent frameworks further support long-horizon training across diverse interactive environments (Xi et al., 2026). Our work focuses on credit assignment in long-horizon agentic RL. 
+
+Group-based local credit assignment. Group-based RL estimates relative advantages from sam-pled rewards without a learned value baseline (Ah-madian et al., 2024; Shao et al., 2024). Subse-quent work improves optimization and sampling to address training bias and instability (Liu et al., 2025; Yu et al., 2025). For multi-turn agents, lo-cal comparisons extend from shared state anchors to groups that account for historical context (Feng et al., 2025; He et al., 2026). Our work focuses on calibrating the action-value estimates entering these local comparisons through shared continua-tion evidence from matched visits. 
+
+Cross-trajectory credit estimation. Shared structure across trajectories provides additional evidence for step-level credit assignment. Tree-GRPO adopts tree-search sampling and computes relative advantages within and across trees (Ji et al., 2026). SALT averages trajectory-level advan-tages over matched state-action-state transitions (Li et al., 2026). GraphGPO aggregates rollouts into a state-transition graph and derives step-level credit from shortest-path distances to successful termi-nal states (Cheng et al., 2026). GRAFT estimates state values through Bellman updates on a trajec-tory graph and derives step-level credit from these values (Yao et al., 2026). PGPO augments step-level advantages by incorporating differences be-tween state potentials estimated from grouped re-turns (Zheng et al., 2026). In this paper, we in-troduce ConCal to calibrate local action values by recursively combining shared continuation evi-dence with visit-specific transition estimates, with an in-depth analysis revealing how calibration and normalization shape action preferences and local credit. 
+
+3 Preliminaries 
+
+3.1 Group-Based Agent RL 
+
+We consider language agents that interact sequen-tially with an environment to complete tasks. Given a task x, the agent receives an observed state st and generates a textual action at based on the current state and retained interaction history. The environ-ment returns a reward rt and the next state st+1 .Rewards reflect the terminal task outcome, with intermediate task rewards set to zero. At each train-ing iteration, the rollout policy π0 = πold = πθold 
+
+is held fixed to collect N trajectories per task. For a given task x, let D = {τi}Ni=1 denote its rollout group. The full training batch B contains the roll-out groups for all sampled tasks. Each trajectory τi
+
+contains Ti ≤ H transitions (s(i) 
+
+> t
+
+, a (i) 
+
+> t
+
+, r (i) 
+
+> t
+
+, s (i)
+
+> t+1
+
+),where H is the maximum number of interactions. Each decision step (i, t ), with 0 ≤ t < T i, consti-tutes a visit to the observed state s(i) 
+
+> t
+
+.
+
+Episode-level advantages. GRPO compares re-turns within a rollout group (Shao et al., 2024). For the total task return R(τi) = PTi−1 
+
+> t=0
+
+r(i) 
+
+> t
+
+, the episode-relative advantage is 
+
+AE, (i) = R(τi) − ¯RdE
+
+, (1) where ¯R is the mean trajectory return. Standard GRPO sets dE = σR + ϵnum , with σR denoting the standard deviation and ϵnum > 0 a numerical stabilizer. Mean centering instead sets dE = 1 . All actions in a trajectory share the same episode-level advantage. 
+
+Step-level advantages. GiGPO introduces local comparisons at repeated state anchors (Feng et al., 2025). Each action is evaluated by its sampled discounted return G(i) 
+
+> t
+
+= PTi−1 
+
+> u=t
+
+γu−tr(i) 
+
+> u
+
+, where 
+
+γ ∈ [0 , 1] is the discount factor. Let S(i) 
+
+> t
+
+contain all visits in D sharing the state anchor of visit (i, t ).The local advantage and combined training signal are 
+
+AS, (i) 
+
+> t
+
+=
+
+G(i) 
+
+> t
+
+− ¯GS(i)
+
+> t
+
+dS(i)
+
+> t
+
+,A(i) 
+
+> t
+
+= AE, (i) + βA S, (i) 
+
+> t
+
+,
+
+(2) where ¯GS is the group mean, dS is the normaliza-tion scale, and β ≥ 0 weights the local advantage. The combined advantages drive PPO-style policy optimization (Schulman et al., 2017). 
+
+3.2 Local Action-Value Estimation 
+
+Let ht denote the full observed interaction history before action at, including the task, current state, and remaining interaction budget. The action value under π0 is 
+
+Qπ0 (h, a ) = Eπ0 [Gt | ht = h, a t = a] , (3) 3𝑅(𝜏 ଷ ) = 0 𝑅(𝜏 ସ ) = 0 𝑅(𝜏 ே ) = 10 𝑅(𝜏 ଶ ) = 10 𝑅(𝜏 ଵ ) = 10 𝜏ଵ :
+
+𝜏ଶ :
+
+𝜏ଷ :
+
+𝜏ସ :
+
+𝜏ே :
+
+𝑠ଵ 
+
+Rollout Data Recursive Continuation Calibration                                                       
+
+> 𝑎 ଵ(ଵ) 𝑟 ଵ(ଵ) 𝑠 ଶ(ଵ) 𝑎 ଶ(ଵ) 𝑟 ଶ(ଵ) 𝑠 ଷ(ଵ) 𝑎 ଷ(ଵ) 𝑟 ଷ(ଵ) 𝑎 ଵ(ଶ) 𝑟 ଵ(ଶ) 𝑠 ଶ(ଶ) 𝑎 ଶ(ଶ) 𝑟 ଶ(ଶ) 𝑠 ଷ(ଶ) 𝑎 ଷ(ଶ) 𝑟 ଷ(ଶ) 𝑎 ଵ(ଷ) 𝑟 ଵ(ଷ) 𝑠 ଶ(ଷ) 𝑎 ଶ(ଷ) 𝑟 ଶ(ଷ) 𝑠 ଷ(ଷ) 𝑎 ଷ(ଷ) 𝑟 ଷ(ଷ) 𝑎 ଵ(ସ) 𝑟 ଵ(ସ) 𝑠 ଶ(ସ) 𝑎 ଶ(ସ) 𝑟 ଶ(ସ) 𝑠 ଷ(ସ) 𝑎 ଷ(ସ) 𝑟 ଷ(ସ) 𝑎 ଵ(ே) 𝑟 ଵ(ே) 𝑠 ଶ(ே) 𝑎 ଶ(ே) 𝑟 ଶ(ே) 𝑠 ଷ(ே) 𝑎 ଷ(ே) 𝑟 ଷ(ே)
+> Example Matching Key 𝒔 𝟐 (𝟐) 𝑠 ଷ(ଶ)
+> 𝑎 ଶ(ଶ)
+> Continuations from Matched Visits 𝑪(𝒛)
+> Peer 𝜏ଵ 𝑌 ଷ(ଵ)
+> Own 𝜏ଶ 𝑌 ଷ(ଶ)
+> Peer 𝜏ଷ 𝑌 ଷ(ଷ) 𝑌 ଷ(௜) = 𝑟 ଷ(௜) + 𝛾𝑉(𝑠 ସ(௜) )
+> Own 𝒀 𝟑 (𝟐) Mean 𝝁(𝒛) 𝟏 − 𝜶 𝜶 𝛼 = 𝑛 ௭
+> 𝑛 ௭+ 1 Recursive Updates
+> 𝑉(𝑠 ଷ(ଶ) ) = (1 − 𝛼)𝑌 ଷ(ଶ) + 𝛼𝜇(𝑧)
+
+Actual Transition Matched Visits Own Visit   
+
+> 𝑎 ଶ(ଶ) , 𝑟 ଶ(ଶ)
+> Relative Advantage
+> Within state groups
+
+𝐴 ா + 𝛽𝐴 ௌ PPO 𝑄 ଶ(ଶ) = 𝑟 ଶ(ଶ) + 𝛾𝑉(𝑠 ଷ(ଶ) )       
+
+> Local Action Value
+> 𝑠 ଷ(ଵ) 𝑎 ଷ(ଵ) 𝑟 ଷ(ଵ)
+> 𝑠 ଷ(ଶ) 𝑎 ଷ(ଶ) 𝑟 ଷ(ଶ)
+> 𝑠 ଷ(ଷ) 𝑎 ଷ(ଷ) 𝑟 ଷ(ଷ)
+> 𝑠 ଶ(ଶ) 𝑠 ଷ(ଶ)
+
+Figure 3: Overview of ConCal. (1) ConCal matches visits across same-task rollouts by their preceding state, executed action, and current state to identify shared continuation evidence ( Left ). (2) It recursively combines continuation evidence from matched visits while retaining each visit’s own transition contribution, producing calibrated continuation values for action evaluation. At each recursion depth, all visits are updated using successor estimates from the previous depth ( Right ). (3) Each action is evaluated using its immediate reward and its actual successor’s calibrated continuation value. The resulting action values are compared within state groups to obtain local advantages, which are combined with episode-level advantages for PPO updates ( Bottom ). 
+
+where Gt is the discounted return over the remain-ing episode. The expectation accounts for subse-quent policy decisions and environment transitions. GiGPO relies on one sampled return G(i)
+
+t to esti-mate Qπ0 (h(i)
+
+t , a (i)
+
+t ). Although state grouping sup-plies a local comparison baseline, each estimate still depends on a single sampled continuation. We seek an estimator eQ(i)
+
+t = E(D, i, t ) that incorpo-rates continuation evidence from matched visits across trajectories to improve local action-value estimates without additional rollouts. 
+
+4 Continuation Calibration 
+
+We introduce C ON CAL , a recursive continuation-value estimator that evaluates actions from con-tinuation evidence shared across existing rollouts. Figure 3 illustrates three steps. Matching Visits 
+
+identifies visits that share continuation evidence. 
+
+Recursive Continuation Calibration blends indi-vidual transition estimates with the matched mean. 
+
+Action Values and Policy Optimization converts calibrated continuation values into action values and relative advantages for policy updates. 
+
+4.1 Matching Visits 
+
+To construct the estimator E(D, i, t ) introduced in Section 3.2, we first match visits across trajectories by the task, preceding state, executed action, and current state. Matching the incoming transition distinguishes visits that reach the same observed state through different preceding state-action pairs. For visit (i, t ), the matching key is 
+
+z(i)
+
+t =
+
+
+
+x, s (i)
+
+t−1, a (i)
+
+t−1, s (i)
+
+t
+
+
+
+. (4) At t = 0 , a start marker replaces the preceding state and action. We collect visits with the same z
+
+into a sharing pool: 
+
+C(z) = {(j, k ) | z(j)
+
+k = z}, (5) where (j, k ) denotes the visit at step k of trajectory 
+
+τj in D. Matched visits need not occur at the same time step. To evaluate action a(i)
+
+t , we draw on the pool 
+
+C(z(i)
+
+t+1 ) to calibrate the continuation value at its actual successor visit (i, t + 1) when t + 1 < T i.For example, in Figure 3, the tuples (s(i)2 , a (i)2 , s (i)3 )
+
+match for i ∈ { 1, 2, 3}, so the continuations from these visits at s(i)3 provide shared evidence for eval-uating a(2) 2 .
+
+4.2 Recursive Continuation Calibration 
+
+The continuation value at a visit depends on its im-mediate reward and the value of its actual successor. ConCal calibrates this value with evidence from matched visits while retaining a separate estimate 4for each visit. Let bVb(s(i) 
+
+> t
+
+) denote the continua-tion estimate for visit (i, t ) at recursion depth b,initialized as bV0(s(i) 
+
+> t
+
+) = 0 .
+
+Visit-specific calibration. We first compute the transition estimate for each visit: 
+
+Y (i) 
+
+> t,b
+
+= r(i) 
+
+> t
+
++ γ bVb−1(s(i)
+
+> t+1
+
+). (6) The successor term is zero when no successor visit is recorded, including at collection truncations. The pool mean averages the transition estimates of all matched visits, including the current visit: 
+
+μb(z) = 1
+
+|C (z)|
+
+X
+
+> (j,k )∈C (z)
+
+Y (j) 
+
+> k,b
+
+. (7) ConCal then calibrates the continuation value at each visit by blending its transition estimate with the pool mean: 
+
+bVb(s(i) 
+
+> t
+
+) = (1 − αz )Y (i) 
+
+> t,b
+
++ αz μb(z), (8) where z = z(i) 
+
+> t
+
+, αz = nz  
+
+> nz+1
+
+, and nz is the num-ber of distinct trajectories in C(z). This calibration moves the estimate for each visit toward the shared mean while retaining its own transition contribu-tion. The pool mean averages visits, and its weight increases with the number of distinct contributing trajectories. At a fixed sharing pool and recursion depth, cal-ibration preserves the mean of the transition esti-mates and contracts their pairwise differences. For any (i, t ), (j, k ) ∈ C (z),
+
+bVb(s(i) 
+
+> t
+
+) − bVb(s(j) 
+
+> k
+
+) = Y (i) 
+
+> t,b
+
+− Y (j)
+
+> k,b
+
+nz + 1 . (9) Each visit therefore retains its own deviation from the shared mean, scaled by 1/(nz + 1) .
+
+Recursive propagation. In Figure 3, each recur-sive update combines the transition estimate for visit (2 , 3) with the mean of the three matched es-timates to calibrate its continuation value. This computation repeats for b = 1 , . . . , H , where H is the maximum interaction budget. At depth b, all visits incorporate successor estimates from depth 
+
+b − 1. The calibrated values then enter the transi-tion estimates of preceding visits at the next depth, propagating shared continuation evidence back-ward through recorded transitions. 
+
+4.3 Action Values and Policy Optimization 
+
+The recursively calibrated continuation values pro-vide the basis for action evaluation. Each action retains its observed reward and actual successor: 
+
+eQ(i) 
+
+> t
+
+= r(i) 
+
+> t
+
++ γ bVH−t−1(s(i)
+
+> t+1
+
+), (10) where t = 0 , . . . , T i − 1. The successor estimate is taken at recursion depth H − t − 1, correspond-ing to the remaining interaction budget after the action. The successor term follows the boundary convention defined above. Batch-wise normalization converts the calibrated action values into step advantages by centering them within each state group and applying a shared batch-level scale. The resulting step advantages are combined with the episode-level advantage in GiGPO: 
+
+eAS, (i) 
+
+> t
+
+=
+
+eQ(i) 
+
+> t
+
+− eQS(i)
+
+> t
+
+edB
+
+,
+
+eA(i) 
+
+> t
+
+= AE, (i) + β eAS, (i) 
+
+> t
+
+,
+
+(11) where eQS is the mean action-value estimate within the group, edB is a normalization scale shared across the batch, and β balances episode-level and step-level credit. On WebShop, the shared scale is one, which reduces step-advantage normalization to mean centering. Details are provided in Ap-pendix E. We then optimize the following clipped objective with the combined advantages: 
+
+J (θ) = EB∼ πold 
+
+" LX
+
+> k=1
+
+wk min 
+
+
+
+ρk eAk,
+
+clip  ρk, 1 − ϵ, 1 + ϵ eAk
+
+
+
+− λKL DKL (πθ∥πref )
+
+#
+
+,
+
+(12) where L is the number of generated tokens, wk
+
+denotes the normalized actor-loss weight of token 
+
+k with P 
+
+> k
+
+wk = 1 , and eAk is the combined ad-vantage of the step containing that token. The im-portance ratio is ρk = πθ(ak | hk)/π old (ak | hk),where ak is the generated token and hk contains the policy input context and preceding tokens within the action. The clipping threshold is ϵ, and λKL 
+
+controls the KL penalty relative to the reference policy πref . The KL term denotes the weighted average over token contexts hk with weights wk.The advantages remain fixed during optimization. Algorithm 1 in Appendix C summarizes the action-value estimation procedure. 5Type Method ALFWorld WebShop Pick Clean Cool Look Heat Pick2 All Score Succ. 
+
+Closed-Source Models 
+
+Prompting GPT-4o 75.3 60.8 31.2 56.7 21.6 49.8 48.0 31.8 23.7 Prompting Gemini-2.5-Pro 92.8 63.3 62.1 69.0 26.6 58.7 60.3 42.5 35.9 
+
+Qwen2.5-1.5B-Instruct 
+
+Prompting Qwen2.5 5.9 5.5 3.3 9.7 4.2 0.0 4.1 23.1 5.2 Prompting ReAct 17.4 20.5 15.7 6.2 7.7 2.0 12.8 40.1 11.3 Prompting Reflexion 35.3 22.2 21.7 13.6 19.4 3.7 21.8 55.8 21.9 RL Training PPO (with critic) 64 .8±3.5 40 .5±6.9 57 .1±4.9 60 .6±6.6 46 .4±4.0 47 .4±1.9 54 .4±3.1 73 .8±3.0 51 .5±2.9
+
+RL Training RLOO 88 .3±3.0 52 .8±8.6 71 .0±5.9 62 .8±8.7 66 .4±5.5 56 .9±4.7 69 .7±2.5 73 .9±5.6 52 .1±6.7
+
+RL Training GRPO 82 .89 ±3.62 82 .14 ±6.37 73 .86 ±6.84 78 .57 ±0.00 77 .78 ±4.54 71 .43 ±3.89 77 .86 ±1.33 84 .73 ±0.49 71 .35 ±2.05 
+
+RL Training GiGPO ∗ 98 .81 ±1.68 95 .16 ±3.89 81 .46 ±0.56 78 .57 ±0.00 94 .44 ±0.00 93 .65 ±5.94 90 .88 ±0.97 87 .94 ±0.43 73 .83 ±2.30 
+
+RL Training GraphGPO 95 .15 ±1.62 100 .00 ±0.00 85 .26 ±2.58 85 .71 ±5.83 96 .30 ±2.61 93 .65 ±2.24 92 .71 ±1.32 89 .29 ±1.48 78 .65 ±3.86 
+
+RL Training C ON CAL 98 .89 ±1.92 98 .72 ±2.22 89 .12 ±9.52 84 .16 ±8.94 94 .64 ±5.27 91 .07 ±3.27 94 .27 ±1.97 90 .18 ±1.27 79 .69 ±3.41 
+
+Table 1: Performance on ALFWorld and WebShop. For ALFWorld, we report per-category and overall success rates (%). For WebShop, we report average task scores and success rates (%). ConCal results report validation means ±
+
+sample standard deviations across three runs. ∗ marks the base method on which ConCal builds. Baseline results are taken from prior publications (Feng et al., 2025; Cheng et al., 2026). The best and second-best means are shown in bold and underlined, respectively. 
+
+5 Experiments 
+
+5.1 Experimental Setup Benchmarks. Following prior work (Feng et al., 2025; Cheng et al., 2026), we evaluate ConCal on two benchmarks, ALFWorld (Shridhar et al., 2021) and WebShop (Yao et al., 2022). ALFWorld comprises six categories of household tasks per-formed through text-based interactions. WebShop requires agents to search for and purchase products that satisfy user requirements. We report overall and per-category success rates on ALFWorld, and average task score and success rate on WebShop. 
+
+Baselines. We compare against GPT-4o (Hurst et al., 2024) and Gemini-2.5-Pro (Comanici et al., 2025), prompting methods ReAct (Yao et al., 2023) and Reflexion (Shinn et al., 2023), and RL meth-ods PPO (Schulman et al., 2017), RLOO (Ah-madian et al., 2024), GRPO (Shao et al., 2024), GiGPO (Feng et al., 2025), and GraphGPO (Cheng et al., 2026). We also include Qwen2.5-Instruct without additional RL training. 
+
+Implementation Details. We train Qwen2.5-1.5B-Instruct for 150 updates, collecting eight tra-jectories for each of 16 tasks per update. Main results report the mean and sample standard devi-ation across three independent training runs. Full training and evaluation settings are provided in Ap-pendix B. 0 30 60 90 120 150 Training updates 0.0 0.2 0.4 0.6 0.8 1.0 Episode Success Rate      
+
+> ALFWorld
+> 030 60 90 120 150 Training updates
+> WebShop
+> GiGPO ConCal (ours)
+
+Figure 4: Learning curves of ConCal in green and GiGPO in blue on ALFWorld and WebShop with Qwen2.5-1.5B-Instruct. Training episode success rates are plotted against policy updates, with faint lines show-ing unsmoothed curves and bold lines showing EMA-smoothed curves with decay 0.95 .
+
+5.2 Experimental Results Main results. Table 1 compares ConCal with ex-isting methods on ALFWorld and WebShop. Con-Cal achieves the highest reported aggregate mean success rates among the compared methods, reach-ing 94.27% overall success on ALFWorld and a task score of 90.18 with 79.69% success on Web-Shop. Compared with GRPO, ConCal improves success rates by 16.41 and 8.34 percentage points (pp) on ALFWorld and WebShop, respectively, and raises the WebShop task score by 5.45 points. Rel-ative to its base method, GiGPO, ConCal achieves success-rate gains of 3.39 pp on ALFWorld and 5.86 pp on WebShop, together with a 2.24-point increase in WebShop task score. Its reported aggre-60 50 100 Action-order comparison (%)         
+
+> ALFWorld
+> MSE ↓ Own-MC 1.921 Gap-matched 1.280
+> ConCal 1.263 WebShop  Own-MC 1.425 Gap-matched 1.188
+> ConCal 1.186
+> Agreement Tie Disagreement 58.8 58.8
+> 61.2
+> 74.5 74.5
+> 81.8
+
+Figure 5: Calibration of relative action values. Agree-ment and Disagreement indicate whether the estimated action ordering matches or reverses the ordering given by held-out returns. Tie denotes near-equal estimated values. Ordering comparisons exclude action pairs with tied held-out returns. Gap-matched rescales the cen-tered Own-MC values within each group to match the norm of the ConCal estimates while preserving their ordering. MSE measures group-centered value error against held-out returns. 
+
+gate mean success rates are also higher than those of GraphGPO on both benchmarks. 
+
+Learning dynamics. Figure 4 compares the train-ing success rates of ConCal and GiGPO on ALF-World and WebShop. On ALFWorld, ConCal im-proves more rapidly during the early-to-middle stages and maintains higher success rates through most of training. On WebShop, the two methods initially follow similar trends, but ConCal achieves higher success rates in later stages and maintains this advantage through the final updates. The gains emerge at different training stages across the two benchmarks under the reported rollout schedule. Section 5.3 assesses action-value estimation quality. Sections 5.4.1 and 5.4.2 examine estima-tion components and advantage normalization, Sec-tion 5.5 reports reuse coverage and computational cost, and Section 5.6 presents a case study. 
+
+5.3 Quality of Local Action-Value Estimates 
+
+To investigate how shared evidence calibrates rela-tive action values, we compare Own-MC and Con-Cal on the same frozen rollouts for each benchmark, with held-out continuation returns as the reference, following the split described in Appendix D. Own-MC estimates each action value from the Monte Carlo return along the same trajectory, as in GiGPO. We measure group-centered value MSE and action-order agreement to assess the accuracy of value differences and preference direction. Gap-matched Estimator ALFWorld WebShop All (%) Score Succ. (%) Own-MC 90 .89 ± 1.63 88 .25 ± 0.80 73 .44 ± 2.07                            
+
+> Fully pooled 91 .93 ±2.39 89 .79 ±1.54 78 .65 ±4.51
+> Single-pass 93 .49 ±1.97 90 .25 ±2.28 78 .65 ±3.16
+> ConCal 94 .27 ±1.97 90 .18 ±1.27 79 .69 ±3.41
+
+Table 2: Continuation-estimator ablations on ALFWorld and WebShop. We report overall success rate on ALF-World and task score and success rate on WebShop, as means ± sample standard deviations across three runs. The best and second-best means are shown in bold and underlined, respectively. 
+
+serves as a diagnostic control that rescales the cen-tered Own-MC values in each group to the norm of the ConCal estimates while preserving their order-ing. This tests how much of the estimation-error reduction can be reproduced by adjusting prefer-ence strength alone. Figure 5 shows that ConCal reduces centered-value MSE by 34.3% on ALF-World and 16.8% on WebShop. Gap-matched re-produces most of the MSE reduction while preserv-ing the Own-MC ordering, showing that much of the error reduction can be recovered by adjusting preference strength alone. ConCal also increases ordering agreement from 58.8% to 61.2% and from 74.5% to 81.8%, respectively. Within the evalu-ated comparison groups, these results show that shared continuations improve relative action-value estimates by calibrating preference strength and increasing agreement with the reference ordering. 
+
+5.4 Component Analysis 
+
+We evaluate continuation estimation through task-performance ablations and normalization through frozen-estimate diagnostics. 
+
+5.4.1 Continuation Estimation 
+
+We further compare ConCal with Own-MC and two variants to examine how continuation estimation contributes to task performance. Single-pass shares continuation returns once, without recursively prop-agating updated estimates backward. Fully pooled retains recursion but assigns each matched visit the pooled mean, removing its separate visit-specific contribution. All other components and settings remain unchanged. Table 2 supports three findings. (1) All three estimators that share continuation ev-idence (Single-pass, Fully pooled, and ConCal) outperform Own-MC across the reported metrics, 71 2 3 4 501234Relative step-advantage RMS     
+
+> ALFWorld
+> 1234501234
+> WebShop
+> Value-spread quintile Group-wise Batch-wise
+
+Figure 6: Relationship between calibrated value spread and step-advantage magnitude under group-wise and batch-wise normalization on ALFWorld and WebShop. Within each batch, state groups with nonzero value spread are divided into five approximately equal-sized bins by the root mean square (RMS) of their centered action values, from bin 1 with the smallest spread to bin 5 with the largest. The vertical axis shows the step-advantage RMS of each group divided by the corre-sponding batch-level step-advantage RMS. Boxes show the middle 50% of values, whiskers the 5th–95th per-centiles, and lines connect medians. 
+
+supporting the benefit of using evidence from other trajectories. (2) ConCal achieves higher success rates than Single-pass on both benchmarks, sup-porting the recursive incorporation of updated esti-mates into earlier decisions. Their WebShop task scores are close, with a slightly higher mean for Single-pass and less variation across seeds for Con-Cal. (3) ConCal outperforms Fully pooled across all metrics, indicating that retaining each visit’s own estimate remains useful even when continua-tions are shared. Together, these findings support ConCal’s design of recursive evidence reuse with visit-specific estimation. 
+
+5.4.2 Advantage Normalization Diagnostic 
+
+To examine whether normalization preserves the preference strength calibrated by ConCal, we test whether groups with larger value gaps receive stronger step advantages. For this diagnostic com-parison, we apply group-wise and batch-wise nor-malization to the same frozen ConCal estimates and compare step-advantage magnitudes across five bins ordered from smaller to larger value gaps. Figure 6 shows that group-wise normalization pro-duces similar median advantage magnitudes across bins on both benchmarks. Groups with small cal-ibrated value gaps therefore receive step signals comparable in magnitude to those with large gaps, weakening the distinction between weak and strong 0 0.2 0.4 0.6 0.8 Rollout Update Old Prob Ref Prob Reward Matching Recursive Calibration 0.5083           
+
+> 0.0375 0.001907
+> 50 100 150 108.85 19.00 5.05 4.74 025 50 75 100 ALFWorld WebShop 55.4% 7.5% 43.4% 32.5% Time (s)
+> (a) Runtime
+> Actions (%)
+> (b) Continuation-reuse coverage
+> Direct coverage Indirect coverage Uncovered 92.5% covered 67.5% covered 37.1% 24.1%
+
+Figure 7: Computational cost and coverage of Con-Cal. (a) Runtime averaged equally over ALFWorld and WebShop. Blue bars denote common training stages, and green bars denote our visit matching and recursive calibration. The x-axis is broken. (b) Direct cover-age denotes actions whose next visits have matches in other trajectories. Indirect coverage denotes additional actions reached through recursive propagation of cal-ibrated continuation values. Gray segments indicate uncovered actions, and brackets show total coverage. 
+
+estimated action preferences. Under batch-wise normalization, median advantage magnitudes in-crease with value spread, so smaller gaps receive weaker step signals and larger gaps receive stronger signals. This preserves the preference-strength dif-ferences calibrated by ConCal and supports our adoption of batch-wise normalization when com-puting step advantages. 
+
+5.5 Continuation Reuse and Computational Cost 
+
+To assess the computational cost and coverage of ConCal, we examine stage runtimes and the frac-tion of actions covered by shared continuation ev-idence. Figure 7(a) shows that rollout is the most time-consuming training stage, taking 108.85 s on average, followed by policy updates at 19.00 s. In separate frozen-batch replays, visit matching and recursive calibration for ConCal take 0.0375 s and 0.0019 s per batch, respectively, under the measure-ment setup in Appendix D. Figure 7(b) shows that directly matched next visits provide shared con-tinuation evidence for 55.4% of recorded actions on ALFWorld and 43.4% on WebShop. Recur-8……         
+
+> Repeat Zest
+> G = 6.9834
+> 𝐴 ௦=+ 0.2484
+> Select 5X
+> G = 0.0000
+> 𝐴 ௦=− 6.7350
+> GiGPO Matched Visits Repeated Clicks
+> ∆𝑮 =− 𝟔. 𝟗𝟖𝟑𝟒
+> ……
+> Repeat Zest
+> 𝑄 = 3.8517
+> 𝐴 ௌ=− 0.2607
+> Select 5X
+> 𝑄 = 4.4969
+> 𝐴 ௌ=+ 0.3845
+> ConCal Matched Visits Repeated Clicks
+> ∆𝑸 =+ 𝟎. 𝟔𝟒𝟓𝟐
+> Task requirements (excerpt): Color: Zest · Size: 5X Current state: Zest selected · Size not selected
+> Current state Current state
+
+Figure 8: Case study in WebShop. Both panels evalu-ate the same two trajectories. Both gaps subtract the estimate for repeating Zest from that for selecting 5X. Green dashed links indicate shared continuation evi-dence; two of the three matched visits are shown. Web-pages are reconstructed from recorded states using the official interface. 
+
+sive propagation extends this coverage to 92.5% and 67.5%, respectively, allowing earlier actions to access shared continuation evidence even when their immediate successor visits have no cross-trajectory matches. ConCal therefore makes shared continuation evidence available to a broad fraction of recorded actions at a small measured cost for matching and calibration, without collecting addi-tional rollouts. 
+
+5.6 Case study 
+
+We present a WebShop case study of local credit assignment for web agents (Figure 8). The task requires Zest color and size 5X, but the agent has selected only the color. GiGPO estimates each ac-tion’s value from its own sampled continuation. It assigns negative step advantage to Select 5X be-cause its continuation ends in task failure, while favoring Repeat Zest , whose trajectory succeeds, yielding a value gap of ∆G = −6.9834 . ConCal calibrates action-value estimates using evidence from multiple continuations and reverses this pref-erence, with ∆ eQ = +0 .6452 . It assigns positive step advantage to Select 5X despite its failed sam-pled continuation, favoring completion of the re-quired size selection. This case illustrates how ConCal uses shared continuation evidence to as-sign positive local credit to useful actions despite failures in their own sampled continuations. 
+
+6 Conclusion 
+
+We introduce ConCal, a recursive continuation-value estimator for long-horizon agentic reinforce-ment learning. ConCal combines evidence from matched visits with the transition estimate of each visit and propagates calibrated continuation val-ues to earlier decisions without additional rollouts. Experiments on ALFWorld and WebShop show im-proved task performance, with ablations supporting both recursive evidence reuse and visit-specific es-timation. Further analyses show that shared contin-uations calibrate preference strength and improve agreement with action orderings derived from held-out returns. These findings support calibrating rel-ative action-value estimates with shared continua-tion evidence from existing rollout groups in the evaluated settings. 
+
+Limitations 
+
+The matching rule of ConCal relies on observed incoming transitions and does not enforce agree-ment in the full interaction history, hidden state, or remaining interaction budget. Such differences can introduce bias into the shared estimates incor-porated into subsequent recursive updates. The extent of continuation reuse also depends on the availability of matching visits within the rollout batch. Future work could refine matching with relevant historical information while maintaining sharing coverage, and account for uncertainty in continuation estimates. 
+
+Use of Generative AI Tools 
+
+Generative AI tools were used for language refine-ment and to assist with figure preparation and cod-ing. The authors reviewed the resulting content and take full responsibility for the methodology, results, and conclusions. 
+
+References 
+
+Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. 2023. GPT-4 technical re-port. arXiv preprint arXiv:2303.08774 .Arash Ahmadian, Chris Cremer, Matthias Gallé, Marzieh Fadaee, Julia Kreutzer, Olivier Pietquin, Ah-met Üstün, and Sara Hooker. 2024. Back to basics: Revisiting REINFORCE-style optimization for learn-ing from human feedback in LLMs. In Proceedings of the 62nd Annual Meeting of the Association for 
+
+9Computational Linguistics (Volume 1: Long Papers) ,pages 12248–12267. Hao Bai, Yifei Zhou, Mert Cemri, Jiayi Pan, Alane Suhr, Sergey Levine, and Aviral Kumar. 2024. DigiRL: Training in-the-wild device-control agents with au-tonomous reinforcement learning. In Advances in Neural Information Processing Systems , volume 37, pages 12461–12495. Thomas Carta, Clément Romac, Thomas Wolf, Sylvain Lamprier, Olivier Sigaud, and Pierre-Yves Oudeyer. 2023. Grounding large language models in interac-tive environments with online reinforcement learning. In International Conference on Machine Learning ,pages 3676–3713. Xin Cheng, Shuo He, Lang Feng, HaiYang Xu, Ming Yan, Lei Feng, and Bo An. 2026. Beyond trajectory-level attribution: Graph-based credit assignment for agentic reinforcement learning. arXiv preprint arXiv:2605.26684 .Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Mar-cel Blistein, Ori Ram, Dan Zhang, Evan Rosen, et al. 2025. Gemini 2.5: Pushing the frontier with ad-vanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 .Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. 2025. Group-in-group policy optimization for LLM agent training. In Advances in Neural Information Processing Systems , volume 38, pages 46375–46408. Hongliang He, Wenlin Yao, Kaixin Ma, Wenhao Yu, Yong Dai, Hongming Zhang, Zhenzhong Lan, and Dong Yu. 2024. WebVoyager: Building an end-to-end web agent with large multimodal models. In 
+
+Proceedings of the 62nd Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers) , pages 6864–6890. Shuo He, Lang Feng, Qi Wei, Xin Cheng, Lei Feng, and Bo An. 2026. Hierarchy-of-groups policy optimiza-tion for long-horizon agentic tasks. In International Conference on Learning Representations , volume 2026, pages 27572–27593. Aaron Hurst, Adam Lerer, Adam P Goucher, Adam Perelman, Aditya Ramesh, Aidan Clark, AJ Os-trow, Akila Welihinda, Alan Hayes, Alec Radford, et al. 2024. GPT-4o system card. arXiv preprint arXiv:2410.21276 .Brian Ichter, Anthony Brohan, Yevgen Chebotar, Chelsea Finn, Karol Hausman, Alexander Herzog, Daniel Ho, Julian Ibarz, Alex Irpan, Eric Jang, Ryan Julian, Dmitry Kalashnikov, Sergey Levine, Yao Lu, Carolina Parada, Kanishka Rao, Pierre Sermanet, Alexander T Toshev, Vincent Vanhoucke, and 26 others. 2023. Do as I can, not as I say: Grounding language in robotic affordances. In Conference on Robot Learning , pages 287–318. Yuxiang Ji, Ziyu Ma, Yong Wang, Guanhua Chen, Xi-angxiang Chu, and Liaoni Wu. 2026. Tree search for LLM agent reinforcement learning. In International Conference on Learning Representations , volume 2026, pages 87362–87388. Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan Arik, Dong Wang, Hamed Zamani, and Jiawei Han. 2025. Search-R1: Training LLMs to reason and leverage search engines with reinforcement learning. 
+
+arXiv preprint arXiv:2503.09516 .Jiazheng Li, Yawei Wang, Qiaojing Yan, Yijun Tian, Zhichao Xu, Huan Song, Panpan Xu, and Lin Lee Cheong. 2026. SALT: Step-level advantage assign-ment for long-horizon agents via trajectory graph. In Findings of the Association for Computational Linguistics: EACL 2026 , pages 4709–4725. Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. 2025. Understanding R1-Zero-like training: A criti-cal perspective. arXiv preprint arXiv:2503.20783 .Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, John Schulman, Jacob Hilton, Fraser Kelton, Luke Miller, Maddie Simens, Amanda Askell, Peter Welinder, Paul F Christiano, Jan Leike, and Ryan Lowe. 2022. Training language models to follow instructions with human feedback. In Advances in Neural Information Processing Systems , volume 35, pages 27730–27744. Qwen, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, and 24 oth-ers. 2025. Qwen2.5 technical report. arXiv preprint arXiv:2412.15115 .Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettle-moyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language models can teach themselves to use tools. In Advances in Neural Information Pro-cessing Systems , volume 36, pages 68539–68551. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017. Proxi-mal policy optimization algorithms. arXiv preprint arXiv:1707.06347 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. DeepSeekMath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 .Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: Language agents with verbal reinforcement learning. In Advances in Neural Information Pro-cessing Systems , volume 36, pages 8634–8652. 
+
+10 Mohit Shridhar, Xingdi Yuan, Marc-Alexandre Côté, Yonatan Bisk, Adam Trischler, and Matthew Hausknecht. 2021. ALFWorld: Aligning text and embodied environments for interactive learning. In 
+
+International Conference on Learning Representa-tions .Zihan Wang, Kangrui Wang, Qineng Wang, Pingyue Zhang, Linjie Li, Zhengyuan Yang, Xing Jin, Kefan Yu, Minh Nhat Nguyen, Licheng Liu, Eli Gottlieb, Yiping Lu, Kyunghyun Cho, Jiajun Wu, Li Fei-Fei, Lijuan Wang, Yejin Choi, and Manling Li. 2025. RA-GEN: Understanding self-evolution in LLM agents via multi-turn reinforcement learning. arXiv preprint arXiv:2504.20073 .Zhepei Wei, Wenlin Yao, Yao Liu, Weizhi Zhang, Qin Lu, Liang Qiu, Changlong Yu, Puyang Xu, Chao Zhang, Bing Yin, Hyokun Yun, and Lihong Li. 2025. WebAgent-R1: Training web agents via end-to-end multi-turn reinforcement learning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 7909–7928. Zhiheng Xi, Yiwen Ding, Wenxiang Chen, Boyang Hong, Honglin Guo, Junzhe Wang, Xin Guo, Ding-wen Yang, Chenyang Liao, Wei He, Songyang Gao, Lu Chen, Rui Zheng, Yicheng Zou, Tao Gui, Qi Zhang, Xipeng Qiu, Xuanjing Huang, Zuxuan Wu, and Yu-Gang Jiang. 2025. AgentGym: Evaluat-ing and training large language model-based agents across diverse environments. In Proceedings of the 63rd Annual Meeting of the Association for Compu-tational Linguistics (Volume 1: Long Papers) , pages 27914–27961. Zhiheng Xi, Jixuan Huang, Chenyang Liao, Baodai Huang, Jiaqi Liu, Honglin Guo, Yajie Yang, Rui Zheng, Junjie Ye, Jiazheng Zhang, Wenxiang Chen, Wei He, Yiwen Ding, Guanyu Li, Zehui Chen, Zhengyin Du, Xuesong Yao, Yufei Xu, Jiecao Chen, and 5 others. 2026. AgentGym-RL: An open-source framework to train LLM agents for long-horizon de-cision making via multi-turn RL. In International Conference on Learning Representations .Shunyu Yao, Howard Chen, John Yang, and Karthik Narasimhan. 2022. WebShop: Towards scalable real-world web interaction with grounded language agents. In Advances in Neural Information Processing Sys-tems , volume 35, pages 20744–20757. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2023. ReAct: Synergizing reasoning and acting in language models. In International Conference on Learning Representations .Xincheng Yao, Haobo Fu, Weiming Liu, and Chongyang Zhang. 2026. Back to the definition: Es-timating step-level advantages via trajectory graphs for agentic reinforcement learning. arXiv preprint arXiv:2609.28963 .Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xi-aochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gao-hong Liu, juncai liu, LingJun Liu, Xin Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Guangming Sheng, Yux-uan Tong, Chi Zhang, Mofan Zhang, and 17 others. 2025. DAPO: An open-source LLM reinforcement learning system at scale. In Advances in Neural Information Processing Systems , volume 38, pages 113222–113244. Yuyao Zheng, Haipeng Sun, Junwei Bao, Lemao Liu, Hongfei Jiang, Yang Song, and Dejing Dou. 2026. PGPO: Potential-guided policy optimiza-tion for multi-turn agentic tasks. arXiv preprint arXiv:2609.02236 .Yifei Zhou, Andrea Zanette, Jiayi Pan, Sergey Levine, and Aviral Kumar. 2024. ArCHer: Training language model agents via hierarchical multi-turn RL. In Pro-ceedings of the 41st International Conference on Ma-chine Learning , volume 235, pages 62178–62209. 
+
+11 Appendix A Benchmark Details 
+
+A.1 WebShop 
+
+WebShop (Yao et al., 2022) is a simulated shop-ping environment in which agents purchase prod-ucts that satisfy natural-language requests. Fol-lowing the WebShop setting of GraphGPO (Cheng et al., 2026), we adopt the text-rich interface, which presents page content and identifies interactive el-ements. We conduct experiments in the 1,000-product environment with programmatically gen-erated goals. Goals with indices 0–499 form the evaluation pool, and the remaining goals form the training pool. Each episode allows up to 15 en-vironment interactions. The environment assigns the purchased product a match score in [0 , 1] based on its type, attributes, selected options, and price relative to the request. We report task score as the mean match score multiplied by 100 and success rate as the percentage of episodes with a match score of 1. Task score captures partial satisfaction of the requirements, whereas success rate measures complete task fulfillment. 
+
+A.2 ALFWorld 
+
+ALFWorld (Shridhar et al., 2021) provides house-hold tasks that require agents to follow natural-language instructions through sequential interac-tions. The six task categories are Pick , Clean , Cool ,
+
+Look , Heat , and Pick2 . These tasks involve locat-ing objects and completing prerequisite actions in the appropriate order. Training tasks are drawn from the 3,553 games in the training split, and eval-uation tasks are drawn from the 140 games in the held-out seen split. Each episode allows up to 50 environment interactions. An episode is successful when all task goal conditions are satisfied within this limit. We report success rates for each task category and an overall success rate ( All ) computed across all evaluated episodes. 
+
+B Implementation Details 
+
+Training configuration. We implement ConCal in verl-agent (Feng et al., 2025) with FSDP for policy training and vLLM for rollout generation. We retain the actor-loss reduction used in GiGPO. We fully fine-tune Qwen2.5-1.5B-Instruct on four NVIDIA H100 GPUs with 80 GB of memory each. We adopt AdamW with a constant learning rate, no warmup, and (β1, β 2) = (0 .9, 0.999) . Both                                                   
+
+> Hyperparameter ALFWorld WebShop Training updates 150 150 Tasks per update 16 16 Trajectories per task 88Retained interaction steps 22Maximum environment steps 50 15 Maximum input tokens 2,048 5,120 Maximum response tokens 512 512 Actor learning rate 10 −610 −6
+> Weight decay 0.01 0.01
+> PPO mini-batch size 256 64 Micro-batch size per GPU 32 8PPO epochs per update 11PPO clipping threshold 0.20.2
+> Gradient clipping norm 1.01.0
+> KL coefficient 0.01 0.01
+> Invalid-action penalty −0.1−0.1
+> Discount factor γ0.95 0.95
+> Local advantage weight β1.01.0
+> Training temperature 1.01.0
+> Evaluation temperature 0.40.4
+> Top-p1.01.0
+> Evaluation batch size 128 128 Evaluation interval (updates) 55
+
+Table 3: Training and evaluation hyperparameters for ConCal. 
+
+benchmarks assign a task reward of 10 for suc-cessful completion and 0 otherwise, with an ad-ditional penalty for invalid actions. Following GiGPO, invalid-action penalties are applied sep-arately from continuation calibration, before step-advantage normalization. We compute step advan-tages with batch-wise normalization as detailed in Appendix E, while episode-level advantages fol-low GiGPO. Table 3 summarizes the training and evaluation settings. 
+
+Evaluation protocol. Unless otherwise stated, we follow the evaluation protocol of GraphGPO (Cheng et al., 2026). Checkpoints are saved and evaluated every five updates. For each run, we select the checkpoint with the highest validation success rate from the final three saved checkpoints. Main results report the mean and sample standard deviation across three independent training runs. 
+
+C Algorithm Details 
+
+Algorithm 1 summarizes the action-value estima-tion and policy optimization procedures of ConCal. Normalization details are provided in Appendix E. 12 Algorithm 1 ConCal 
+
+Require: Rollout batch B, original episode advantages {AE, (i)}, current policy πθ , frozen policies πold and πref 
+
+Require: Interaction limit H with Ti ≤ H, discount γ, local advantage weight β
+
+Require: PPO clipping threshold ϵ, KL coefficient λKL 
+
+Ensure: Updated policy πθ
+
+1: Define visits I = {(i, t ) | τi ∈ B , 0 ≤ t < T i}, with xi denoting the task of τi. Adopt START as the marker for s(i) 
+
+> −1
+
+and 
+
+a(i)
+
+> −1
+
+2: Construct z(i) 
+
+> t
+
+= ( xi, s (i)
+
+> t−1
+
+, a (i)
+
+> t−1
+
+, s (i) 
+
+> t
+
+) and sharing pools C(z) = {(i, t ) ∈ I | z(i) 
+
+> t
+
+= z}
+
+3: For each pool, set nz ← {i : ∃t, (i, t ) ∈ C (z)} and αz ← nz /(nz + 1) 
+
+4: Initialize bV0(s(i) 
+
+> t
+
+) ← 0 for all visits and bVb(s(i) 
+
+> Ti
+
+) ← 0 for all i and b = 0 , . . . , H 
+
+5: for b = 1 , . . . , H do 
+
+6: Y (i) 
+
+> t,b
+
+← r(i) 
+
+> t
+
++ γ bVb−1(s(i)
+
+> t+1
+
+) for all (i, t ) ∈ I 
+
+7: μb(z) ← |C (z)|−1 P 
+
+> (j,u )∈C (z)
+
+Y (j) 
+
+> u,b
+
+for every sharing pool 8: bVb(s(i) 
+
+> t
+
+) ← (1 − αz )Y (i) 
+
+> t,b
+
++ αz μb(z) for all (i, t ) ∈ I , with z = z(i)
+
+> t
+
+9: eQ(i) 
+
+> t
+
+← r(i) 
+
+> t
+
++ γ bVH−t−1(s(i)
+
+> t+1
+
+) for all (i, t ) ∈ I 
+
+10: Form state groups S(i) 
+
+> t
+
+= {(j, u ) ∈ I | xj = xi, s (j) 
+
+> u
+
+= s(i) 
+
+> t
+
+} and compute their means eQS
+
+11: ∆(i) 
+
+> t
+
+← eQ(i) 
+
+> t
+
+− eQS(i)
+
+> t
+
+for all visits 12: Compute reference step advantages AS, ref by applying the reference normalization to the calibrated values within each state group 13: Initialize edB ← 1
+
+14: if RMS B (∆) > 0 then 
+
+15: edB ← RMS B (∆) / RMS B (AS, ref )
+
+16: end if 
+
+17: eAS, (i) 
+
+> t
+
+← ∆(i) 
+
+> t
+
+/ edB , eA(i) 
+
+> t
+
+← AE, (i) + β eAS, (i) 
+
+> t
+
+for all visits 18: Assign each generated token the combined advantage of its step eAk and hold all advantages fixed 19: for each PPO minibatch M from B do 
+
+20: Apply normalized actor-loss weights wM 
+
+> k
+
+, with P 
+
+> k∈M
+
+wM 
+
+> k
+
+= 1 
+
+21: ρk ← πθ (ak | hk )/π old (ak | hk ), ¯ρk ← clip( ρk , 1 − ϵ, 1 + ϵ) for all k ∈ M 
+
+22: JM(θ) ← X
+
+> k∈M
+
+wM
+
+> k
+
+h
+
+min( ρk eAk , ¯ρk eAk ) − λKL DKL (πθ (· | hk ) ∥ πref (· | hk )) 
+
+i
+
+23: Update θ with the configured optimizer to maximize JM(θ)
+
+24: return πθ
+
+D Diagnostic Analysis Details 
+
+This section describes the analyses of relative-value calibration, continuation reuse, and computational cost for ConCal. All analyses reuse existing rollout data. 
+
+Relative-value evaluation. For the relative-value diagnostics in Figure 5, we analyze 30 frozen roll-out batches per benchmark, collected at updates 5, 10, . . . , 150. Within each task, we split the eight trajectories into two sets of four according to trajec-tory identifiers, independently of outcomes. Each estimator operates on one set, with sharing pools reconstructed within that set. Discounted returns from the other set provide the held-out reference. We then swap the two sets and repeat the evalua-tion. Across both split directions, we retain 592 comparison groups and 405 eligible action pairs for ALFWorld, and 334 groups and 137 pairs for WebShop. Comparison groups share the same task, ob-served state, and remaining interaction budget. We retain groups containing at least two executed com-mands observed in both sets. For each command, we first average values within each trajectory. We then average the trajectory-level values with equal weights. Estimated and reference command values are centered separately within each group. Let zmg
+
+and zref  
+
+> g
+
+denote the centered vectors for estimator 
+
+m and the reference. We compute 
+
+MSE( m) = 1
+
+|G| 
+
+X
+
+> g∈G
+
+∥zmg − zref  
+
+> g
+
+∥22
+
+|A g| , (13) where G contains all eligible comparison groups from both split directions across all batches, and Ag
+
+contains the commands observed in both sets for group g. Ordering statistics include all unordered command pairs with an absolute reference gap of at least 10 −3. Estimated gaps below 10 −3 in absolute value are classified as Tie . The remaining pairs are classified as Agreement or Disagreement accord-ing to whether their estimated direction matches the reference. Percentages are computed over all 13 eligible pairs. 
+
+Gap-matched control. Gap-matched rescales the centered Own-MC vector within each compari-son group: 
+
+zGM  
+
+> g
+
+= ∥zConCal  
+
+> g
+
+∥2
+
+∥zMC  
+
+> g
+
+∥2
+
+zMC  
+
+> g
+
+. (14) When ∥zMC  
+
+> g
+
+∥2 ≤ 10 −12 , the original centered vec-tor is retained. The scaling factor depends only on the estimator outputs, without held-out returns. When scaling is applied, the resulting vector has the same norm as the centered ConCal vector. Under this scaling, a positive factor preserves the Own-MC ordering and a zero target norm produces ties. 
+
+Evidence-reuse coverage. Coverage is measured on the same 30 complete batches per benchmark. An action has direct coverage when its recorded successor belongs to a sharing pool containing vis-its from at least two distinct trajectories and the remaining continuation budget is positive. Addi-tional recursive coverage includes actions with-out direct coverage whose estimates incorporate cross-trajectory evidence through recursive updates within their remaining budget. All remaining ac-tions are uncovered . Coverage percentages are computed over all action occurrences in the ana-lyzed batches, with each occurrence counted once. 
+
+Runtime measurement. Timings for rollout gen-eration, policy updates, old-policy and reference-policy log-probability computation, and reward computation are taken from the original training logs over updates 2–150. Matching and recursive calibration are measured separately by replaying the frozen batches on an H100 MIG instance with 40 GB of memory. These computations retain their CPU implementation. Calibration timing includes transferring and applying the correction on the GPU. CUDA is synchronized at stage boundaries. Each batch receives two warmup repetitions and seven timed repetitions per method. Component times are taken from the repetition with the me-dian total replay time and averaged across batches. The runtime figure gives the two benchmark means equal weight. 
+
+E Step-Advantage Normalization 
+
+We compute step advantages through batch-wise normalization with a scale shared across all state groups in the complete rollout batch B. Let ∆ de-note the group-centered calibrated action values. We compute reference advantages AS, ref by apply-ing the step-normalization rule in GiGPO to the same calibrated values. The rule performs group-wise standardization with the sample standard devi-ation plus 10 −6 on ALFWorld and mean centering on WebShop. Each generated token inherits its step-level value. With the normalized actor-loss weights wk from Eq. (12), the batch RMS is 
+
+RMS B(v) = 
+
+> L
+
+X
+
+> k=1
+
+wkv2
+
+> k
+
+!1/2
+
+. (15) When the centered-value RMS is nonzero, the shared normalization scale is 
+
+edB = RMS B(∆) RMS B(AS, ref ) . (16) On WebShop, AS, ref = ∆ gives edB = 1 . The scale is computed once over all tasks in the up-date and held fixed during policy optimization. If the centered-value RMS is zero, step advantages are set to zero. Episode-level advantages remain unchanged. 
+
+F Additional Training Dynamics 
+
+Figure 9 compares six learning and optimization metrics for ConCal and GiGPO from the same runs as the main-text learning curves. The metrics are training and validation success, action-format va-lidity, reference-policy KL, PPO clip fraction, and policy entropy. Action-format validity measures compliance with the required response format, and the PPO clip fraction records how often the clipped surrogate determines the loss. On ALFWorld, ConCal achieves higher training and validation success through much of training. On WebShop, the training-success advantage be-comes clearer during later updates, with higher average training and validation success over the final 50 updates. Both methods reach nearly 100% action-format validity on both benchmarks, while differences in task success persist. The accompanying optimization dynamics vary across benchmarks. On ALFWorld, ConCal main-tains higher policy entropy later in training, while the two methods reach similar reference-policy KL near the end. On WebShop, the higher late-stage success rates are accompanied by higher KL and clipping fractions. Both methods exhibit a similar decrease followed by a partial recovery in policy 14 0 50 100 150 025 50 75 100 
+
+> Success (%)
+
+Training success    
+
+> 050 100 150 025 50 75 100
+> Success (%)
+
+Validation success    
+
+> 050 100 150 025 50 75 100
+> Valid outputs (%)
+
+Action-format validity    
+
+> 050 100 150 00.1 0.2 0.3
+> KL (nats)
+
+Reference-policy KL    
+
+> 050 100 150 00.5 11.5
+> Clipped tokens (%)
+
+PPO clip fraction    
+
+> 050 100 150 00.4 0.8 1.2
+> Entropy (nats)
+
+Policy entropy 
+
+> WebShop
+
+Training updates    
+
+> 050 100 150 025 50 75 100
+> Success (%)
+
+Training success    
+
+> 050 100 150 025 50 75 100
+> Success (%)
+
+Validation success    
+
+> 050 100 150 025 50 75 100
+> Valid outputs (%)
+
+Action-format validity    
+
+> 050 100 150 00.08 0.16 0.24
+> KL (nats)
+
+Reference-policy KL    
+
+> 050 100 150 00.3 0.6 0.9
+> Clipped tokens (%)
+
+PPO clip fraction    
+
+> 050 100 150 00.3 0.6 0.9
+> Entropy (nats)
+
+Policy entropy  
+
+> ALFWorld
+> GiGPO ConCal
+
+Figure 9: Training dynamics of ConCal and GiGPO with Qwen2.5-1.5B-Instruct. The top two rows show ALFWorld, and the bottom two rows show WebShop. Faint lines show raw training metrics, and bold lines show exponential moving averages with decay 0.95 . Validation success is shown at the recorded evaluation updates without smoothing. 
+
+entropy on WebShop, and their clipping fractions decline during later training on both benchmarks. 
+
+G Discussion with Related Methods 
+
+G.1 GraphGPO 
+
+GraphGPO (Cheng et al., 2026) constructs step re-wards from shortest-path distances to successful terminal states. ConCal focuses on calibrating the action-value differences used for local credit. It recursively combines shared continuation evidence with each visit’s own transition target, then evalu-ates actions using their recorded rewards and actual successors. Its credit therefore reflects estimated discounted returns, while GraphGPO’s credit re-flects distance to success on the merged graph. For actions from the same state with equal transition costs and equally distant successors, GraphGPO assigns identical distance-based step rewards. Con-Cal can still distinguish their action values through differences in recorded rewards and sampled con-tinuation evidence, with partial sharing retaining each visit’s contribution. 
+
+G.2 SALT 
+
+SALT (Li et al., 2026) averages trajectory-level ad-vantages across matched transitions to assign step-level credit. ConCal instead recursively calibrates continuation values by partially pooling targets 
+
+r+γ bV across visits matched by their incoming tran-sitions, retaining each visit’s own transition contri-bution. It constructs action values from recorded rewards and calibrated continuation estimates at their actual successors, then derives local advan-tages through state-group centering. Recursive 15 propagation also reaches earlier actions whose suc-cessor visits have no direct cross-trajectory match. SALT focuses on refining trajectory-level advan-tages into step-level credit, whereas our study cen-ters on continuation-value estimation before local credit is formed. We provide an in-depth empiri-cal analysis of how calibration changes preference strength and action ordering, and how normaliza-tion preserves or suppresses the resulting value gaps in local credit. 
+
+G.3 GRAFT 
+
+Concurrent work GRAFT (Yao et al., 2026) ex-plicitly constructs a trajectory graph and estimates shared node values through empirical Bellman iter-ation. It derives step advantages from node-value differences and further refines them with Graph GAE. ConCal instead partially shares continua-tion evidence across visits matched by incoming transitions while retaining a separate estimate for each visit (Equation 9). Its recursive updates op-erate directly on recorded visits without explic-itly constructing a transition graph. Action values combine recorded rewards with calibrated contin-uations at actual successors, with the state-group mean providing the local baseline. GRAFT fo-cuses on graph-based state-value recovery and step-advantage construction, whereas our study cen-ters on partial continuation calibration and its ef-fects on relative action values. Using held-out re-turns, our in-depth empirical analysis distinguishes preference-strength calibration from action-order changes: Gap-matched reproduces most of Con-Cal’s centered-MSE reduction relative to Own-MC through magnitude adjustment, while ConCal also improves ordering agreement. 
+
+H Prompt Templates 
+
+We construct training and evaluation prompts from the environment templates provided by verl-agent (Feng et al., 2025). Each prompt contains the task, current observation, available actions, and up to two recent observation–action pairs. At each interaction step, we fill the placeholders in curly braces with the corresponding values. The prompts request reasoning within <think> tags and a single action within <action> tags. Figures 10 and 11 show the templates with in-teraction history. At the initial step, we select the corresponding template without interaction history. Figures 12 and 13 show example user prompts from validation episodes on ALFWorld and WebShop, respectively. 16 You are an expert agent operating in the ALFRED Embodied Environment. Your task is to: {task_description} Prior to this step, you have already taken {step_count} step(s). Below are the most recent {history_length} observations and the corresponding actions you took: {action_history} You are now at step {current_step} and your current observation is: {current_observation} Your admissible actions of the current situation are: [{admissible_actions}]. Now it's your turn to take an action. You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+Figure 10: ALFWorld prompt template with interaction history. At the initial step, the task is included in the initial observation, and the history and step-index fields are omitted. 
+
+You are an expert autonomous agent operating in the WebShop e-commerce environment. Your task is to: {task_description}. Prior to this step, you have already taken {step_count} step(s). Below are the most recent {history_length} observations and the corresponding actions you took: {action_history} You are now at step {current_step} and your current observation is: {current_observation}. Your admissible actions of the current situation are: [{available_actions} ]. Now it's your turn to take one action for the current step. You should first reason step-by-step about the current situation, then think carefully which admissible action best advances the shopping goal. This reasoning process MUST be enclosed within <think> </think> tags. Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+Figure 11: WebShop prompt template with interaction history. A template without history is selected at the initial step and when the formatted prompt exceeds 13,000 characters. 
+
+17 You are an expert agent operating in the ALFRED Embodied Environment. Your task is to: look at cd under the desklamp. Prior to this step, you have already taken 3 step(s). Below are the most recent 2 observations and the corresponding actions you took: [Observation 2: 'You arrive at desk 1. On the desk 1, you see a cd 1, a cellphone 1, a creditcard 2, and a creditcard 1.', Action 2: 'take cd 1 from desk 1'] [Observation 3: 'You pick up the cd 1 from the desk 1.', Action 3: 'go to desk 2'] You are now at step 4 and your current observation is: You arrive at desk 2. On the desk 2, you see a book 1, a pen 2, a pen 1, and a pencil 2. Your admissible actions of the current situation are: ['examine cd 1' 'examine desk 2' 'go to bed 1' 'go to desk 1' 'go to garbagecan 1' 'go to shelf 1' 'go to shelf 2' 'go to shelf 3' 'go to shelf 4' 'go to shelf 5' 'inventory' 'look' 'move cd 1 to desk 2']. Now it's your turn to take an action. You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+Figure 12: An example ALFWorld user prompt from a validation episode, showing the task, the two most recent interactions, the current observation, and available actions. 
+
+18 You are an expert autonomous agent operating in the WebShop e-commerce environment. Your task is to: Find me eco friendly, heavy duty, assembly required, easy clean file cabinets with size: 35.4"w x 15.7"d x 29.3"h, and price lower than 200.00 dollars. Prior to this step, you have already taken 8 step(s). Below are the most recent 2 observations and the corresponding actions you took: [Observation 7: '[button] Back to Search [button_] [button] < Prev [button_] size [button] 23.6"w x 15.7"d x 29.3"h [button_] [button] 35.4"w x 15.7"d x 29.3"h [button_] DEVAISE 2-Drawer Wood Lateral File Cabinet with Lock for Office Home, Black Price: $169.99 Rating: N.A. [button] Description [button_] [button] Features [button_] [button] Reviews [button_] [button] Buy Now [button_] ', Action 7: 'click[35.4"w x 15.7"d x 29.3"h]'] [Observation 8: '[button] Back to Search [button_] [button] < Prev [button_] size [button] 23.6"w x 15.7"d x 29.3"h [button_] [button] 35.4"w x 15.7"d x 29.3"h [button_] DEVAISE 2-Drawer Wood Lateral File Cabinet with Lock for Office Home, Black Price: $169.99 Rating: N.A. [button] Description [button_] [button] Features [button_] [button] Reviews [button_] [button] Buy Now [button_] ', Action 8: 'click[35.4"w x 15.7"d x 29.3"h]'] You are now at step 9 and your current observation is: [button] Back to Search [button_] [button] < Prev [button_] size [button] 23.6"w x 15.7"d x 29.3"h [button_] [button] 35.4"w x 15.7"d x 29.3"h [button_] DEVAISE 2-Drawer Wood Lateral File Cabinet with Lock for Office Home, Black Price: $169.99 Rating: N.A. [button] Description [button_] [button] Features [button_] [button] Reviews [button_] [button] Buy Now [button_] .Your admissible actions of the current situation are: ['click[back to search]', 'click[< prev]', 'click[description]', 'click[features]', 'click[reviews]', 'click[buy now]', 'click[23.6"w x 15.7"d x 29.3"h]', 'click[35.4"w x 15.7"d x 29.3"h]', ]. Now it's your turn to take one action for the current step. You should first reason step-by-step about the current situation, then think carefully which admissible action best advances the shopping goal. This reasoning process MUST be enclosed within <think> </think> tags. Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+Figure 13: An example WebShop user prompt from a validation episode, showing the shopping goal, the two most recent interactions, the current product page, and available actions. 
+
+19

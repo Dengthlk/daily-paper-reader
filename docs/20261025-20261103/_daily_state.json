@@ -1,8 +1,313 @@
 {
   "date": "20261025-20261103",
   "date_label": "2026-10-25 ~ 2026-11-03",
-  "generated_at": "2026-11-03 06:55:07 UTC",
+  "generated_at": "2026-11-03 07:20:08 UTC",
   "recommend_exists": true,
-  "run_count": 1,
-  "papers": []
+  "run_count": 2,
+  "papers": [
+    {
+      "paper_id": "2610.35398v1",
+      "route": "20261025-20261103/2610.35398v1-belief-conditioned-multi-agent-actor-critic-for-decentralized-llm-collaboration",
+      "title": "Belief-Conditioned Multi-Agent Actor Critic for Decentralized LLM Collaboration",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "面向去中心化大模型协作的多智能体演员评论家及Minecraft实验",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.35773v1",
+      "route": "20261025-20261103/2610.35773v1-a-unified-arena-for-llm-agents-across-diverse-eurogame",
+      "title": "A Unified Arena for LLM Agents across Diverse Eurogame",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "在竞争性欧式桌游上评测LLM智能体的统一基准竞技场",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.39049v1",
+      "route": "20261025-20261103/2610.39049v1-reinforcement-learning-for-the-game-of-balatro-a-fast-simulator-and-two-policy-training-approach",
+      "title": "Reinforcement Learning for the Game of Balatro: A Fast Simulator and Two-Policy Training Approach",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "面向Balatro的快速模拟器与双策略PPO强化学习流程",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.40276v1",
+      "route": "20261025-20261103/2610.40276v1-taskframe-connecting-task-level-planning-with-frame-level-control-for-game-agents",
+      "title": "TaskFrame: Connecting Task-Level Planning with Frame-Level Control for Game Agents",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "视觉语言规划器与帧级控制结合的通用游戏智能体",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.41264v1",
+      "route": "20261025-20261103/2610.41264v1-rome-wasnt-built-in-one-turn-replay-grounded-reward-signals-for-long-horizon-freeciv-agents",
+      "title": "Rome Wasn't Built in One Turn: Replay-Grounded Reward Signals for Long-Horizon Freeciv Agents",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "面向长程策略游戏语言模型智能体的回放式奖励信号",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34450v1",
+      "route": "20261025-20261103/2610.34450v1-evolvemas-a-unified-self-evolution-framework-for-decentralized-multi-agent-systems",
+      "title": "EvolveMAS: A Unified Self-Evolution Framework for Decentralized Multi-Agent Systems",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向去中心化大模型多智能体系统的自进化框架",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.35736v1",
+      "route": "20261025-20261103/2610.35736v1-preference-guided-cooperation-in-multi-objective-multi-agent-reinforcement-learning",
+      "title": "Preference-Guided Cooperation in Multi-Objective Multi-Agent Reinforcement Learning",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向多智能体合作的目标级反事实信用分配",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.35801v1",
+      "route": "20261025-20261103/2610.35801v1-focus-active-critic-learning-for-long-horizon-language-model-agents",
+      "title": "FOCUS: Active Critic Learning for Long-Horizon Language Model Agents",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向长程语言模型智能体的主动评论家学习与TD优势信用分配",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.36925v1",
+      "route": "20261025-20261103/2610.36925v1-vision-language-agents-can-learn-in-their-own-latent-worlds",
+      "title": "Vision-Language Agents Can Learn in Their Own Latent Worlds",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "将视觉语言模型重构为潜在世界模型的基于模型强化学习",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.37195v1",
+      "route": "20261025-20261103/2610.37195v1-action-value-calibration-via-continuation-sharing-for-long-horizon-agentic-reinforcement-learning",
+      "title": "Action-Value Calibration via Continuation Sharing for Long-Horizon Agentic Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向长程智能体强化学习的信用分配与动作价值校准",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.39324v1",
+      "route": "20261025-20261103/2610.39324v1-mrc-mmagent-reinforcement-learning-for-multi-role-collaboration-in-multimodal-tool-using-agents",
+      "title": "MRC-MMAgent: Reinforcement Learning for Multi-Role Collaboration in Multimodal Tool-Using Agents",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向多模态工具使用大模型智能体的多角色协同强化学习",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.33817v1",
+      "route": "20261025-20261103/2610.33817v1-envlunch-the-environment-as-a-free-lunch-for-learning-to-interact",
+      "title": "EnvLunch: The Environment as a Free Lunch for Learning to Interact",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "利用环境产生的可验证任务为智能体强化学习预热",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34137v1",
+      "route": "20261025-20261103/2610.34137v1-self-evolution-reasoner-continuous-optimization-via-policy-intrinsic-exploration-and-exploitation",
+      "title": "Self-Evolution Reasoner: Continuous Optimization via Policy-Intrinsic Exploration and Exploitation",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向大模型自我改进的内在探索策略优化",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34523v1",
+      "route": "20261025-20261103/2610.34523v1-how-humans-learn-unfamiliar-worlds-a-think-aloud-dataset-on-arc-agi-3",
+      "title": "How Humans Learn Unfamiliar Worlds: A Think-Aloud Dataset on ARC-AGI-3",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "比较人类与大模型智能体探索新游戏环境的出声思维数据集",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.35201v1",
+      "route": "20261025-20261103/2610.35201v1-dtca-denoising-token-credit-assignment-for-reinforcement-learning-in-diffusion-language-models",
+      "title": "DTCA: Denoising Token Credit Assignment for Reinforcement Learning in Diffusion Language Models",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向语言模型强化学习的词元级信用分配",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.33726v1",
+      "route": "20261025-20261103/2610.33726v1-human-feedback-guided-multi-agent-inverse-reinforcement-learning-for-interactive-driving-behavior-modeling",
+      "title": "Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning for Interactive Driving Behavior Modeling",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "面向交互驾驶行为的多智能体逆强化学习",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34208v1",
+      "route": "20261025-20261103/2610.34208v1-corma-constraint-routed-decision-mamba-for-generalizable-multi-constraint-offline-safe-reinforcement-learning",
+      "title": "CORMA: Constraint-Routed Decision Mamba for Generalizable Multi-Constraint Offline Safe Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "可泛化的多约束离线安全强化学习",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34260v1",
+      "route": "20261025-20261103/2610.34260v1-multievoskill-structure-aware-multi-agent-skill-evolution-for-generalizable-skill-artifacts",
+      "title": "MultiEvoSkill: Structure-Aware Multi-Agent Skill Evolution for Generalizable Skill Artifacts",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "面向大模型智能体的结构感知多智能体技能演化",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    },
+    {
+      "paper_id": "2610.34466v1",
+      "route": "20261025-20261103/2610.34466v1-intnet-a-communication-driven-multi-agent-reinforcement-learning-framework-for-cooperative-autonomous-driving",
+      "title": "IntNet: A Communication-Driven Multi-Agent Reinforcement Learning Framework for Cooperative Autonomous Driving",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "面向协同自动驾驶的多智能体强化学习框架",
+      "first_seen_at": "2026-11-03 07:20:08 UTC",
+      "updated_at": "2026-11-03 07:20:08 UTC"
+    }
+  ]
 }

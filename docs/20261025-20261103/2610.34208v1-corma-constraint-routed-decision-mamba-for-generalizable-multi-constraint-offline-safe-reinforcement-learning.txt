@@ -1,0 +1,2767 @@
+Title: CORMA: Constraint-Routed Decision Mamba for Generalizable Multi-Constraint Offline Safe Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2610.34208v1
+
+Published Time: Tue, 27 Oct 2026 01:32:36 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# CORMA: Constraint-Routed Decision Mamba for Generalizable Multi-Constraint Offline Safe Reinforcement Learning 
+
+## Changxu Ni 1, Feiran You 3, Yongan Guo 2,Hongyang Du 3, Kang Wei 1, Le Liang 1, Yiyang Ni 2, Jun Li 1
+
+1Southeast University 
+
+2Nanjing University of Posts and Telecommunications 
+
+3The University of Hong Kong 
+
+Abstract 
+
+Offline safe reinforcement learning (RL) learns safety-aware policies from static datasets while satisfying safety constraints during deployment. Motivated by the strong trajectory-modeling capabilities of Transformers, recent Decision Trans-former (DT)-based methods formulate offline safe RL as conditional sequence modeling by conditioning action gen-eration on return-to-go (RTG) and cost-to-go (CTG) to-kens, thereby enabling adaptation to varying safety bud-gets. However, existing DT-based methods are developed for single-constraint tasks. For tasks with multiple con-straints, generalizing learned policies to unseen combina-tions of safety budgets remains challenging due to the con-flicting requirements imposed by heterogeneous constraints. Moreover, the quadratic complexity of Transformer architec-tures significantly increases the computational overhead in multi-constraint tasks, as representing additional constraints requires more CTG tokens. Recently, Mamba has emerged as an efficient sequence-modeling backbone, offering linear computational complexity and strong generalization capabil-ities. In this paper, we propose CORMA, a constraint-routed decision Mamba framework for generalizable multi-constraint offline safe RL. CORMA decomposes policy inference into constraint-aware RTG estimation and adaptive action gener-ation, where constraint-specific experts model feasible RTG distributions and a router-guided product-of-experts mecha-nism fuses these distributions to provide safety-aware guid-ance for a Mamba-based action decoder. A three-stage opti-mization strategy is designed to improve training stability. Ex-tensive experiments on OSRL benchmarks demonstrate that CORMA achieves superior reward-safety trade-offs, reduces inference latency by 37 % compared with DT-based meth-ods, and exhibits stronger zero-shot generalization to unseen safety-budget combinations than offline safe RL baselines. 
+
+## Introduction 
+
+Reinforcement learning (RL) has achieved remarkable suc-cess in complex decision-making tasks (Hansen et al., 2024; Wang et al., 2024). However, in safety-critical domains such as autonomous driving and industrial robot control, agents must maximize task rewards while satisfying safety con-straints (Wei et al., 2024; Wachi et al., 2024). Safe RL (Gao et al., 2024; Hazra et al., 2025) addresses this problem 
+
+Copyright © 2027, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. Safety Budget of  Constraint 2 
+
+A
+
+> ···
+> Poor generalization in unseen safe budgets
+> Safety Budget of Constraint 2 Safety Budget of Constraint 1
+
+B CORMA Method     
+
+> Transformer-based Method
+> Seen Slight Moderate Severe
+> Quadratic complexity Linear complexity
+> Transformer Block Seen Slight Moderate Severe
+> Seen safe budget region 1
+> Add&Norm Feed Forward Add&Norm Multi-Head Attention
+> Transformer Block
+> Add&Norm Feed Forward Add&Norm Multi-Head Attention
+> Generalize to unseen regions 2
+> 1Seen safe budget region
+> Seen Slight Moderate Severe
+> Mamba Block
+> Channel MLP Norm Mamba Norm
+> Mamba Block
+> Channel MLP Norm Mamba Norm
+> Seen Slight Moderate Severe
+> ···
+> Generalize to unseen regions 2
+> Robust generalization when safe budgets change
+> ···
+> RTG CTG 1
+> CTG 2
+> CTG N
+> CTG 1
+> CTG 2
+> CTG N
+> ···
+> Gating Router RTG
+> CTG 1
+> CTG 2
+> CTG N
+> ···
+> Constraint-routed RTG
+> State
+> ···
+> State
+> State
+> ···
+> Safety Budget of Constraint 1Safety Budget of Constraint 2 Safety Budget of Constraint 1 Safety Budget of Constraint 2 Safety Budget of Constraint 1
+> Expert1
+> Expert2
+> ExpertN
+
+Figure 1: Illustration of the challenges. After pre-training on seen safety-budget regions, Transformer-based sequence models struggle under unseen safety-budget combinations, whereas CORMA generalizes more robustly. through constrained Markov decision processes (CMDPs), where policies are optimized subject to predefined safety budgets (Liu et al., 2023a; Zhao et al., 2023). Most existing methods, however, require online interactions that may ex-pose the agent or environment to unacceptable risks. Offline safe RL avoids such unsafe exploration by learning entirely from static datasets without additional environmental inter-actions (Alles et al., 2024; Gong et al., 2025). Existing offline safe RL methods mainly include model-based (Kidambi et al., 2020; Yu et al., 2020), model-free (Kumar et al., 2020; Kostrikov et al., 2021), and conditional sequence modeling approaches (Chen et al., 2021; Xue et al., 2026). Model-based and model-free methods often rely on Bellman backups, making them susceptible to overestima-tion and bootstrapping errors in offline settings. Moreover, they are typically trained for fixed safety budgets and thus generalize poorly to unseen safety budgets during training (Achiam et al., 2017). In contrast, methods such as the Con-strained Decision Transformer (CDT) condition action gener-ation on return-to-go (RTG) and cost-to-go (CTG), enabling arXiv:2610.34208v1 [cs.LG] 25 Oct 2026 zero-shot adaptation to different safety budgets through con-ditional sequence modeling (Liu et al., 2023b). Despite their effectiveness, existing Transformer-based methods are primarily designed for single-constraint tasks and face two major limitations in multi-constraint settings. First, self-attention has quadratic complexity with respect to sequence length, while representing additional constraints requires more CTG tokens, substantially increasing training and inference overhead (Dao et al., 2022; Tay et al., 2022). Second, standard self-attention lacks an explicit mechanism for coordinating multiple CTG conditions and their influence on RTG-guided action generation (Vaswani et al., 2017). Mamba, a selective state space model (SSM), provides a promising alternative. Its parallel scan mechanism captures long-range causal dependencies with linear computational complexity, while its selective state mechanism dynamically filters task-relevant information (Gu and Dao, 2024). Mamba has shown strong performance in conditional sequence mod-eling for unconstrained offline RL (Lv et al., 2024; Huang et al., 2024), yet its potential for safe RL with multiple con-straints remains unexplored. This motivates the following question: How can Mamba-based conditional sequence mod-eling efficiently coordinate multiple safety constraints and generalize zero-shot to unseen safety-budget combinations? 
+
+To address this, we propose CO nstraint-Routed deci-sion MA mba (CORMA), a novel Mamba-based condi-tional sequence modeling framework for generalizable multi-constraint offline safe RL. To be specific, CORMA introduces a constraint-aware expert-routing mechanism, where inde-pendent RTG expert networks evaluate diverse safety budgets and model feasible RTG distributions. A gating router as-signs adaptive weight scores to these experts, and fuses their predicted distributions through a product-of-experts (PoE) mechanism. The final RTG is then sampled from the fused distribution and fed into a Mamba-based action decoder. To improve training stability, we design a three-stage optimiza-tion strategy that separately trains the action decoder, RTG experts, and the router. Experimental results demonstrate that CORMA achieves strong reward-safety trade-offs in multi-constraint safe RL tasks and robust zero-shot generalization to unseen safety-budget combinations. The main contribu-tions of this paper are summarized as follows: 
+
+• We identify fundamental limitations of conditional se-quence modeling in multi-constraint offline safe RL : additional CTG conditions substantially increase the se-quence modeling overhead; while directly concatenating multiple CTG tokens is insufficient to achieve robust gen-eralization under unseen safety-budget combinations. 
+
+• We propose CORMA, a novel conditional sequence mod-eling framework for generalizable multi-constraint offline safe RL. CORMA uses constraint-aware RTG experts to model feasible RTG distributions under different CTG conditions, and fuses them through a router-guided PoE mechanism to generate constraint-aware RTG guidance for a Mamba-based action decoder. 
+
+• We conduct extensive experiments on OSRL benchmarks. Results verify that CORMA achieves superior task per-formance while reduces inference overhead by 37% com-pared with Transformer-based baselines, and exhibits stronger zero-shot adaptation to unseen safety-budget combinations than existing offline safe RL baselines. 
+
+## Preliminaries 
+
+Multi-Constraint Safe RL 
+
+We model the problem of safe RL as a CMDP (Alt-man, 1998). A CMDP can be represented by the tuple 
+
+(S, A, P, r, {ci}Ni=1 ), where S and A denote the state space and action space, respectively; P : S × A × S → [0 , 1] is the state transition probability; r : S × A → R is the reward function; ci : S × A → R represents the cost function of the i-th constraint; N is the number of constraints. We define the policy as π : S × A → [0 , 1] . The objective is to find an optimal policy π∗ that maximizes the expected cumulative reward while satisfying the constraints, i.e., 
+
+π∗ = arg max  
+
+> π
+
+Eπ
+
+" TX
+
+> t=1
+
+rt
+
+#
+
+, (1) s.t. Eπ
+
+" TX
+
+> t=1
+
+cit
+
+#
+
+≤ κi, ∀i
+
+where κi represents the safety budget of the i-th constraint. 
+
+Decision Transformer For Offline Safe RL 
+
+The traditional CDT solves the safe RL prob-lem via a conditional sequence modeling method. It models the trajectory sequence of the agent as 
+
+τ = (s0, a 0, R 0, C 0, . . . , s T , a T , r T , C T ), where Rt =
+
+PTj=t rj represents the RTG, Ct = PTj=t cj rep-resents the CTG. The pre-collected dataset is de-fined as D. The input of traditional CDT is 
+
+τ−K:t = ( st−K+1 , C t−K+1 , R t−K+1 , a t−K+1 , . . . , s t, C t,Rt), which captures the trajectory sequence from the previ-ous K steps. Based on this, the policy of traditional CDT is modeled as a random Gaussian distribution (Zheng et al., 2022), i.e., at ∼ πθ (·| τ−K:t) = N (μθ (τ−K:t), Σθ (τ−K:t)) .During the training phase, traditional CDT optimizes the pol-icy parameters θ by minimizing the negative log-likelihood of the actions from the sampled dataset D, regularized by a policy entropy term to improve robustness. During the infer-ence phase, traditional CDT sets the initial guidance signals 
+
+R1 and C1 at the first time step based on the target reward re-turns and safety budget κ. After executing the sampled action 
+
+at, the system dynamically updates the RTG and CTG based on the instantaneous rewards rt and costs ct received from the environment, i.e., Rt+1 = Rt − rt and Ct+1 = Ct − ct.The updated Rt+1 and Ct+1 , together with the next state 
+
+st+1 , are then fed as input for auto-regressively predicting the subsequent action at+1 .
+
+State Space Model and Mamba 
+
+A continuous-time SSM describes the mapping of an input signal x(t) ∈ RD to an output signal y(t) ∈ RD through a hidden state h(t) ∈ RN . A standard linear SSM is given by 
+
+h′(t) = Ah(t) + Bx(t), y(t) = Ch(t), where A ∈ RN ×N ,B ∈ RN ×D and C ∈ RD×N are the state transition, in-put projection, and output projection matrices. To process discrete-time sequences, the continuous parameters are dis-cretized with a step size ∆. Using zero-order hold (ZOH), we obtain ¯A = exp(∆ A), ¯B = (∆ A)−1(exp(∆ A) − I) · ∆B.
+
+The resulting discrete recurrence can be written as ht =¯Aht−1 + ¯Bxt, y t = Cht. Although traditional SSMs have shown promise in sequence modeling, they rely on linear time-invariant dynamics where the matrices ¯A, ¯B, and C re-main fixed across time (Gu et al., 2022). This time-invariant property limits their ability to dynamically filter task-relevant information. Mamba addresses this limitation by introducing a data-dependent selection mechanism (Gu and Dao, 2023), where B, C, and ∆ are parameterized as functions of the current input xt. This enables Mamba to selectively preserve important contextual information while filtering irrelevant noise. Furthermore, by leveraging a hardware-aware paral-lel scan algorithm, Mamba achieves efficient long-sequence modeling with linear complexity of O(L).
+
+## Investigating Conditional Sequence Modeling in Multi-Constraint Safe RL 
+
+In this section, we investigate two key challenges of applying conditional sequence modeling to multi-constraint safe RL: high computational complexity and limited generalization to unseen safety-budget combinations. 
+
+Computational Complexity Challenges Under Multiple Constraints 
+
+Traditional offline safe RL algorithms, such as Constrained Policy Optimization (CPO) (Achiam et al., 2017), and Con-straints Penalized Q-learning (CPQ) (Xu et al., 2022), rely on trust regions or conservative penalties to satisfy constraints. When extended to multi-constraint scenarios via Lagrange multipliers (Tessler et al., 2018; Stooke et al., 2020; Yu et al., 2022) or separate cost critics (Guo et al., 2025), they suf-fer from gradient conflicts during shared parameter updates, since different constraints may induce inconsistent policy-update directions. This limitation motivates a sequence mod-eling alternative that formulates offline safe RL as trajec-tory generation conditioned on RTG and CTG tokens. How-ever, the representation of multiple constraints requires addi-tional CTG tokens. Due to the quadratic complexity of self-attention, the longer sequences cause computational costs to grow quadratically, which results in significant inference overhead. To demonstrate this, we conducted experiments on an offline safe RL dataset derived from Safety-Gymnasium. We compared the standard CDT model with Constrained Decision Mamba (CDM), a variant that replaces the Trans-former backbone with Mamba. As illustrated in Fig. 2 (a), while CDT suffers from a sharp increase in inference latency as the number of constraints increases, CDM consistently achieves lower latency. This demonstrates the better scala-bility of Mamba for multi-constraint offline safe RL. 1 2 3    
+
+> Number of Constraints
+> 020 40 60 80 100
+> Inference Latency (ms)  CDT CDM
+> Seen Slight Moderate Severe
+> Degree of Safety-Budget Deviation
+> 1234
+> Normalized Max Cost (Cost-N)
+> Safety Threshold CDT CDM
+> (a) (b)
+
+Figure 2: Inference efficiency and zero-shot generation anal-ysis of CDT and CDM under multi-constraint settings. (a) Inference latency with increasing constraints. (b) Safety per-formance under different safety-budget regions. 
+
+Generalization Challenges under Dynamic Combinations of Safety Budgets 
+
+Traditional Lagrangian-based methods optimize policies un-der static safety budgets and require full retraining when safety budgets change. Recent conditional sequence model-ing methods, such as CDT (Liu et al., 2023b), SDT (Guo et al., 2024), and CoPDT (Xue et al., 2026), achieve gen-eralization to unseen safety budgets in single-constraint en-vironments. However, whether these methods can still gen-eralize when multiple safety budgets change simultaneously in multi-constraint tasks remains underexplored. To investi-gate this, we evaluate sequence models across safety-budget combinations with different degrees of deviation from the of-fline dataset. Since different constraints have heterogeneous cost scales, we normalize each cost return Ci by its corre-sponding safety budget κi, and measure overall safety using Cost-N , defined as Cost-N = max i{Ci/κ i}. As visualized in Fig. 1, we partition the safety-budget space into four re-gions according to the minimum normalized relative distance from an evaluation budget vector κ to the seen region Kseen :
+
+d(κ, Kseen ) = min κ′∈K seen 
+
+r
+
+> 1
+> N
+
+PNi=1 
+
+ κi−κ′i
+
+> κ′i
+
+2
+
+. The re-gions are seen ( d = 0 ), slight ( 0 < d ≤ d1), moderate (d1 < d ≤ d2), and severe ( d2 < d ≤ d3), where d1, d2, and 
+
+d3 denote the predefined region boundaries, and their spe-cific values are provided in appendix. As Fig. 2(b) reveals, standard CDT suffers from severe constraint violations under unseen budget combinations. Furthermore, CDM improves performance over CDT, but still fails to satisfy all constraints when multiple safety budgets change simultaneously. These results raise a key question: How can we preserve Mamba’s efficient inference capability while achieving zero-shot gen-eralization to unseen multi-constraint scenarios? 
+
+## Method 
+
+In this section, we first introduce the constraint-routed RTG prediction module, which models constraint-specific feasible RTG distributions and fuses them through a router-guided PoE mechanism. Then, we present the Mamba-based action decoder for conditional action generation. Finally, we de-scribe the three-stage optimization mechanism for decoupled training of the action decoder, experts, and router. 
+
+Constraint-Routed PoE for RTG Estimation 
+
+Under the conditional sequence modeling framework, policy inference is conditioned on both target return and the remain-ing safety budget, which are represented by the RTG token 
+
+Rt and the CTG tokens {Cit }Ni=1 , respectively. Nevertheless, an inherent tension exists between Rt and Cit . If an unreal-istically high Rt is specified, the model may over-prioritize reward maximization and consequently incur constraint vi-olations. Thus, it is imperative to set an appropriate Rt that balances reward maximization and constraint satisfaction. Moreover, in multi-constraint tasks, different constraints may require conflicting target returns. Satisfying the safety budget of one constraint may contradict that of another. This trade-off significantly reduces the feasible range of Rt. To address this, we design a constraint-routed PoE mechanism for RTG estimation. Specifically, we employ lightweight Mamba en-coders as independent constraint-specific experts, where each expert models the RTG distribution for one constraint. For the 
+
+i-th constraint, we construct a length-K historical trajectory that only contains the corresponding Cit , i.e., 
+
+τ i 
+
+> −K:t
+
+=
+
+
+
+st−K+1 , C it−K+1 , R t−K+1 , a t−K+1 , . . . , s t−1,Cit−1, R t−1, a t−1, s t, C it
+
+
+
+. (2) Based on this trajectory, the i-th expert parameterizes a Gaussian distribution over the current RTG, i.e., 
+
+pi(· | τ i
+
+> −K:t
+
+) = N (μϕi (τ i
+
+> −K:t
+
+), Σϕi (τ i
+
+> −K:t
+
+)) , (3) where μϕi (τ i
+
+> −K:t
+
+) and Σϕi (τ i
+
+> −K:t
+
+) denote the mean and the variance of the RTG distribution predicted by the i-th expert, respectively. Furthermore, we design a router to estimate the fusion weight for each expert’s prediction. The router takes the current state st and the normalized remaining CTG vector ¯Ct =  ¯C1 
+
+> t
+
+, ¯C2 
+
+> t
+
+, . . . , ¯CNt
+
+T as input, and outputs a normalized weight vector αt = [ α1 
+
+> t
+
+, . . . , α Nt ]T through a softmax function, where ¯Cit = Cit /κ i denotes the normalized CTG of the i-th constraint, and αit denotes the fusion weight of the i-th expert. Given the distributions {pi(· | τ i
+
+> −K:t
+
+)}Ni=1 
+
+and the weights αt, we define the fused PoE distribution as 
+
+pPoE 
+
+> θR
+
+ · | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+
+
+= 1
+
+ZtNY
+
+> i=1
+
+pi
+
+ · | τ i
+
+> −K:t
+
+αit , (4) where Zt is the normalization constant. The final target RTG is sampled as 
+
+ˆRt ∼ pPoE 
+
+> θR
+
+ · | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+ . (5) The closed-form expressions for the fused Gaussian distribu-tion and its reparameterized sampling procedure are provided in the appendix. Algorithm 1: CORMA Three-Stage Training 
+
+Input : Offline dataset D, sequence length K, number of constraints 
+
+N , hyper-parameters λ, and training steps T1, T 2, T 3.
+
+Initialize : θB, {ϕi}Ni=1 , and θR.1: // Stage 1: Action Decoder Pre-training 2: for t = 1 to T1 do 
+
+3: Sample a batch of (τ−K:t, a ∗ 
+
+> t
+
+) from D.4: Update θB by minimizing LB(θB) in Eq. (9). 5: end for 
+
+6: Freeze θB.7: // Stage 2: Constraint-Specific Expert Training 8: for i = 1 to N do 
+
+9: Construct Di for the i-th expert. 10: for t = 1 to T2 do 
+
+11: Sample a batch of (τ i
+
+> −K:t
+
+, R ∗ 
+
+> t
+
+) from Di.12: Update ϕi by minimizing LE 
+
+> i
+
+(ϕi) in Eq. (10). 13: end for 
+
+14: end for 
+
+15: Freeze {ϕi}Ni=1 .16: // Stage 3: Router Network Training 17: Construct DR based on {Di}Ni=1 .18: for t = 1 to T3 do 
+
+19: Sample a batch of (st, {Cit }Ni=1 , a t, {τ i
+
+> −K:t
+
+}Ni=1 ) from DR.20: Compute ¯Ct and predict αt based on the router. 21: for i = 1 to N do 
+
+22: Predict pϕi (·| τ i
+
+> −K:t
+
+) based on the i-th expert network. 23: end for 
+
+24: Sample ˆRt from the fused distribution 
+
+> 1
+> Zt
+
+QNi=1 pi(·| τ i
+
+> −K:t
+
+)αit .25: Update θR by minimizing LR(θR) in Eq. (11). 26: end for 
+
+27: Return θB, {ϕi}Ni=1 , and θR.
+
+Mamba-based Conditional Action Decoder 
+
+After obtaining the constraint-aware ˆRt, we employ a Mamba module as the conditional action decoder. At time step t, the module receives a length-K trajectory, i.e., 
+
+ˆτ−K:t =
+
+
+
+st−K+1 , {Cit−K+1 }Ni=1 , ˆRt−K+1 , a t−K+1 , . . . , st−1, {Cit−1}Ni=1 , ˆRt−1, a t−1, s t, {Cit }Ni=1 , ˆRt
+
+
+
+. (6) By leveraging its selective state space mechanism, the Mamba module extracts temporal features from this sequence to produce a hidden representation yt. To improve robustness in offline policy learning, we model the action decoder as a stochastic continuous distribution. Specifically, yt is fed into two parallel linear projection heads which parameterize the mean μθB (ˆ τ−K:t) and covariance ΣθB (ˆ τ−K:t) of the action distribution, respectively. Finally, the conditional action pol-icy is modeled as a Gaussian distribution: 
+
+πθB (· | ˆτ−K:t) = N
+
+
+
+μθB (ˆ τ−K:t), ΣθB (ˆ τ−K:t)
+
+
+
+, (7) where θB denotes the parameters of the action decoder. 
+
+Three-Stage Optimization Mechanism 
+
+In multi-constraint offline safe RL, directly modeling mul-tiple heterogeneous safety constraints within a unified pol-icy optimization framework remains challenging due to the Offline 
+
+Dataset 
+
+Multi -Constraint Trajectories Sequence 
+
+... 
+
+> ...
+
+... 
+
+> ...
+> ...
+> ...
+> ...
+> ...
+
+Action Distribution 
+
+Sampling 
+
+Predicted Action 
+
+Training Loss Function : 
+
+NLL Loss  Entropy Loss 
+
+Stage 1: Action Decoder Pretraining  Stage 2: Constraint -Specific RTG Experts Training  Stage 3: PoE Fusion -Based Router Training 
+
+Expert 1   
+
+> 2
+> 𝒑 𝝓 𝟐
+> 𝟐 ( · |𝝉 𝟐 )
+
+Expert 2 
+
+> N
+
+Expert  N
+
+> ...
+
+𝜶 𝒕 =[𝜶 𝒕 𝟏 , 𝜶 𝒕 𝟐 , . . . , 𝜶 𝒕 𝑵 ]
+
+> Route Weights
+
+Expert 1  Expert 2  Expert  N
+
+... 
+
+Router -Weighted PoE Fusion 
+
+Training Loss Function : 
+
+Router 
+
+... 
+
+Parameters State:  Activate Router, Frozen others 
+
+Conditional Action Decoder 
+
+Update 
+
+Gaussian policy parameterization    
+
+> Conv.
+> Proj. Conv. σ
+> Selective
+> Scan
+> Output
+> Proj.
+> σGate Projection xN
+> (𝑪 𝟏 (𝝉) ≤ 𝑪 𝝆 𝟏 ,𝑹 (𝝉) ≥ 𝑹 𝜼 𝟏 )
+
+Training Loss Function : 
+
+For  i-th  expert,  
+
+> State 𝒔 𝒕
+
+Sampling 
+
+Update      
+
+> (Balanced
+> Mixed )
+> ...
+> ...
+> ...
+> ...
+> Trajectory for Expert 1
+> Trajectory for Expert 2
+> Trajectory for Expert N
+> Mamba
+> Mamba
+> Predict RTG
+> based on
+> Mamba
+> Predict RTG
+> based on
+
+Rt-K+1 
+
+> 1
+
+Ct-K+1  Ct-K+1  Ct-K+1  st-K+1  at-K+1    
+
+> 12N*
+
+Rt Ct
+
+> 1
+
+Ct
+
+> 2
+
+Ct
+
+> N
+
+st at
+
+> *
+
+𝝉 -K:t 
+
+𝝅 𝜽 𝑩 (⋅ |𝝉 )-K:t 
+
+at
+
+𝓛(𝜽 𝐁 ) = −𝐥𝐨𝐠 𝝅 𝜽 𝑩 (𝒂 𝒕 
+
+> ∗
+
+|𝝉 ) − 𝝀𝑯[ 𝝅 𝜽 𝑩 (⋅ |𝝉 )] -K:t  -K:t 
+
+𝓓 
+
+𝓓  𝓓 
+
+𝓓 
+
+𝓓 
+
+> -K:t
+
+𝝉 1
+
+Rt-K+1  Ct-K+1  
+
+> 1
+
+st-K+1  at-K+1 
+
+Rt-1 Ct-1
+
+> 1
+
+st-1 at-1
+
+Ct
+
+> 1
+
+st Rt
+
+> *
+> 1
+> ...
+> ...
+> ...
+> ...
+> -K:t
+
+Rt-K+1  Ct-K+1  
+
+> 2
+
+st-K+1  at-K+1 
+
+Rt-1 Ct-1
+
+> 2
+
+st-1 at-1
+
+> 2
+
+𝝉 
+
+Ct 
+
+> 2
+
+st Rt
+
+> *
+> ...
+> ...
+> ...
+> ...
+
+Ct-K+1  st-K+1  at-K+1 
+
+Ct-1 st-1 at-1
+
+Rt-K+1 
+
+Rt-1
+
+Ct
+
+> N
+> N
+> N
+
+st Rt     
+
+> *
+> -K:t 𝒑 𝝓 𝟏
+> 𝟏 ( · |𝝉 𝟏 )
+> -K:t
+> 𝒑 𝝓 𝑵 ( · |𝝉 )-K:t
+> NN
+
+𝓛 𝒊 (𝝓 𝒊 ) = −𝐥𝐨𝐠 𝒑 𝝓 𝒊 (𝑹 𝒕 
+
+> ∗
+
+|𝝉 )   
+
+> E𝒊 𝒊
+> -K:t
+
+𝓛(𝜽 𝐑 ) = − 𝐥𝐨𝐠 𝒑 𝜽 𝐑  
+
+> 𝐏𝐨𝐄
+
+(𝑹 𝒕 ∗ ∣ {𝝉 −𝑲:𝒕 𝒊 }𝒊= 𝑵 , 𝒔 𝒕 , ሜ 𝑪 𝒕 )
+
+𝝁 𝒕 𝐏𝐨𝐄 , 𝚺 𝒕 𝐏𝐨𝐄      
+
+> 𝝐 𝒕 ∼ 𝓝(𝟎, 𝟏) 𝑹 𝒕 = 𝝁 𝒕 𝐏𝐨𝐄 +𝚺 𝒕 𝐏𝐨𝐄 𝝐 𝒕
+
+Ƹ
+
+𝓓 
+
+> -K:t
+
+𝝉 N 
+
+> 𝝉 𝟐
+> -K:t
+> Predict RTG
+> based on 𝝉 𝟏
+> -K:t
+> -K:t 𝝉 𝑵
+> (𝑪 𝟐 (𝝉) ≤ 𝑪 𝝆 𝟐 ,𝑹 (𝝉) ≥ 𝑹 𝜼 𝟐 )
+> (𝑪 𝑵 (𝝉) ≤ 𝑪 𝝆 𝑵 ,𝑹 (𝝉) ≥ 𝑹 𝜼 𝑵 )
+
+{𝓓 } 𝒊=𝟏  
+
+> 𝑵
+> R
+> CTG vector ሜ𝑪 𝒕
+
+𝒑 𝜽 𝐑  
+
+> 𝐏𝐨𝐄
+
+(𝑹 𝒕 ∗ ∣ {𝝉 −𝑲:𝒕 𝒊 }𝒊=𝟏 𝑵 , 𝒔 𝒕 , ሜ 𝑪 𝒕 )       
+
+> 𝒑 𝝓 𝟐
+> 𝟐 ( · |𝝉 𝟐 )-K:t 𝒑 𝝓 𝟏
+> 𝟏 ( · |𝝉 𝟏 )-K:t -K:t 𝒑 𝝓 𝑵
+> 𝑵 ( · |𝝉 𝑵 )
+> i
+
+Figure 3: Overview of CORMA. Stage I pre-trains the Mamba-based action decoder using offline trajectories. Stage II trains constraint-specific RTG experts to model feasible RTG distributions under different constraints. Stage III trains the router to adaptively fuse expert predictions through PoE and generate constraint-aware RTG guidance for safe action execution. complex interactions among different constraints. To address this, we introduce a three-stage optimization mechanism, as illustrated in Fig. 3. 
+
+Stage I: Conditional Action Decoder Pre-training In the first stage, we pre-train the conditional action decoder net-work via the offline dataset D. At time step t, it receives a length-K trajectory sequence as input, i.e., 
+
+τ−K:t =
+
+
+
+st−K+1 , {Cit−K+1 }Ni=1 , R t−K+1 , a t−K+1 , . . . , st, {Cit }Ni=1 , R t
+
+
+
+. (8) To further enhance the exploration capability of the pol-icy, we introduce a Shannon entropy regularization term 
+
+H[πθB (·| τ−K:t)] into the optimization objective. Finally, the loss function of the network can be expressed as 
+
+LB(θB) = E(τ−K:t,a ∗ 
+
+> t
+
+)∼D 
+
+h
+
+− log πθB (a∗
+
+t |τ−K:t)
+
+− λH πθB (·| τ−K:t)i
+
+, (9) where λ is a weight coefficient, and a∗
+
+t is the action from D.
+
+Stage II: Constraint-Specific Expert Training After completing the first-stage training, we freeze the parameters 
+
+θB of the conditional action decoder and proceed to train each constraint-specific RTG expert. For the i-th constraint, let Ciρ
+
+denote the ρ-quantile of the trajectory cost returns {Ci(τ ) : 
+
+τ ∈ D} . Among the trajectories satisfying Ci(τ ) ≤ Ciρ, we further define Riη as the η-quantile of their reward returns. We construct Di = τ ∈ D : Ci(τ ) ≤ Ciρ, R (τ ) ≥ Riη ,
+
+which retains low-cost trajectories with relatively high re-turns under the i-th constraint. For each sequence τ i
+
+−K:t
+
+sampled from Di, only the CTG tokens associated with the 
+
+i-th constraint are retained, and the corresponding empirical 
+
+R∗
+
+t is used as the likelihood target of the expert. Thus, the optimization objective of the i-th expert network is 
+
+LE
+
+i (ϕi) = E(τ i
+
+> −K:t
+
+,R ∗ 
+
+> t
+
+)∼D i
+
+h
+
+− log pϕi (R∗
+
+t | τ i
+
+−K:t)
+
+i
+
+, (10) where ϕi are the parameters of the i-th expert network. 
+
+Stage III: Routing Network Training After training all experts, we freeze θB and {ϕi}Ni=1 , and optimize only the router parameters θR. We construct the routing dataset DR as a balanced mixture of {D i}Ni=1 by sampling each constraint-specific subset with equal probability. The router is trained to maximize the likelihood of the empirical R∗
+
+t under the fused PoE distribution, i.e., 
+
+LR(θR) = E({τ i
+
+> −K:t
+
+}Ni=1 ,s t, ¯Ct,R ∗ 
+
+> t
+
+)∼D R
+
+ − log pPoE 
+
+θR
+
+ R∗
+
+t |{τ i
+
+−K:t}Ni=1 , s t, ¯Ct
+
+ . (11) 
+
+## Experiment 
+
+In this section, we design our experiments to answer the following research questions: 
+
+• RQ1: Can CORMA learn safe policies under multiple constraints from offline datasets? 
+
+• RQ2: Can CORMA achieve both few-shot and zero-shot adaptation to unseen safety-budget combinations? 
+
+• RQ3: Can CORMA achieve efficient training and deploy-ment under multi-constraint settings? Method BC-v2 CC-v2 BC-v3 CC-v3 DC-v3 PB-v3 PG-v3 CG-v3 PP-v3 CP-v3 
+
+r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓ r ↑ c ↓
+
+BCQ-Lag 88.3 1.25 75.9 0.99 74.5 1.71 69.7 2.88 92.1 1.92 80.2 1.10 86.3 1.01 81.2 1.18 79.1 1.29 80.3 1.22 BEAR-Lag 90.1 1.02 83.8 1.05 86.3 1.99 73.2 2.42 94.8 2.76 85.9 1.08 89.2 1.17 84.9 1.69 82.7 1.33 83.1 1.29 PDCA 87.7 0.98 81.3 0.97 78.7 1.76 71.6 1.79 89.1 1.57 86.3 1.46 89.3 1.45 87.3 1.67 83.0 1.06 85.0 1.08 POCE 88.8 1.42 81.5 1.08 79.4 1.37 72.4 1.38 86.8 1.33 87.2 1.01 90.1 0.99 88.6 1.01 84.2 1.03 86.1 1.02 OASIS 82.5 0.95 77.8 1.02 73.8 1.18 67.5 1.24 81.6 1.78 84.5 0.99 87.0 0.97 85.5 0.98 80.8 1.01 83.2 0.99 
+
+CAPS 79.9 0.99 75.5 0.98 71.3 1.13 65.8 0.98 78.0 1.20 83.4 0.94 86.5 1.05 84.8 0.96 78.9 0.98 81.5 0.97 
+
+CCAC 83.3 0.98 80.2 0.96 77.5 1.08 71.2 1.34 84.2 0.99 88.3 1.16 90.5 0.94 88.9 0.95 83.8 0.96 86.2 0.99 
+
+BC-Safe 75.9 1.98 77.2 1.32 82.4 1.14 72.6 1.65 43.0 0.98 70.4 1.59 58.5 1.77 61.2 1.04 81.1 1.25 70.8 1.13 CDT-MC 72.8 0.97 75.1 1.21 78.2 1.62 71.8 1.08 86.2 1.35 70.3 1.91 92.2 1.47 70.4 1.22 77.5 1.23 79.1 1.65 CoPDT-MC 89.9 1.61 79.6 0.99 79.8 1.49 71.3 1.39 87.3 1.73 88.6 1.69 88.5 1.37 87.4 1.27 86.4 1.23 87.9 1.91 CORDT 83.5 0.91 82.4 1.16 80.2 1.28 72.4 0.92 83.5 0.96 88.2 0.97 90.9 1.02 86.2 0.95 85.5 0.98 87.1 1.01 CORMA w/o PoE 70.4 1.18 62.8 0.99 75.8 1.48 71.1 0.99 81.9 1.18 65.0 1.15 70.1 0.97 68.0 1.16 79.4 1.05 54.0 0.98 
+
+CORMA-S 82.9 1.19 78.4 1.23 73.8 1.87 66.8 1.69 80.1 1.78 75.3 1.39 79.7 1.68 78.1 1.27 74.6 1.36 79.7 1.29 
+
+CORMA (Ours) 84.8 0.89 78.4 0.98 80.9 0.89 70.8 0.97 88.0 0.95 90.2 0.93 91.7 0.92 89.5 0.94 86.9 0.93 88.3 0.95 
+
+Table 1: Evaluation results on Bullet-Safety-Gym and Safety-Gymnasium tasks. Entries report normalized reward ( r ↑∈ [0 , 100] )and maximum normalized cost among all constraints ( c ↓), averaged over 5 seeds and 20 episodes. Black bold indicates constraint satisfaction ( c ≤ 1). Black bold highlights the best safety-performance trade-off among all methods. 0 500 1000 1500 2000             
+
+> Episodes
+> 50 60 70 80 90 100
+> Accumulative Rewards (a)
+> CORMA CORDT CORMA w/o PoE CDT-MC
+> 0500 1000 1500 2000
+> Episodes
+> 0.7 0.9 1.1 1.3 1.5
+> Collision Costs (b)
+> CORMA CORDT CORMA w/o PoE CDT-MC
+> 0500 1000 1500 2000
+> Episodes
+> 0.7 0.9 1.1 1.3 1.5
+> High Speed Costs (c)
+> CORMA CORDT CORMA w/o PoE CDT-MC
+> 0500 1000 1500 2000
+> Episodes
+> 0.7 0.9 1.1 1.3 1.5
+> Low Speed Costs (d)
+> CORMA CORDT CORMA w/o PoE CDT-MC
+
+Figure 4: Fine-tuning convergence under new safety-budget combinations in the DC-v3 tasks. The policies are fine-tuned using trajectories that satisfy the new safety-budget combinations. (a) Normalized accumulative rewards during fine-tuning. (b) Normalized collision costs. (c) Normalized high-speed costs. (d) Normalized low-speed costs. 
+
+Experimental Setup 
+
+Tasks and Constraints We evaluate our method on OSRL benchmark tasks built upon Bullet-Safety-Gym (Liu et al., 2023a) and Safety-Gymnasium (Ji et al., 2023). We con-sider four types of robots (Point, Car, Ball, and Drone) and four tasks (Circle, Goal, Push, Button). Task names follow the convention “Robot-Task", e.g., PG denotes “Point-Goal". For each task, we incorporate three heterogeneous con-straints: the boundary/collision constraint, the high-velocity constraint, and the low-velocity constraint. Based on these, we establish two task settings: the -v2 tasks include the two constraints of boundary/collision and high velocity, while the challenging -v3 tasks encompass all constraints. 
+
+Metrics We evaluate performance using episodic reward return and episodic cost return. To ensure comparability across tasks with different reward scales, we adopt the nor-malized reward return as Rnormalized = Rπ −Rmin  
+
+> Rmax −Rmin
+
+× 100 ,where Rπ denotes the evaluated episodic reward return of policy π, and Rmin and Rmax are the minimum and maxi-mum episodic reward returns in the offline dataset, respec-tively. To compare heterogeneous constraints and categorize safety-budget combinations for zero-shot evaluation, we use Cost-N to measure overall safety and d(κ, Kseen ) to quantify budget deviation, as predefined in the preceding generaliza-tion analysis. Specific experimental conditions and hyperpa-rameters are detailed in appendix. 
+
+Algorithms and Baselines To evaluate the performance of CORMA, we compared it against the following baselines: (1) CDT-MC, a multi-constraint adaptation of the CDT; (2) CORMA w/o PoE, an ablation baseline that completely re-moves the constraint-specific experts and the routing mech-anism, directly feeding the concatenated CTGs and RTG Seen Slight Moderate Severe 50 60 70 80 90 100          
+
+> Accumulative Rewards (a)
+> CDT-MC CORMA w/o PoE CORDT CORMA
+> Seen Slight Moderate Severe 0.5 0.9 1.3 1.7 2.1 2.5
+> Collision Costs (b)
+> CDT-MC CORMA w/o PoE CORDT CORMA
+> Seen Slight Moderate Severe 0.5 0.9 1.3 1.7 2.1 2.5
+> High-Speed Costs (c)
+> CDT-MC CORMA w/o PoE CORDT CORMA
+> Seen Slight Moderate Severe 0.5 0.9 1.3 1.7 2.1 2.5
+> Low-Speed Costs (d)
+> CDT-MC CORMA w/o PoE CORDT CORMA
+
+Figure 5: Zero-shot generalization under unseen safety-budget combinations in the DC-v3 task. (a) Normalized accumulative rewards. (b) Normalized Collision costs. (c) Normalized High-speed costs. (d) Normalized Low-speed costs. 
+
+Phase CDT CDM CORDT CORMA Backbone (h) 15.82 11.64 15.81 11.62 Experts (h) – – 1.42 1.34 Router (h) – – 0.71 0.68 Total Train (h) 15.82 11.64 17.94 13.64 
+
+Inference (s) 0.008 0.003 0.010 0.005 
+
+Table 2: Time comparison during training and deployment. Training times are reported in hours (h), and deployment inference times are reported in seconds (s). into the action decoder; (3) CORMA-S, which replaces the multi-expert PoE module with a single unified network that jointly models all CTGs for RTG prediction; (4) Constraint-Routed Decision Transformer (CORDT), which substitutes the action decoder network of CORMA with Transformers; (5) CoPDT-MC, a multi-constraint adaptation of the recent sequence modeling method CoPDT (Xue et al., 2026). (6) BC-Safe (Nguyen et al., 2022), a behavior cloning baseline; (7) BCQ (Fujimoto et al., 2019) with Lagrangian (BCQ-Lag), BEAR (Kumar et al., 2019) with Lagrangian (BEAR-Lag), and PDCA (Hong et al., 2024), safe RL methods adapted for multiple constraints through Lagrangian multipliers; (8) POCE (Guan, 2024), OASIS (Yao, 2024), CAPS (Chemingui et al., 2025), CCAC (Guo et al., 2025), four recent baselines that demonstrates excellent performance; 
+
+Comparison and Analysis 
+
+RQ1: As shown in Table 1, CORMA achieves a favorable reward–safety trade-off across most tasks. Conventional of-fline safe RL methods remain competitive on -v2 tasks, but degrade markedly on the challenging -v3 tasks. More impor-tantly, CORDT consistently outperforms CORMA w/o PoE, indicating that the constraint-routed PoE mechanism is the primary source of CORMA’s performance gains. Meanwhile, CORMA-S frequently violates constraints, indicating that a single expert is insufficient for reliable multi-constraint RTG prediction. CORMA w/o PoE generally outperforms CDT-MC and CoPDT-MC, confirming the complementary benefit of the Mamba action decoder. These results demonstrate that CORMA can effectively learn safety-aware policies from of-fline datasets under multiple heterogeneous constraints. 
+
+RQ2: To evaluate CORMA’s adaptability, we first examine its few-shot adaptation to unseen safety-budget combinations on the challenging DC-v3 task. The models are pre-trained on the base dataset and then fine-tuned using a small subset of trajectories. As shown in Fig. 4, CORMA reduces the col-lision, high-speed, and low-speed costs below their budgets with fewer fine-tuning steps. The overall performance follows CORMA > CORDT > CORMA w/o PoE > CDT-MC. The advantage of CORDT over CDT-MC indicates the effective-ness of constraint-routed PoE mechanism, while the gain of CORMA over CORDT shows that the Mamba action decoder improves adaptability. Moreover, we evaluate the zero-shot generalization of CORMA under slight, moderate, and severe safety-budget regions, corresponding to increasing values of 
+
+d(κ, Kseen ). As shown in Fig. 5, CORMA maintains com-petitive rewards across different regions. Fig. 5(b)-(d) further show that CORMA controls all individual costs within their budgets, whereas the baselines exhibit increasing violations. These results demonstrate the robust zero-shot adaptability of CORMA to unseen safety-budget combinations. 
+
+RQ3: We evaluate the computational efficiency of CORMA during training and deployment. Although CORMA adds additional experts and a router, the linear complexity of Mamba significantly reduces sequence mod-eling overhead compared with Transformer-based baselines. As shown in Table 2, this computational efficiency advan-tage offsets the overhead of the additional modules, leading to lower training time than the Transformer-based baselines. Moreover, CORMA achieves 0.005 s/step inference latency, demonstrating its ability to support multi-constraint policy inference with lower deployment latency. 
+
+## Conclusion 
+
+In this work, we study multi-constraint offline safe RL with varying safety-budget combinations. We propose CORMA, a framework that decomposes policy inference into constraint-aware RTG estimation and adaptive action generation. A three-stage optimization mechanism separately trains the ac-tion decoder, experts, and router. Experiments on OSRL benchmarks show that CORMA achieves better reward-safety trade-offs and stronger zero-shot generalization to un-seen budget combinations than existing safe RL baselines. References 
+
+Achiam, J.; Held, D.; Tamar, A.; and Abbeel, P. 2017. Constrained policy optimization. In Proceedings of the 34th International Conference on Machine Learning , 22–31 Alles, M.; Becker-Ehmck, P.; van der Smagt, P.; and Karl, M. 2024. Constrained latent action policies for model-based offline reinforcement learning. In Advances in Neural Information Processing Systems , volume 37, 70381–70405 Altman, E. 1998. Constrained Markov decision processes with total cost criteria: Lagrangian approach and dual linear program. Mathematical methods of operations research ,48(3): 387–417 Chemingui, Y.; Deshwal, A.; Wei, H.; Fern, A.; and Doppa, J. 2025. Constraint-adaptive policy switching for offline safe reinforcement learning. In Proceedings of the 39th AAAI Conference on Artificial Intelligence , volume 39, 15722–15730 Chen, L.; Lu, K.; Rajeswaran, A.; Lee, K.; Grover, A.; Laskin, M.; Abbeel, P.; Srinivas, A.; and Mordatch, I. 2021. Decision transformer: Reinforcement learning via sequence modeling. Advances in Neural Information Processing Systems , 34: 15084–15097 Dao, T.; Fu, D.; Ermon, S.; Rudra, A.; and Ré, C. 2022. Flashattention: Fast and memory-efficient exact attention with io-awareness. Advances in Neural Information Pro-cessing Systems , 35: 16344–16359 Fujimoto, S.; Meger, D.; and Precup, D. 2019. Off-policy deep reinforcement learning without exploration. In Pro-ceedings of the 36th International Conference on Machine Learning , 2052–2062 Gao, S.; Ding, J.; Fu, L.; Wang, X.; and Zhou, C. 2024. Exterior penalty policy optimization with penalty metric network under constraints. arXiv preprint arXiv:2407.15537 
+
+Gong, Z.; Kumar, A.; and Varakantham, P. 2025. Offline safe reinforcement learning using trajectory classification. In Proceedings of the 39th AAAI Conference on Artificial Intelligence , volume 39, 16880–16887 Gu, A.; Goel, K.; and Ré, C. 2021. Efficiently modeling long sequences with structured state spaces. arXiv preprint arXiv:2111.00396 
+
+Gu, A.; and Dao, T. 2023. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 
+
+Guan, J.; Shen, L.; Zhou, A.; Li, L.; Hu, H.; He, X.; Chen, G.; and Jiang, C. 2024. POCE: Primal policy optimization with conservative estimation for multi-constraint offline reinforcement learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,26243–26253 Guo, Z.; Zhou, W.; Wang, S.; and Li, W. 2025. Constraint-conditioned actor-critic for offline safe reinforcement learning. In Proceedings of the 13th International Confer-ence on Learning Representations 
+
+Guo, Z.; Zhou, W.; and Li, W. 2024. Temporal logic specification-conditioned decision transformer for offline safe reinforcement learning. In Proceedings of the 41st In-ternational Conference on Machine Learning , 17003–17019 Hansen, N.; Su, H.; and Wang, X. 2024. TD-MPC2: Scalable, robust world models for continuous control. In Proceedings of the 12th International Conference on Learning Representations , volume 2024, 47376–47405 Hazra, S.; Dasgupta, P.; and Dey, S. 2025. Incentivizing safer actions in policy optimization for constrained reinforcement learning. arXiv preprint arXiv:2509.09208 
+
+Hong, K.; Li, Y.; and Tewari, A. 2024. A primal-dual-critic algorithm for offline constrained reinforcement learning. In Proceedings of the 27th International Conference on Artificial Intelligence and Statistics , 280–288 Huang, S.; Hu, J.; Yang, Z.; Yang, L.; Luo, T.; Chen, H.; Sun, L.; and Yang, B. 2024. Decision Mamba: Reinforcement learning via hybrid selective sequence modeling. Advances in Neural Information Processing Systems , 37: 72688–72709 Ji, J.; Zhang, B.; Zhou, J.; Pan, X.; Huang, W.; Sun, R.; Geng, Y.; Zhong, Y.; Dai, J.; and Yang, Y. 2023. Safety gymnasium: A unified safe reinforcement learning bench-mark. Advances in Neural Information Processing Systems ,36: 18964–18993 Kidambi, R.; Rajeswaran, A.; Netrapalli, P.; and Joachims, T. 2020. MOREL: Model-based offline reinforcement learning. Advances in Neural Information Processing Systems , 33: 21810–21823 Kostrikov, I.; Fergus, R.; Tompson, J.; and Nachum, O. 2021. Offline reinforcement learning with fisher divergence critic regularization. In Proceedings of the 38th International Conference on Machine Learning , 5774–5783 Kumar, A.; Fu, J.; Soh, M.; Tucker, G.; and Levine, S. 2019. Stabilizing off-policy q-learning via bootstrapping error reduction. Advances in Neural Information Processing Systems , 32: 11784–11794 Liu, Z.; Guo, Z.; Lin, H.; Yao, Y.; Zhu, J.; Cen, Z.; Hu, H.; Yu, W.; Zhang, T.; Tan, J.; et al. 2023a. Datasets and benchmarks for offline safe reinforcement learning. arXiv preprint arXiv:2306.09303 
+
+Liu, Z.; Guo, Z.; Yao, Y.; Cen, Z.; Yu, W.; Zhang, T.; and Zhao, D. 2023b. Constrained decision transformer for offline safe reinforcement learning. In Proceedings of the 40th International Conference on Machine Learning ,21611–21630 Lv, Q.; Deng, X.; Chen, G.; Wang, M. Y.; and Nie, L. 2024. Decision Mamba: A multi-grained state space model with self-evolution regularization for offline rl. Advances in Neural Information Processing Systems , 37: 22827–22849 Nguyen, T.; Zheng, Q.; and Grover, A. 2022. Reliable conditioning of behavioral cloning for offline reinforcement learning. arXiv preprint arXiv:2210.05158 
+
+Stooke, A.; Achiam, J.; and Abbeel, P. 2020. Responsive safety in reinforcement learning by pid lagrangian methods. In Proceedings of the 37th International Conference on Machine Learning , 9133–9143 Tay, Y.; Dehghani, M.; Bahri, D.; and Metzler, D. 2022. Efficient transformers: A survey. ACM Computing Surveys ,55(6): 1–28 Tessler, C.; Mankowitz, D. J.; and Mannor, S. 2018. Reward constrained policy optimization. arXiv preprint arXiv:1805.11074 
+
+Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. Attention is all you need. Advances in Neural Information Processing Systems , 30 Wachi, A.; Shen, X.; and Sui, Y. 2024. A survey of constraint formulations in safe reinforcement learning. arXiv preprint arXiv:2402.02025 
+
+Wang, S.; Liu, S.; Ye, W.; You, J.; and Gao, Y. 2024. Efficientzero V2: Mastering discrete and continuous control with limited data. arXiv preprint arXiv:2403.00564 
+
+Wei, H.; Liu, X.; and Ying, L. 2024. Safe reinforce-ment learning with instantaneous constraints: The role of aggressive exploration. In Proceedings of the 38th AAAI Conference on Artificial Intelligence , volume 38, 21708–21716 Xu, H.; Zhan, X.; and Zhu, X. 2022. Constraints penalized q-learning for safe offline reinforcement learning. In 
+
+Proceedings of the 36th AAAI Conference on Artificial Intelligence , volume 36, 8753–8760 Kumar, A.; Zhou, A.; Tucker, G.; and Levine, S. 2020. Conservative Q-learning for offline reinforcement learning. 
+
+Advances in Neural Information Processing Systems , 33: 1179–1191 Xue, R.; Zhang, Z.; Li, L.; Guan, C.; Yuan, L.; and Yu, Y. 2026. Adaptable Safe Policy Learning from Multi-task Data with Constraint Prioritized Decision Transformer. 
+
+Advances in Neural Information Processing Systems , 38: 64765–64803 Yao, Y.; Cen, Z.; Ding, W.; Lin, H.; Liu, S.; Zhang, T.; Yu, W.; and Zhao, D. 2024. OASIS: Conditional distribution shaping for offline safe reinforcement learning. Advances in Neural Information Processing Systems , 37: 78451–78478 Yu, H.; Xu, W.; and Zhang, H. 2022. Towards safe reinforcement learning with a safety editor policy. Advances in Neural Information Processing Systems , 35: 2608–2621 Yu, T.; Thomas, G.; Yu, L.; Ermon, S.; Zou, J. Y.; Levine, S.; Finn, C.; and Ma, T. 2020. MOPO: Model-based offline policy optimization. Advances in Neural Information Processing Systems , 33: 14129–14142 Zhao, W.; He, T.; Chen, R.; Wei, T.; and Liu, C. 2023. State-wise safe reinforcement learning: A survey. arXiv preprint arXiv:2302.03122 
+
+Zheng, Q.; Zhang, A.; and Grover, A. 2022. Online decision transformer. In Proceedings of the 39th International Conference on Machine Learning , 27042–27059 Appendix 
+
+A. Gaussian Representation of the Router-Weighted PoE . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+B. Generalization Bound of CORMA under Multi-Constraint Offline RL . . . . . . . . . . . . . . . 12 
+
+C. Related Work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .16 C.1 Offline Safe Reinforcement Learning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 C.2 Generalization in Offline Safe RL . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 C.3 Mamba in Reinforcement Learning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+D. CORMA Three-Stage Training and deployment algorithms . . . . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+E. Experimental Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 E.1 Experimental Tasks and Datasets . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 E.2 Baselines . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 E.3 Safety-Budget Shift Regions Settings . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 E.4 Hyperparameters . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 
+
+F. More Experimental Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 F.1 Analysis on Safe Policy Learning under Multiple Constraints . . . . . . . . . . . . . . . . . . . . . . 22 F.2 Analysis on Trajectory Stitching Ability . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 26 F.3 Analysis of the Zero-Shot Constraints Generalization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27 F.4 Effect of Trajectory Context Length on Stage-1 Action Decoder Training . . . . . . . . . . . 28 F.5 How Critical Is the Three-Stage Training Strategy? . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 30 A. Gaussian Representation of the Router-Weighted PoE 
+
+In this section, we derive the Gaussian representation of the router-weighted PoE distribution introduced in the main text. For the i-th expert, the predicted distribution over the RTG at time step t is pi
+
+ · | τ i
+
+> −K:t
+
+ = N (μi,t , Σi,t ) , where μi,t = μϕi
+
+ τ i
+
+> −K:t
+
+ , Σi,t = Σ ϕi
+
+ τ i
+
+> −K:t
+
+ denote the mean and variance predicted by the i-th expert, respectively. Conditioned on {τ i
+
+> −K:t
+
+}Ni=1 , st,and ¯Ct, the router-weighted PoE distribution is defined as 
+
+pPoE 
+
+> θR
+
+ · | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+ = 1
+
+ZtNY
+
+> i=1
+
+pi
+
+ · | τ i
+
+> −K:t
+
+αit , (12) where Zt denotes the normalization constant. The routing weights are generated by a softmax function and satisfy αit > 0, PNi=1 αit = 1 . Let ζt denote an arbitrary candidate value of the scalar RTG at time step t. Substituting the Gaussian density into the unnormalized PoE, we have 
+
+> N
+
+Y
+
+> i=1
+
+pi
+
+ ζt | τ i
+
+> −K:t
+
+αit
+
+=
+
+> N
+
+Y
+
+> i=1
+
+"
+
+1
+
+p2πΣi,t 
+
+exp 
+
+
+
+− (ζt − μi,t )2
+
+2Σ i,t 
+
+#αit
+
+=
+
+" NY
+
+> i=1
+
+(2 πΣi,t )−αit/2
+
+#
+
+exp 
+
+"
+
+− 12
+
+> N
+
+X
+
+> i=1
+
+αit
+
+Σi,t 
+
+(ζt − μi,t )2
+
+#
+
+.
+
+(13) Define the fused precision and the corresponding precision-weighted mean term as 
+
+ΛPoE  
+
+> t
+
+=
+
+> N
+
+X
+
+> i=1
+
+αit
+
+Σi,t 
+
+, ηPoE  
+
+> t
+
+=
+
+> N
+
+X
+
+> i=1
+
+αitμi,t 
+
+Σi,t 
+
+. (14) Since αit > 0 and Σi,t > 0, ΛPoE  
+
+> t
+
+> 0. Expanding the quadratic term in Eq. (13), we have 
+
+> N
+
+X
+
+> i=1
+
+αit
+
+Σi,t 
+
+(ζt − μi,t )2
+
+= Λ PoE  
+
+> t
+
+ζ2 
+
+> t
+
+− 2ηPoE  
+
+> t
+
+ζt +
+
+> N
+
+X
+
+> i=1
+
+αitμ2
+
+> i,t
+
+Σi,t 
+
+.
+
+= Λ PoE 
+
+> t
+
+
+
+ζt − ηPoE 
+
+> t
+
+ΛPoE 
+
+> t
+
+2
+
++
+
+> N
+
+X
+
+> i=1
+
+αitμ2
+
+> i,t
+
+Σi,t 
+
+− (ηPoE  
+
+> t
+
+)2
+
+ΛPoE 
+
+> t
+
+.
+
+(15) By definition, the normalization constant Zt ensures that the resulting probability density function integrates to one. It is given by the integral of the unnormalized PoE distribution over all possible values of ζt, i.e., 
+
+Zt =
+
+Z NY
+
+> i=1
+
+pi
+
+ ζt | τ i
+
+> −K:t
+
+αit dζt. (16) Substituting the expanded quadratic form from Eq. (4) into Eq. (13), the terms independent of ζt can be factored out of the integral. Evaluating the remaining standard Gaussian integral R exp( − Λ2 x2) d x = p2π/ Λ, we obtain the explicit closed-form expression for the normalization constant, i.e., 
+
+Zt =
+
+s
+
+2π
+
+ΛPoE 
+
+> t
+
+" NY
+
+> i=1
+
+(2 πΣi,t )−αit/2
+
+#
+
+exp 
+
+"
+
+− 12
+
+> N
+
+X
+
+> i=1
+
+αitμ2
+
+> i,t
+
+Σi,t 
+
+− (ηPoE  
+
+> t
+
+)2
+
+ΛPoE 
+
+> t
+
+!# 
+
+. (17) Dividing the unnormalized density in Eq. (13) by Zt, the leading constant multipliers and the exponential remainder exactly cancel out. The normalized fused density can therefore be written as 
+
+pPoE 
+
+> θR
+
+ ζt | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+
+
+=
+
+r ΛPoE 
+
+> t
+
+2π exp 
+
+"
+
+− ΛPoE 
+
+> t
+
+2
+
+
+
+ζt − ηPoE 
+
+> t
+
+ΛPoE 
+
+> t
+
+2#
+
+. (18) Hence, the router-weighted PoE remains Gaussian, i.e., 
+
+pPoE 
+
+> θR
+
+ · | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+ = N  μPoE  
+
+> t
+
+, ΣPoE 
+
+> t
+
+ , (19) where the fused mean and variance are 
+
+μPoE  
+
+> t
+
+= ηPoE 
+
+> t
+
+ΛPoE 
+
+> t
+
+, ΣPoE  
+
+> t
+
+= 1ΛPoE 
+
+> t
+
+. (20) Finally, the target RTG is sampled from the fused distribution pPoE 
+
+> θR
+
+ · | { τ i
+
+> −K:t
+
+}Ni=1 , s t, ¯Ct
+
+. The sampling operation can be implemented through the reparameterization technique, i.e., 
+
+ˆRt = μPoE  
+
+> t
+
++
+
+q
+
+ΣPoE  
+
+> t
+
+ϵt, ϵt ∼ N (0 , 1) . (21) 
+
+## B. Generalization Bound of CORMA under Multi-Constraint Offline RL 
+
+To analyze the generalization capabilities of CORMA under novel safety-budget combinations, we derive total variation distance (TVD)-based bounds on the expected cumulative return and per-constraint cumulative cost discrepancies. Based on the theoretical analysis conclusions, we further explain how the constraint-specific RTG experts and router-weighted PoE fusion reduce RTG-induced distribution shift, thereby improving multi-constraint generalization. 
+
+Assumption 1. Let Ct = {C1 
+
+> t
+
+, C 2 
+
+> t
+
+, . . . , C Nt } denote the CTG collection associated with N
+
+constraints. At each time step, the instantaneous reward r(st, a t) and cost ci(st, a t) of the i-th constraint are bounded. There exist Rmax and {Ci
+
+> max
+
+}Ni=1 such that 
+
+|r(st, a t)| ≤ Rmax , (22) 
+
+|ci(st, a t)| ≤ Ci
+
+> max
+
+, ∀i ∈ { 1, . . . , N }. (23) 
+
+Assumption 2. For each constraint dimension i ∈ { 1, . . . , N }, the maximum TVD discrepancy 
+
+DCi 
+
+> T V
+
+(t) between the conditional distribution of the next-step CTG generated by CORMA dur-ing online generalization p1(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+), and the corresponding distribution under the feasible optimal policy p2(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+) satisfies 
+
+max  
+
+> t
+
+E(st,R t,Ct)∼pt 
+
+> 1(st,R t,Ct), a t∼π1(·| st,R t,Ct),
+> (st+1 ,C 1: i−1
+> t+1 )∼p1(·| st,R t,Ct,a t)
+
+h
+
+DCi 
+
+> T V
+
+(t)
+
+i
+
+≤ ξCi , ∀i ∈ { 1, . . . , N }. (24) where ξCi denotes the upper bound on the expected TVD discrepancy between the online generated conditional distribution and that of the feasible optimal policy for the i-th CTG. 
+
+Assumption 3. The TVD discrepancy DRT V (t) between the online RTG conditional distribution generated by CORMA p1(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t) and the corresponding RTG conditional distribution under the feasible optimal policy p2(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t) satisfies 
+
+max  
+
+> t
+
+E(st,R t,Ct)∼pt
+
+> 1(st,R t,Ct), a t∼π1(·| st,R t,Ct),
+> (st+1 ,Ct+1 )∼p1(·| st,R t,Ct,a t)
+
+DRT V (t) ≤ ξR. (25) where ξR denotes the upper bound on the expected TVD discrepancy between the online generated RTG conditional distribution and the RTG conditional distribution of the feasible optimal policy. 
+
+Assumption 4. The maximum TVD discrepancy between the online generalization policy π1
+
+learned by CORMA and the feasible optimal policy π2 is bounded, i.e., 
+
+max 
+
+> st,R t,Ct
+
+DT V 
+
+
+
+π1(·| st, R t, Ct) ∥ π2(·| st, R t, Ct)
+
+
+
+≤ ξπ , (26) where ξπ denotes the upper bound on the policy discrepancy between the online generalization policy and the feasible optimal policy. 
+
+Theorem 1 : The expected cumulative reward ΛR 
+
+> 1
+
+and the expected cumulative cost of the i-th constraint ΛCi 
+
+> 1
+
+in the online deployment phase are bounded as 
+
+|ΛR 
+
+> 1
+
+− ΛR 
+
+> 2
+
+| ≤ 2Rmax 
+
+T (ξ0 + ξπ ) + T (T − 1) 2
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ , (27) |ΛCi 
+
+> 1
+
+− ΛCi 
+
+> 2
+
+| ≤ 2Ci
+
+> max
+
+T (ξ0 + ξπ ) + T (T − 1) 2
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ , ∀i. (28) where ΛR 
+
+> 2
+
+and ΛCi 
+
+> 2
+
+denote the expected cumulative reward and the expected cumulative cost of the 
+
+i-th constraint under the feasible optimal policy, respectively; T is the finite deployment horizon, and ξ0 denotes the TVD discrepancy between the initial distributions. Proof: We regard the target RTG Rt and the CTG collection Ct = {C1 
+
+> t
+
+, C 2 
+
+> t
+
+, . . . , C Nt } as part of the observation space. Let p2(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t) denote the joint transition distribu-tion under the feasible optimal policy, and let p1(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t) denote the joint transition distribution generated by CORMA during the online generalization. By applying Bayes’ rule and the probability chain rule, the joint transition distribution during online generalization can be factorized as 
+
+p1(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t)= p1(st+1 |st, R t, Ct, a t) ·
+
+> N
+
+Y
+
+> i=1
+
+p1(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+)
+
+· p1(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t). (29) Similarly, the joint transition distribution under the feasible optimal policy can be factorized as 
+
+p2(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t)= p2(st+1 |st, R t, Ct, a t) ·
+
+> N
+
+Y
+
+> i=1
+
+p2(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+)
+
+· p2(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t). (30) Since RTG and CTGs do not influence the physical state transition dynamics, we have 
+
+p1(st+1 |st, R t, Ct, a t) = p1(st+1 |st, a t), (31) 
+
+p2(st+1 |st, R t, Ct, a t) = p2(st+1 |st, a t). (32) Moreover, since p1(st+1 |st, a t) = p2(st+1 |st, a t), we have 
+
+p1(st+1 |st, R t, Ct, a t) = p2(st+1 |st, R t, Ct, a t). (33) Therefore, we expand the TVD between the joint transition distribution during online generalization and the joint transition distribution under the feasible optimal policy as 
+
+DT V 
+
+
+
+p1(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t) ∥ p2(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t)
+
+
+
+≤
+
+> N
+
+X
+
+> i=1
+
+Est+1 ,C 1: i−1 
+
+> t+1 ∼p1(·| st,R t,Ct,a t)
+
+
+
+DT V 
+
+
+
+p1(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+)
+
+∥ p2(Cit+1 |st+1 , s t, R t, Ct, a t, C 1: i−1 
+
+> t+1
+
+)
+
+
+
++ Est+1 ,Ct+1 ∼p1(·| st,R t,Ct,a t)
+
+
+
+DT V 
+
+
+
+p1(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t)
+
+∥ p2(Rt+1 |C t+1 , s t+1 , s t, R t, Ct, a t)
+
+
+
+. (34) Based on Assumptions 2 and 3, the maximum one-step discrepancy ξm between the joint transition distribution during online generalization and that under the feasible optimal policy satisfies 
+
+ξm = max 
+
+t E(st,R t,Ct)∼pt
+
+> 1
+
+(st,R t,Ct),at∼π1(·| st,R t,Ct)
+
+"
+
+DT V 
+
+
+
+p1(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t)
+
+∥ p2(st+1 , R t+1 , Ct+1 |st, R t, Ct, a t)
+
+#
+
+≤
+
+NX
+
+j=1 
+
+max 
+
+t E(st,R t,Ct)∼pt
+
+> 1
+
+(st,R t,Ct),a t∼π1(·| st,R t,Ct),
+
+(st+1 ,C 1: j−1 
+
+> t+1
+
+)∼p1(st+1 ,C 1: j−1 
+
+> t+1
+
+|st,R t,Ct,a t)
+
+h
+
+DCj
+
+T V (t)
+
+i
+
++ max 
+
+t E(st,R t,Ct)∼pt
+
+> 1
+
+(st,R t,Ct),a t∼π1(·| st,R t,Ct),
+
+(st+1 ,Ct+1 )∼p1(st+1 ,Ct+1 |st,R t,Ct,a t)
+
+DRT V (t)
+
+≤
+
+NX
+
+j=1 
+
+ξCj + ξR. (35) Based on the Rmax and {Ci
+
+max }Ni=1 in Assumption 1 , we expand the difference between the expected cumulative returns of the policies π1 and π2 over a finite horizon T as 
+
+|ΛR
+
+1 − ΛR
+
+2 |
+
+=
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+ pt
+
+1(st, R t, Ct, a t) − pt
+
+2(st, R t, Ct, a t)r(st, a t)
+
+≤
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+pt
+
+1(st, R t, Ct, a t) − pt
+
+2(st, R t, Ct, a t) |r(st, a t)|≤ Rmax 
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+pt
+
+1(st, R t, Ct, a t) − pt
+
+2(st, R t, Ct, a t)
+
+= Rmax 
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+pt
+
+1(st, R t, Ct)π1(at|st, R t, Ct) − pt
+
+2(st, R t, Ct)π2(at|st, R t, Ct)
+
+= Rmax 
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+pt
+
+1(st, R t, Ct)π1(at|st, R t, Ct) − pt
+
+1(st, R t, Ct)π2(at|st, R t, Ct)+  pt
+
+1(st, R t, Ct) − pt
+
+2(st, R t, Ct)π2(at|st, R t, Ct)
+
+≤ Rmax 
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct,a t
+
+pt
+
+1(st, R t, Ct)π1(at|st, R t, Ct) − pt
+
+1(st, R t, Ct)π2(at|st, R t, Ct)
+
++ Rmax 
+
+T −1X
+
+t=0 
+
+X
+
+st,R t,Ct
+
+pt
+
+1(st, R t, Ct) − pt
+
+2(st, R t, Ct)
+
+= 2 Rmax 
+
+T −1X
+
+t=0 
+
+E(st,R t,Ct)∼pt
+
+> 1
+
+DT V (π1(·| st, R t, Ct) ∥ π2(·| st, R t, Ct)) 
+
++ 2 Rmax 
+
+T −1X
+
+t=0 
+
+DT V (pt
+
+1(st, R t, Ct) ∥ pt
+
+2(st, R t, Ct)) , (36) where ΛR
+
+1 and ΛR
+
+2 denote the expected cumulative returns of π1 and π2, respectively. Furthermore, based on the policy discrepancy bound ξπ in Assumption 4 , we have 
+
+|ΛR
+
+1 − ΛR
+
+2 |≤ 2Rmax 
+
+T −1X
+
+t=0 
+
+ξπ + 2 Rmax 
+
+T −1X
+
+t=0 
+
+DT V 
+
+
+
+pt
+
+1(st, R t, Ct) ∥ pt
+
+2(st, R t, Ct)
+
+
+
+. (37) Let ξt = DT V 
+
+ pt
+
+1(st, R t, Ct) ∥ pt
+
+2(st, R t, Ct). In particular, the initial distribution discrepancy is defined as 
+
+ξ0 = DT V 
+
+
+
+p01(s0, R 0, C0) ∥ p02(s0, R 0, C0)
+
+
+
+. (38) We recursively expand this discrepancy based on the one-step Markov transition from time step 
+
+t − 1 to t as 
+
+ξt = DT V 
+
+
+
+pt
+
+1(st, R t, Ct) ∥ pt
+
+2(st, R t, Ct)
+
+
+
+= 12
+
+X
+
+st,R t,Ct
+
+pt
+
+1(st, R t, Ct) − pt
+
+2(st, R t, Ct)
+
+≤ 12 E(st−1,R t−1,Ct−1)∼pt−11 (st−1,R t−1,Ct−1)
+
+ X
+
+st,R t,Ct
+
+p1(st, R t, Ct|st−1, R t−1, Ct−1)
+
+− p2(st, R t, Ct|st−1, R t−1, Ct−1)
+
+
+
++ DT V 
+
+
+
+pt−11 (st−1, R t−1, Ct−1) ∥ pt−12 (st−1, R t−1, Ct−1)
+
+
+
+. (39) We define the one-step discrepancy between the two joint-state transition distributions as 
+
+δt = 12 E(st−1,R t−1,Ct−1)∼pt−11 (st−1,R t−1,Ct−1)
+
+ X
+
+st,R t,Ct
+
+p1(st, R t, Ct|st−1, R t−1, Ct−1)
+
+− p2(st, R t, Ct|st−1, R t−1, Ct−1)
+
+
+
+. (40) We further decompose the joint-state transition into the action distribution induced by the policy and the environment transition dynamics. For p1, we have 
+
+p1(st, R t, Ct|st−1, R t−1, Ct−1)= X
+
+at−1
+
+π1(at−1|st−1, R t−1, Ct−1) · p1(st, R t, Ct|st−1, R t−1, Ct−1, a t−1). (41) Similarly, for p2, we have 
+
+p2(st, R t, Ct|st−1, R t−1, Ct−1)= X
+
+at−1
+
+π2(at−1|st−1, R t−1, Ct−1) · p2(st, R t, Ct|st−1, R t−1, Ct−1, a t−1). (42) Therefore, by applying the triangle inequality, we obtain 
+
+δt = 12 E(st−1,R t−1,Ct−1)∼pt−11 (st−1,R t−1,Ct−1)
+
+" X
+
+st,R t,Ct
+
+X
+
+at−1
+
+h
+
+π1(at−1|st−1, R t−1, Ct−1)
+
+· p1(st, R t, Ct|st−1, R t−1, Ct−1, a t−1) − π2(at−1|st−1, R t−1, Ct−1)
+
+· p2(st, R t, Ct|st−1, R t−1, Ct−1, a t−1)
+
+i #
+
+≤ E(st−1,R t−1,Ct−1)∼pt−11 (st−1,R t−1,Ct−1)
+
+" X
+
+at−1
+
+π1(at−1|st−1, R t−1, Ct−1)
+
+· D T V 
+
+
+
+p1(st, R t, Ct|st−1, R t−1, Ct−1, a t−1) ∥ p2(st, R t, Ct|st−1, R t−1, Ct−1, a t−1)
+
+#
+
++ E(st−1,R t−1,Ct−1)∼pt−11 (st−1,R t−1,Ct−1)
+
+"
+
+DT V 
+
+
+
+π1(·| st−1, R t−1, Ct−1) ∥ π2(·| st−1, R t−1, Ct−1)
+
+#≤ ξm + max 
+
+> st−1,R t−1,Ct−1
+
+DT V 
+
+
+
+π1(·| st−1, R t−1, Ct−1)
+
+∥ π2(·| st−1, R t−1, Ct−1)
+
+
+
+≤ ξm + ξπ
+
+≤
+
+> N
+
+X
+
+> i=1
+
+ξCi + ξR + ξπ . (43) Substituting this into the recursion of the marginal distribution discrepancy, we have 
+
+ξt = DT V 
+
+
+
+pt
+
+> 1
+
+(st, R t, Ct) ∥ pt
+
+> 2
+
+(st, R t, Ct)
+
+
+
+≤ δt + ξt−1
+
+≤ ξ0 +
+
+> t
+
+X
+
+> i=1
+
+δi
+
+≤ ξ0 + t
+
+ NX
+
+> i=1
+
+ξCi + ξR + ξπ
+
+
+
+. (44) Finally, substituting the marginal distribution discrepancy bound ξt ≤ ξ0 + t  P Ni=1 ξCi + ξR +
+
+ξπ
+
+, we obtain the following upper bound on the expected return discrepancy, i.e., 
+
+|ΛR 
+
+> 1
+
+− ΛR 
+
+> 2
+
+| ≤ 2Rmax  
+
+> T−1
+
+X
+
+> t=0
+
+ξ0 + t
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ + ξπ
+
+
+
+= 2 Rmax 
+
+T (ξ0 + ξπ ) + T (T − 1) 2
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ . (45) Similarly, for any constraint dimension i ∈ { 1, . . . , N }, by replacing the reward function with the i-th cost function and scaling the bound by the maximum one-step cost Ci
+
+> max
+
+, we obtain the upper bound on the expected cumulative cost discrepancy as 
+
+|ΛCi 
+
+> 1
+
+− ΛCi 
+
+> 2
+
+| ≤ 2Ci 
+
+> max
+> T−1
+
+X
+
+> t=0
+
+ξ0 + t
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ + ξπ
+
+
+
+= 2 Ci
+
+> max
+
+T (ξ0 + ξπ ) + T (T − 1) 2
+
+
+
+> N
+
+X
+
+> j=1
+
+ξCj + ξR + ξπ
+
+ , ∀i. (46) 
+
+Theorem 1 characterizes the performance gap between the online deployment policy and the feasible optimal policy under new budget combinations. This gap is primarily determined by the policy discrepancy ξπ , the RTG transition discrepancy ξR, and the CTG transition discrepancies 
+
+{ξCi }Ni=1 . When confronted with unseen safety-budget combinations, an idealized feasible optimal policy can allocate an appropriate target return RTG based on the current state and remaining bud-gets. However, when handling such unseen constraint conditions, traditional CDT-based methods fail to generate suitable RTGs, leading to a substantial RTG transition discrepancy ξR against the fea-sible optimal policy, which compounds rapidly over time steps. In contrast, by thoroughly learning the intrinsic relationships among states, CTGs, and RTGs from offline expert trajectories, CORMA can dynamically set well-calibrated RTGs when encountering unseen budget combinations. This effectively reduces the RTG transition discrepancy ξR against the feasible optimal policy, thereby tightening the performance-gap bounds and enabling the cumulative return ΛR 
+
+> 1
+
+and per-constraint cumulative cost ΛCi 
+
+> 1
+
+to more closely approach the idealized feasible optimal performance. 
+
+## C. Related Work 
+
+C.1 Offline Safe Reinforcement Learning 
+
+Offline safe reinforcement learning learns constraint-satisfying policies from static datasets and avoids risky online exploration in real-world environments. Early methods mainly address single-cost constraints. For example, CPO enforces safety by constraining each policy update within a trust-region optimization framework (Achiam et al., 2017). CBPL extends safe policy learning to offline batch settings by combining fitted policy evaluation with constrained policy improvement (Le et al., 2019). CPQ further reduces offline constraint violations by assigning conservative penalties to unsafe or out-of-distribution actions during Q-learning (Xu et al., 2022). However, many practical scenarios require agents to satisfy multiple safety constraints simultaneously. To address the complex challenges of multi-constraint settings, recent studies have developed specific gradient manipulation techniques. For instance, (Yao et al. , 2022) approach multi-constraint safe RL from a Multi-Objective Optimization (MOO) perspective, proposing a Gradient Shaping (GradS) method for Lagrangian-based algorithms that improves training efficiency by eliminating redundant and conflicting constraint gradients. Similarly, (Kim et al. 2023) introduce a trust region-based Safe Distributional Actor-Critic (SDAC) algorithm, which features a gradient integration method that manages infeasibility issues by projecting unsafe policies into a feasible policy set through a quadratic program consisting of all constraint gradients. Nevertheless, due to the inherent trade-offs among different constraints, these methods may still suffer from policy generalization under unseen safety-budget combinations. 
+
+C.2 Generalization in Offline Safe RL 
+
+Recent studies have explored generalization in offline safe RL. For instance, CCAC enables zero-shot adaptation to varying constraint thresholds by modeling the relationship between state-action distributions and safety constraints to regularize critics and policy learning (Guo et al., 2025). CDT improves adaptation to varying constraint thresholds by conditioning action generation on target returns and cost returns (Liu et al., 2023b). CoPDT advances multi-task safety adaptation by using a constraint-prioritized prompt encoder to distinguish different constraints and a dynamic RTG generation mechanism to predict target returns aligned with current safety requirements (Xue et al., 2026). However, existing methods still mainly generalize to threshold changes under a single constraint. They remain insufficient for multi-constraint settings where several safety thresholds vary simultaneously. 
+
+C.3 Mamba in Reinforcement Learning 
+
+Mamba is a selective state space model that enables linear-time sequence modeling through an input-dependent selection mechanism and a hardware-aware parallel scan (Gu and Dao, 2024). Its efficiency in processing long trajectories has motivated several applications in reinforcement learning. Ota et al. replace the self-attention modules of Decision Transformer with Mamba for sequential decision-making (Ota, 2024). Lv et al. further propose a multi-grained Decision Mamba that captures both inter-step temporal dependencies and intra-step relationships among RTGs, states, and actions, achieving improved performance on MuJoCo tasks (Lv et al., 2024). Subsequent studies explore different applications of Mamba in trajectory modeling. Huang et al. introduce Decision Mamba-Hybrid, which combines Mamba-based long-term memory with Transformer-based action prediction and achieves faster inference on long-horizon tasks (Huang et al., 2024). Dai et al. show that a carefully designed Decision Mamba can outperform Decision Transformer with substantially fewer parameters on Atari and MuJoCo (Dai et al., 2024). Nevertheless, existing Mamba-based RL methods mainly focus on unconstrained return maximization and computational efficiency. To the best of our knowledge, Mamba-based conditional sequence modeling has not yet been studied for offline safe RL under varying and unseen safety-budget combinations. 
+
+## D. CORMA Three-Stage Training and deployment algorithms 
+
+In this section, we provide the detailed algorithms of CORMA in multi-constraint scenarios. As described in the main paper, the workflow of CORMA primarily includes two phases: the three-stage offline training and the online policy deployment. The offline training phase consists of three decoupled stages. In Stage I, we pretrain the Mamba-based action decoder backbone θB. We sample length-K multi-constraint trajectories τ−K:t from the offline dataset D. The backbone learns the conditional action policy πθB via minimization of the loss function LB(θB). After this stage, the backbone parameters θB are frozen. In Stage II, we train the constraint-specific experts. For each constraint i, we filter the dataset to obtain a specific subset 
+
+Di. The i-th expert network ϕi processes the constraint-specific trajectory sequence τ i 
+
+> −K:t
+
+to predict the feasible RTG distribution pϕi (·| τ i
+
+> −K:t
+
+). These experts are optimized through minimization of the objective LE 
+
+> i
+
+(ϕi) and subsequently frozen. In Stage III, we train the gating router θR on a subset 
+
+DR. The router evaluates the current state st and the normalized remaining safety budget vector ¯Ctto compute the routing weights αt. The model fuses the expert predictions into a product of experts distribution to sample the final target RTG Rt. The router updates its parameters via minimization of the loss LR(θR). The detailed three-stage training procedure is provided in Algorithm 1. During the online deployment phase, the well-trained networks coordinate to generate safe actions. At each time step t, the agent observes the current state st and appends the state and CTGs to the trajectory sequences for each expert. Each expert infers its respective RTG distribution based on the historical context. The router then evaluates the normalized safety budgets ¯Ct to assign the weights αt. These weights fuse the expert distributions to sample a constraint-aware target RTG ˆRt. Finally, the Mamba backbone θB utilizes the updated full trajectory sequence ˆτ−K:t
+
+as the condition to sample an action at. After the execution of at, the environment returns the instant reward and costs to update the remaining safety budgets Cit+1 . The deployment procedure is provided in Algorithm 2. Algorithm 2: CORMA Three-Stage Training 
+
+Input : Offline dataset D, sequence length K, number of constraints N , hyper-parameters λ, ρ, η , action decoder pretraining steps T1, expert training steps T2, router training steps T3.
+
+Initialize : action decoder θB, experts {ϕi}Ni=1 , router θR.
+
+1: // Stage 1: Action Decoder Pretraining 
+
+2: for t = 1 to T1 do 
+
+3: Sample a batch of length-K trajectories τ−K:t = ( st−K+1 , R t−K+1 , {Cit−K+1 }Ni=1 , a t−K+1 ,. . . , s t, R t, {Cit }Ni=1 ) and actions a∗ 
+
+> t
+
+from D.
+
+4: Predict the conditional action policy πθB (·| τ−K:t).
+
+5: Update Mamba backbone θB by minimizing LB(θB).
+
+6: end for 
+
+7: Freeze parameters θB.
+
+8: // Stage 2: Constraint-Specific Expert Training 
+
+9: for each constraint i ∈ { 1, . . . , N } do 
+
+10: Filter dataset to obtain Di for the i-th expert. 
+
+11: for t = 1 to T2 do 
+
+12: Sample a batch of constraint-specific trajectories τ i 
+
+> −K:t
+
+and RTG R∗ 
+
+> t
+
+from Di.
+
+13: Predict RTG distribution pϕi (·| τ i
+
+> −K:t
+
+) based on the i-th expert network. 
+
+14: Update expert ϕi by minimizing LE 
+
+> i
+
+(ϕi).
+
+15: end for 
+
+16: end for 
+
+17: Freeze all expert parameters {ϕi}Ni=1 .
+
+18: // Stage 3: Router Network Training 
+
+19: Construct DR based on {Di}Ni=1 .
+
+20: for t = 1 to T3 do 
+
+21: Sample a batch of (st, {Cit }Ni=1 , R ∗ 
+
+> t
+
+) and the trajectory {τ i
+
+> −K:t
+
+}Ni=1 from DR.
+
+22: Compute normalized remaining safety budgets vector ¯Ct.
+
+23: Predict routing weights αt = [ α1 
+
+> t
+
+, . . . , α Nt ]T based on the router. 
+
+24: for each constraint i ∈ { 1, . . . , N } do 
+
+25: Predict RTG distribution pϕi (·| τ i
+
+> −K:t
+
+) based on i-th expert network. 
+
+26: end for 
+
+27: Sample the final target RTG ˆRt from the fused PoE distribution 1
+
+> Zt
+
+QNi=1 pi(· | τ i
+
+> −K:t
+
+)αit .
+
+28: Update router θR by minimizing LR(θR).
+
+29: end for 
+
+30: Return Well-trained models θB, {ϕi}Ni=1 , θR.Figure 6: Visualization of the simulation environments and representative tasks (Liu et al., 2023a). Algorithm 3: CORMA Deployment 
+
+Input : Initial constraint budget vector C1 = ( κ1, . . . , κ N )T , well-trained models θB, {ϕi}Ni=1 , θR,deployment steps T .
+
+Initialize : Initial state s1, trajectory sequences {τ i = [ ] }Ni=1 , ˆτ = [ ] . 
+
+> 1:
+
+for t = 1 , . . . , T do  
+
+> 2:
+
+Observe current state st from the environment.  
+
+> 3:
+
+for each constraint i ∈ { 1, . . . , N } do  
+
+> 4:
+
+Append st, Cit to trajectory sequence τ i. 
+
+> 5:
+
+Formulate current condition sequence τ i 
+
+> −K:t
+
+for i-th expert using recent length-K history trajectory sequence.  
+
+> 6:
+
+Predict RTG distribution pϕi (·| τ i
+
+> −K:t
+
+) based on each expert network.  
+
+> 7:
+
+end for  
+
+> 8:
+
+Compute normalized remaining safety budgets vector ¯Ct. 
+
+> 9:
+
+Compute normalized weights vector αt based on the router.  
+
+> 10:
+
+Generate constraint-aware RTG ˆRt by sampling from the fused PoE distribution: ˆRt ∼
+
+> 1
+> Zt
+
+QNi=1 pϕi (·| τ i
+
+> −K:t
+
+)αit . 
+
+> 11:
+
+Append st, ˆRt, and {Cit }Ni=1 to trajectory sequence ˆτ . 
+
+> 12:
+
+Formulate current condition sequence ˆτ−K:t using recent length-K history trajectory sequence.  
+
+> 13:
+
+Sample action at from the conditional action policy πθB (·| ˆτ−K:t). 
+
+> 14:
+
+Execute action at in the environment, observe reward rt and costs {cit}Ni=1 . 
+
+> 15:
+
+for each constraint i ∈ { 1, . . . , N } do  
+
+> 16:
+
+Update remaining safety budget: Cit+1 = Cit − cit. 
+
+> 17:
+
+end for  
+
+> 18:
+
+Append Rt, a t to trajectory sequence {τ i}Ni=1 . 
+
+> 19:
+
+Append at to trajectory sequence ˆτ . 
+
+> 20:
+
+end for 
+
+## E.Experimental Details 
+
+E.1 Experimental Tasks and Datasets 
+
+Safety-Gymnasium (Ji et al., 2023): Built on the MuJoCo physics simulator, Safety-Gymnasium provides safety-critical continuous-control environments with diverse robot-task combinations. In our experiments, we evaluate Point and Car agents on Button, Goal, and Push tasks, denoted as PB, CB, PG, CG, PP, and CP, respectively. In the Goal task, the agent is required to navigate toward a target location while avoiding unsafe regions. In the Push task, the agent must move an object to a designated goal position, which introduces more complex contact dynamics and longer-horizon planning. In the Button task, the agent needs to reach and activate target buttons scattered in the environment. These tasks involve heterogeneous safety requirements, including collision avoidance, high-velocity limitation, and low-velocity regulation, making them suitable for evaluating policy learning under multiple simultaneous constraints. 
+
+Bullet-Safety-Gym (Liu, 2023a): Built on the PyBullet physics simulator, Bullet-Safety-Gym contains lightweight yet challenging safety-control tasks for different robotic agents. We evaluate three Circle tasks with Ball, Car, and Drone agents, denoted as BC, CC, and DC, respectively. In the Circle task, the agent is encouraged to move along a circular trajectory while satisfying safety constraints related to boundary violation and velocity control. Compared with Safety-Gymnasium, Bullet-Safety-Gym provides shorter and more focused locomotion tasks, which allow us to examine whether an offline safe RL method can efficiently balance task reward and constraint satisfaction across different robot dynamics. For both benchmark suites, we construct two experimental set-tings: the -v2 setting includes boundary/collision and high-velocity constraints, while the more challenging -v3 setting further introduces a low-velocity constraint. Therefore, the evaluated tasks cover both two-constraint and three-constraint scenarios, enabling a comprehensive assessment of multi-constraint safety generalization. The offline datasets used for each task are sourced from OSRL (Liu et al., 2023a). Fig. 1 visualizes some representative tasks of these environments. 
+
+E.2 Baselines 
+
+We provide a more detailed introduction to the baselines used in our experiments in this section. 
+
+• BCQ-Lag is a Lagrangian extension of Batch-Constrained Q-learning (BCQ) for offline safe reinforcement learning. BCQ constrains the learned policy to select actions close to the offline dataset distribution, thereby reducing extrapolation errors caused by out-of-distribution actions. In BCQ-Lag, safety constraints are handled by introducing Lagrangian multipliers into the policy optimization objective. For the multi-constraint setting, we extend the Lagrangian formulation with multiple dual variables, each corresponding to one safety constraint. 
+
+• BEAR-Lag is a Lagrangian variant of Bootstrapping Error Accumulation Reduction (BEAR). BEAR regularizes the learned policy by minimizing the divergence between policy actions and dataset actions, which helps reduce bootstrapping errors in offline reinforcement learning. BEAR-Lag further incorporates safety constraints through Lagrangian relaxation. Similar to BCQ-Lag, we adapt BEAR-Lag to multi-constraint scenarios by using separate Lagrangian multipliers for different constraints. 
+
+• PDCA is a recent primal-dual critic-based offline constrained reinforcement learning method. It estimates the Lagrangian objective with learned reward and cost critics, and alternates between primal policy improvement and dual variable updates. Compared with classical Lagrangian baselines, PDCA provides a more principled primal-dual optimization framework for offline constrained policy learning. In our experiments, we extend PDCA to the multi-constraint setting by assigning an independent dual variable to each constraint. 
+
+• POCE is a recent conservative offline constrained reinforcement learning algorithm designed for multi-constraint settings. It uses conservative value estimation to improve policy learning under safety constraints and reduces the risk of selecting unsafe out-of-distribution actions. Compared with BCQ-Lag and BEAR-Lag, POCE is more directly related to multi-constraint offline safe RL, since it explicitly considers multiple cost signals during policy optimization. 
+
+• OASIS is a recent offline safe reinforcement learning method based on conditional distribution shaping. It aims to improve the quality of offline data by generating or reshaping trajectories toward safer and more rewarding regions. In our experiments, OASIS is adapted to multi-constraint tasks by treating a trajectory as feasible only when all constraint costs are below their corresponding safety thresholds. 
+
+• CAPS is a constraint-adaptive policy switching method for offline safe reinforcement learning. It trains policies with different reward-cost trade-offs and chooses an appropriate policy according to the given safety budget during deployment. This makes CAPS suitable for evaluating constraint adaptation without retraining. Since the original formulation mainly considers scalar safety budgets, we adapt CAPS to the multi-constraint setting by selecting policies according to the maximum normalized constraint violation, i.e., Cost-N, and by requiring all normalized costs to satisfy the target thresholds. 
+
+• CCAC is a constraint-conditioned actor-critic method for offline safe reinforcement learning. It conditions the policy and value functions on safety thresholds, enabling the learned policy to adapt to different constraint budgets at test time. In our experiments, we extend CCAC to multi-constraint tasks by conditioning the policy on the multi-dimensional threshold vector and evaluating safety using the maximum normalized violation cost. 
+
+• BC-Safe is a behavior cloning baseline trained only on safe trajectories from the offline dataset. Specifically, trajectories whose costs satisfy all safety budgets are selected to train a supervised policy. This baseline provides a conservative reference for multi-constraint offline safe RL. • CDT-MC is a multi-constraint adaptation of the Constrained Decision Transformer (CDT). It extends the standard Decision Transformer by incorporating cost-to-go (CTG) as an additional condition, allowing the policy to generate actions according to both the target return-to-go (RTG) and the remaining safety budget. In our multi-constraint experiments, CDT-MC is extended by concatenating multiple CTG tokens corresponding to different constraints. 
+
+• CoPDT-MC is a multi-constraint adaptation of the recent sequence modeling method Constraint Prioritized Decision Transformer (CoPDT). CoPDT is designed to prioritize constraint satisfac-tion during offline policy learning. To handle our settings, CoPDT-MC extends this framework by incorporating multiple cost constraints into its sequence modeling architecture. 
+
+• CORDT is a Transformer-based variant of our framework. It retains the constraint-specific expert routing and Product-of-Experts (PoE) fusion mechanism, but replaces the Mamba-based conditional action decoder with a Transformer backbone. This baseline is designed to isolate the contribution of the Mamba architecture. By comparing CORDT with CORMA, we can evaluate whether the linear-complexity selective state-space model improves sequence modeling efficiency and long-horizon decision-making under multi-constraint conditions. 
+
+• CORMA w/o PoE is an ablation baseline that completely removes the constraint-specific experts and the PoE fusion mechanism. It directly utilizes the empirical RTG and concatenated CTGs as inputs for the Mamba action decoder, without explicitly modeling the feasible RTG distribution. This baseline is used to evaluate the necessity and effectiveness of our constraint-routed RTG estimation module. 
+
+• CORMA-S is an ablation baseline that removes the constraint-decoupled architecture. Instead of using multiple constraint-specific experts, it employs a single monolithic expert to directly model the joint RTG distribution conditioned on all CTG tokens simultaneously. This helps verify whether a single unified network is sufficient to disentangle conflicting safety requirements compared to our decoupled routing mechanism. 
+
+E.3 Safety-Budget Shift Regions Settings 
+
+As introduced in the main text, to evaluate zero-shot generalization under unseen safety-budget combinations, we partition the safety-budget space according to the minimum normalized relative distance from an evaluation budget vector κ to the seen budget region Kseen :
+
+d(κ, Kseen ) = min 
+
+> κ′∈K seen
+
+vuut 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ κi − κ′i
+
+κ′i
+
+2
+
+. (47) Here, all safety-budget components are assumed to be positive. Based on this distance metric, we divide the evaluation space into four continuous regions with progressively increasing deviations: seen, slight, moderate, and severe. The region boundaries are predefined as d1 = 0 .05 , d2 = 0 .10 ,and d3 = 0 .15 . The four regions are defined as: (1)Seen region: d(κ, Kseen ) = 0 ; (2)Slight-shift region: d(κ, Kseen ) ∈ (0 , d 1]; (3)Moderate-shift region: d(κ, Kseen ) ∈ (d1, d 2]; (4)Severe-shift region: d(κ, Kseen ) ∈ (d2, d 3]. We generate diverse budget combinations by perturbing a reference boundary budget κref along multiple directions. For an evaluation region (dlow , d high ], we sample a target perturbation magnitude δ ∼ U (dlow , d high ). A candidate evaluation budget is then constructed using a constraint-specific perturbation vector ∆ = [∆ 1, . . . , ∆N ]⊤. The perturbation vector is normalized according to vuut 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(∆ i)2 = δ. (48) Based on the sampled perturbation magnitude δ, we consider three perturbation scenarios to simulate heterogeneous constraint variations: 1. Uniform Shift: All constraint budgets are changed by the same proportion and in the same direction. They are either jointly tightened or jointly relaxed. 2. Asymmetric Shift: One constraint budget is substantially tightened or relaxed, while the remain-ing constraints stay at the seen boundary. 3. Conflicting Shift: One or more constraint budgets are tightened, while the remaining budgets are relaxed. -v2 tasks. The -v2 tasks contain the collision/boundary constraint and the high-velocity con-straint. The reference budget is represented as κref v2 =
+
+h
+
+κcol ref , κ high ref 
+
+i⊤
+
+. For a sampled perturbation magnitude δ, representative candidate budgets are constructed as 
+
+κuni v2 =
+
+h
+
+(1 ± ∆col )κcol ref , (1 ± ∆high )κhigh ref 
+
+i⊤
+
+, (49) 
+
+κasy v2 =
+
+h
+
+(1 ± √2∆ col )κcol ref , κ high ref 
+
+i⊤
+
+, (50) 
+
+κconf v2 =
+
+h
+
+(1 ± ∆col )κcol ref , (1 ∓ ∆high )κhigh ref 
+
+i⊤
+
+. (51) 
+
+-v3 tasks. The -v3 tasks additionally include the low-velocity constraint. The corresponding reference budget is 
+
+κref v3 =
+
+h
+
+κcol ref , κ high ref , κ low ref 
+
+i⊤
+
+.
+
+Representative candidate budgets are constructed as 
+
+κuni v3 =
+
+h
+
+(1 ± ∆col )κcol ref , (1 ± ∆high )κhigh ref , (1 ± ∆low )κlow ref 
+
+i⊤
+
+, (52) 
+
+κasy v3 =
+
+h
+
+(1 ± √3∆ col )κcol ref , κ high ref , κ low ref 
+
+i⊤
+
+, (53) 
+
+κconf v3 =
+
+h
+
+(1 ± ∆col )κcol ref , (1 ± ∆high )κhigh ref , (1 ∓ ∆low )κlow ref 
+
+i⊤
+
+. (54) 
+
+E.4 Hyperparameters 
+
+The training and deployment of CORMA both involve the selection of hyperparameters. To ensure reproducibility, this section outlines the specific hyperparameters used in our experiments. CORMA is implemented within the OSRL framework, and the default parameters are retained for any hyperparameters not explicitly mentioned in Table 3. 
+
+## F.More Experimental Results 
+
+F.1 Analysis on Safe Policy Learning under Multiple Constraints 
+
+Tables 4 and 5 report the performance of different algorithms under the seen safety-budget combi-nations contained in the offline datasets. The v2 tasks involve two constraint dimensions, whereas the v3 tasks additionally introduce a low-velocity constraint, resulting in more complex interactions among heterogeneous safety requirements. These experiments evaluate whether each method can adapt to different multi-dimensional safety budgets observed during training while maintaining both constraint satisfaction and competitive task performance. Overall, CORMA achieves the most stable reward–safety trade-off across the evaluated settings. Among the 30 task–budget combina-tions, CORMA satisfies the normalized safety threshold in 26 cases, substantially more than the other sequence-modeling variants. Averaged over all combinations, CORMA achieves a normalized reward of approximately 81 .4 with an average Cost-N of 0.96 . These results indicate that CORMA can adapt its behavior to different safety-budget configurations without relying on a single fixed constraint setting. On the v2 tasks, CORMA maintains Cost-N below 1.0 under all 15 safety-budget combinations. It also achieves the best safety-performance trade-off in six combinations, including S1 and S2 on BC-v2, S1 on CC-v2, and S2, S4, and S5 on DC-v2. Although several conventional offline safe RL methods, such as OASIS, CAPS, and CCAC, also obtain feasible results under some two-constraint settings, their reward–safety trade-offs vary across tasks and budget combinations. In contrast, CDT-MC and CoPDT-MC frequently violate the safety threshold despite attaining relatively high rewards, indicating that directly conditioning a sequence model on multiple CTG tokens is insufficient for reliably coordinating heterogeneous constraints. The three-constraint results further reveal the increased difficulty of multi-constraint policy learning. CORMA remains feasible in 11 of the 15 v3 task–budget combinations and achieves an average Cost-N of approximately 0.98 . On BC-v3 and DC-v3, CORMA satisfies the constraints in four of the five combinations, while the remaining violations are marginal, with Cost-N values of 
+
+1.01 and 1.02 , respectively. CC-v3 is more challenging: CORMA remains feasible under S1, S3, and S5, but exhibits violations under S2 and S4. Nevertheless, its Cost-N remains close to the safety Hyperparameter Value conditional action decoder θB
+
+Mamba num layers 2Mamba embedding dim 128 Mamba expand factor 2Mamba convolution size 4update steps 30000 batch size 1024 learning rate 0.0001 constraint-specific RTG experts ϕi
+
+Mamba num layers 2Mamba embedding dim 128 Mamba expand factor 2Mamba convolution size 4update steps 60000 batch size 1024 learning rate 0.0001 gating router network θR
+
+router hidden layers [256, 256, 256] update steps 20000 batch size 1024 learning rate 0.0001 policy learning and deployment sequence len K 50 
+
+Ciρ 0.5 
+
+Riη 0.8 
+
+λ 0.001 Dropout 0.1 Weight decay 0.01 Table 3: Hyperparameter choices of CORMA. boundary in most cases, while many competing methods incur considerably larger violations. In particular, CDT-MC is feasible in only one v3 combination, CoPDT-MC fails to satisfy the threshold in all v3 combinations, and CORMA-S remains unsafe throughout the three-constraint evaluations. The comparisons among the CORMA variants further clarify the contribution of the proposed architecture. Removing the constraint-routed PoE module reduces the number of feasible com-binations and increases the average Cost-N , especially on the v3 tasks. Similarly, CORMA-S, which replaces the constraint-specific experts with a single shared RTG predictor, exhibits severe constraint violations, suggesting that a unified expert cannot adequately represent the heteroge-neous and potentially conflicting effects of multiple constraints. These results support the use of constraint-wise expert specialization and adaptive PoE fusion for estimating a feasible RTG under different safety-budget combinations. Compared with CORDT, CORMA also exhibits more robust safety performance across the evaluated budgets. CORDT satisfies the constraint threshold in 14 of the 30 combinations, whereas CORMA is feasible in 26 combinations. Moreover, CORDT obtains an average Cost-N of approximately 1.10 , compared with 0.96 for CORMA. Because both methods use the same constraint-routed PoE mechanism, this improvement indicates that the Mamba-based action decoder provides more stable long-horizon action generation under varying multi-constraint conditions. Nevertheless, the remaining violations of CORMA on several difficult v3 combina-tions also show that simultaneously satisfying highly restrictive and heterogeneous budgets remains challenging. These results demonstrate that CORMA provides a more reliable mechanism for learning budget-conditioned policies from multi-constraint offline datasets. Its advantage is reflected not only in high rewards, but more importantly in its substantially higher feasibility rate and lower average Cost-N across diverse seen safety-budget combinations. The improvements over CORMA w/o PoE, CORMA-S, and CORDT jointly verify the complementary benefits of constraint-specific RTG experts, router-guided PoE fusion, and the Mamba-based action decoder. Task Method Safety-budget Combinations S1 S2 S3 S4 S5 
+
+Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N
+
+BC-v2 
+
+BCQ-Lag 88.6 1.06 82.4 1.21 85.7 1.48 80.1 0.94 81.2 1.03 BEAR-Lag 84.7 1.12 88.2 1.07 91.5 1.01 86.4 1.09 87.1 1.15 PDCA 88.9 1.15 83.8 0.96 88.5 0.99 81.2 1.05 82.6 0.97 
+
+POCE 89.6 1.02 84.5 0.99 89.2 1.16 82.2 1.01 87.0 1.19 OASIS 85.8 0.99 80.6 0.98 85.1 0.93 88.2 0.98 89.5 0.97 
+
+CAPS 73.5 0.94 78.0 0.92 82.8 0.98 75.4 0.93 76.8 0.95 
+
+CCAC 80.2 0.96 85.6 0.94 80.4 0.91 82.8 0.95 84.1 0.97 
+
+BC-Safe 71.8 1.79 76.6 0.99 77.3 1.54 73.5 1.37 76.1 0.98 
+
+CDT-MC 70.9 1.58 75.4 0.98 76.2 1.43 73.2 1.54 74.6 1.62 CoPDT-MC 91.5 1.18 86.8 1.12 81.4 1.08 83.9 1.15 85.0 1.20 CORDT 88.2 0.96 83.5 1.15 87.9 1.48 80.5 0.99 82.4 1.65 CORMA w/o PoE 70.4 0.98 74.7 1.22 78.3 1.28 72.8 1.25 73.6 0.99 
+
+CORMA-S 87.5 1.28 82.8 1.03 87.2 0.98 89.6 1.06 81.5 1.12 
+
+CORMA (Ours) 89.8 0.95 88.6 0.93 80.1 0.87 85.2 0.96 86.5 0.98 CC-v2 
+
+BCQ-Lag 72.8 1.09 76.4 0.99 78.1 0.96 73.7 1.04 74.5 1.01 BEAR-Lag 82.6 1.04 84.9 1.08 86.1 1.03 81.7 1.06 83.4 1.05 PDCA 79.4 1.11 82.1 0.96 83.7 0.95 80.6 0.98 80.9 0.97 
+
+POCE 80.3 1.27 82.8 1.05 84.4 1.09 81.2 1.08 78.9 1.11 OASIS 76.8 0.97 79.2 0.99 80.5 1.05 77.4 0.98 85.1 1.07 CAPS 74.6 0.96 76.8 0.98 77.9 0.97 74.9 1.00 73.3 0.99 
+
+CCAC 80.8 0.95 82.7 0.94 84.2 0.95 83.1 0.93 79.6 0.97 
+
+BC-Safe 74.1 1.07 79.6 1.44 81.3 1.29 77.0 1.31 73.9 1.36 CDT-MC 71.9 1.09 80.7 1.24 79.8 1.39 74.3 1.28 72.8 1.18 CoPDT-MC 76.5 0.97 80.1 1.18 82.3 0.95 77.6 1.22 75.4 0.99 
+
+CORDT 81.1 1.12 84.5 1.19 86.7 0.99 82.0 1.01 78.8 1.13 CORMA w/o PoE 79.9 0.97 81.6 0.99 83.8 1.16 79.4 1.02 78.2 0.98 
+
+CORMA-S 76.1 1.17 80.4 1.25 82.0 1.30 77.9 1.18 75.5 1.25 
+
+CORMA (Ours) 81.6 0.97 81.9 0.95 85.1 0.92 82.6 0.97 80.4 0.96 DC-v2 
+
+BCQ-Lag 77.3 1.14 71.5 0.98 75.4 0.98 79.1 0.97 70.2 0.97 
+
+BEAR-Lag 79.4 1.03 74.8 1.07 79.6 0.99 71.9 1.29 73.2 1.04 PDCA 70.2 1.05 76.6 0.99 82.0 0.94 73.1 1.02 74.5 1.08 POCE 71.0 1.01 77.5 1.06 83.2 0.91 74.2 1.19 75.6 1.03 OASIS 78.0 0.98 74.1 0.94 80.1 0.89 71.0 0.96 72.2 0.99 
+
+CAPS 76.3 0.93 72.2 0.95 78.5 0.85 79.8 0.92 80.1 0.94 
+
+CCAC 72.3 0.96 78.6 0.94 84.5 0.88 75.4 0.95 76.3 0.97 
+
+BC-Safe 75.6 1.03 79.2 1.35 72.8 0.97 77.5 1.27 78.4 0.97 
+
+CDT-MC 83.2 1.05 79.6 0.96 75.7 0.98 76.8 1.01 78.3 0.99 
+
+CoPDT-MC 74.3 1.25 80.5 1.20 86.0 1.14 77.2 1.23 78.8 1.30 CORDT 71.5 0.96 77.2 1.28 82.6 0.97 74.2 0.96 75.9 1.10 CORMA w/o PoE 72.8 0.92 77.6 0.96 71.9 1.16 75.4 0.99 76.6 0.95 
+
+CORMA-S 78.8 1.06 75.1 1.01 81.4 0.96 71.6 1.04 73.0 1.17 
+
+CORMA (Ours) 71.6 0.96 79.7 0.93 83.6 0.95 82.1 0.97 83.9 0.96 
+
+Table 4: Detailed evaluation under seen two-safety-budget combinations. Reward is normalized to 0–100 , and the safety threshold is normalized to 1. S1–S5 denote threshold combinations appearing in the offline dataset. Bold indicates constraint satisfaction (c ≤ 1), and underlined bold indicates the highest reward among feasible methods. Task Method safety-budget combinations S1 S2 S3 S4 S5 
+
+Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N
+
+BC-v3 
+
+BCQ-Lag 72.6 1.82 77.8 1.63 75.1 1.48 73.4 1.91 73.6 1.71 BEAR-Lag 84.7 1.61 88.9 1.86 86.1 1.72 83.8 2.24 88.0 2.02 PDCA 76.8 1.48 81.5 1.60 80.3 1.49 77.1 1.94 77.8 1.88 POCE 77.2 1.45 82.6 1.29 80.4 1.18 78.5 1.50 78.3 1.42 OASIS 71.9 1.24 76.4 1.12 74.8 0.99 72.3 1.32 73.6 1.24 CAPS 69.7 1.17 73.4 1.08 72.8 0.97 70.2 1.25 70.4 1.22 CCAC 79.4 0.97 75.8 1.16 82.0 0.99 74.6 1.13 75.7 1.15 BC-Safe 80.6 1.21 84.9 1.13 83.2 0.96 81.1 1.19 82.2 1.26 CDT-MC 75.4 1.73 80.8 1.55 82.1 1.38 77.6 1.69 75.1 1.75 CoPDT-MC 77.9 1.58 82.7 1.43 81.4 1.31 78.2 1.56 78.8 1.57 CORDT 78.6 1.36 83.1 1.22 81.7 0.98 79.4 1.41 78.2 1.43 CORMA w/o PoE 73.5 1.57 78.9 1.39 77.1 1.24 74.6 1.68 74.9 1.59 CORMA-S 71.6 1.98 76.9 1.74 74.4 1.59 72.5 2.04 73.6 2.00 
+
+CORMA (Ours) 78.7 0.98 83.0 0.99 79.8 0.97 82.5 1.01 80.5 0.93 CC-v3 
+
+BCQ-Lag 64.9 1.97 67.4 1.77 74.0 1.91 69.6 1.85 72.5 1.83 BEAR-Lag 73.5 2.01 67.0 1.62 77.9 1.79 70.4 1.34 77.2 1.44 PDCA 61.1 1.69 73.3 1.90 76.1 1.87 74.5 1.77 73.0 1.72 POCE 73.3 1.30 69.8 1.43 79.6 1.54 66.0 1.42 73.3 1.24 OASIS 70.4 1.13 62.4 1.22 73.2 1.17 76.8 1.56 74.7 1.12 CAPS 63.7 0.94 68.1 0.99 66.4 0.98 64.9 1.08 65.9 1.19 CCAC 68.2 1.65 74.5 1.26 76.1 1.44 72.7 1.19 64.5 1.16 BC-Safe 68.3 1.69 70.6 1.61 72.9 1.70 75.2 1.71 76.0 1.58 CDT-MC 69.4 1.12 74.1 0.97 77.3 1.08 70.6 1.14 67.6 1.09 CoPDT-MC 73.8 1.24 69.5 1.38 70.8 1.24 68.3 1.52 74.1 1.53 CORDT 75.0 1.05 73.8 0.89 74.5 0.94 71.2 0.92 67.5 1.10 CORMA w/o PoE 73.9 1.06 67.8 0.94 72.6 0.98 69.7 1.07 71.5 1.15 CORMA-S 75.2 1.67 65.6 1.73 69.9 1.46 77.7 1.94 71.6 1.57 
+
+CORMA (Ours) 72.4 0.95 68.1 1.09 70.3 0.96 69.7 1.09 73.5 0.93 DC-v3 
+
+BCQ-Lag 93.3 1.77 90.1 2.03 94.4 1.55 94.8 1.73 87.9 1.85 BEAR-Lag 95.5 2.63 92.8 2.85 96.0 2.61 93.9 2.94 94.3 2.78 PDCA 88.8 1.46 87.6 1.22 92.2 1.59 87.5 1.79 88.2 1.71 POCE 91.4 1.53 85.3 1.31 85.1 1.18 84.4 1.28 87.8 1.45 OASIS 82.9 1.75 82.4 1.89 79.5 1.71 81.7 1.83 81.4 1.72 CAPS 79.3 1.06 80.2 1.13 72.1 1.44 78.9 1.22 77.5 1.35 CCAC 80.4 1.17 83.7 0.96 84.9 0.97 85.9 0.99 86.2 1.04 BC-Safe 41.2 1.05 61.6 0.91 52.1 0.98 45.5 1.04 54.6 0.93 
+
+CDT-MC 88.7 1.40 85.8 1.11 82.4 1.32 86.3 1.50 83.4 1.41 CoPDT-MC 86.9 1.44 85.0 1.47 83.3 1.52 85.1 1.78 81.2 1.54 CORDT 82.4 0.99 86.4 0.90 82.5 0.98 85.1 1.12 81.1 0.83 
+
+CORMA w/o PoE 84.1 0.99 83.6 1.08 81.3 1.06 79.6 1.25 83.2 1.03 CORMA-S 76.9 1.50 79.8 1.92 80.9 1.22 82.6 1.62 81.4 1.27 
+
+CORMA (Ours) 88.4 0.93 86.1 0.94 90.9 0.97 88.8 0.95 85.7 1.02 Table 5: Detailed evaluation under seen three-safety-budget combinations. Reward is normalized to 0–100 , and the safety threshold is normalized to 1. S1–S5 denote threshold combinations appearing in the offline dataset. Bold indicates constraint satisfaction ( c ≤ 1), and underlined bold indicates the highest reward among feasible methods. Task CDT-MC CORMA w/o PoE CORDT CORMA (Ours) 
+
+Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N
+
+BC-v2 71.2 0.98 72.8 1.22 83.4 0.98 85.5 0.96 
+
+CC-v2 72.1 1.24 78.5 1.02 72.0 1.28 70.6 0.98 
+
+DC-v2 77.0 1.11 75.9 1.05 82.4 0.97 84.8 0.93 
+
+BC-v3 84.6 2.04 78.6 1.94 81.0 1.46 86.5 0.98 
+
+CC-v3 70.7 1.18 73.2 1.26 66.5 1.13 64.2 0.98 
+
+DC-v3 92.5 2.16 90.5 1.42 84.8 0.99 82.0 0.96 
+
+PB-v3 84.4 2.04 74.0 1.28 82.5 0.97 83.4 0.95 
+
+CB-v3 79.5 1.40 79.2 1.23 78.4 1.03 79.2 0.98 
+
+PG-v3 88.6 1.58 86.8 1.15 88.5 1.38 86.8 0.95 
+
+CG-v3 86.0 1.36 84.5 1.37 87.0 0.99 85.2 0.97 
+
+PP-v3 71.2 1.32 71.9 1.34 72.0 1.02 71.4 0.96 
+
+CP-v3 84.3 1.78 81.2 1.01 86.8 1.08 82.3 0.98 
+
+Average 80.2 1.52 78.9 1.27 80.4 1.11 80.2 0.97 
+
+Table 6: Trajectory stitching ability analysis on multi-constraint tasks. Reward ( r) is normalized to 0–100, and Cost-N ( c) denotes the maximum normalized constraint violation. Bold indicates constraint satisfaction ( c ≤ 1), and underlined bold indicates the highest reward among feasible methods. 
+
+F.2 Analysis on Trajectory Stitching Ability 
+
+This subsection evaluates the trajectory stitching ability of different sequence-modeling methods in multi-constraint offline safe reinforcement learning. To construct a more challenging setting, we remove from the offline datasets all complete trajectories that directly satisfy the target safety-budget combinations. Consequently, the policy cannot satisfy all constraints by simply imitating a complete jointly feasible trajectory. Instead, it must learn complementary local behaviors from different trajectories and compose them into a new safe decision sequence during deployment. We compare CDT-MC, CORMA w/o PoE, CORDT, and the full CORMA on Bullet-Safety-Gym and Safety-Gymnasium tasks. The normalized reward measures task performance, while Cost-N
+
+measures the maximum normalized violation among all constraints. As shown in Table 6, CDT-MC and CORMA w/o PoE achieve average normalized rewards of 80 .2
+
+and 78 .9, respectively, but their average Cost-N values reach 1.52 and 1.27 , both clearly exceeding the safety threshold. CDT-MC satisfies all constraints only on BC-v2 and exhibits different degrees of safety violation on the remaining tasks. In particular, although CDT-MC achieves relatively high rewards on three-constraint tasks such as BC-v3, DC-v3, and PB-v3, its Cost-N values reach 2.04 ,
+
+2.16 , and 2.04 , respectively. This indicates that its generated behaviors remain strongly biased toward reward maximization and cannot reliably compose local behaviors that satisfy different constraints. CORMA w/o PoE reduces the average Cost-N to 1.27 , suggesting that the Mamba action decoder provides some benefit for long-horizon behavior modeling. Nevertheless, this variant fails to satisfy the safety threshold on all 12 tasks, indicating that conditioning Mamba only on multiple CTGs and a predefined RTG is insufficient to address multi-constraint behavior composition when jointly feasible trajectories are absent. By introducing constraint-specific experts, a router, and PoE fusion, CORDT further reduces the average Cost-N to 1.11 and satisfies the safety threshold on five tasks: BC-v2, DC-v2, DC-v3, PB-v3, and CG-v3. Compared with CDT-MC and CORMA w/o PoE, these results indicate that explicitly modeling feasible RTG distributions under different constraints helps extract more effective high-level guidance from trajectories with complementary safety properties. For example, CORDT achieves reward–safety results of 84 .8/0.99 and 87 .0/0.99 on DC-v3 and CG-v3, respectively, demonstrating that it can effectively compose safe behaviors from different trajectories in some tasks. However, CORDT still violates the constraints on CC-v2, BC-v3, CC-v3, CB-v3, PG-v3, PP-v3, and CP-v3. This suggests that, with a Transformer-based action decoder, the fused RTG guidance cannot always be translated into temporally consistent safe actions over long horizons. In contrast, CORMA achieves the most stable safety performance while maintaining competitive task rewards. Its average reward is 80 .2, which is comparable to 80 .2 for CDT-MC and 80 .4 for CORDT, whereas its average Cost-N is only 0.97 . More importantly, CORMA is the only method that satisfies the safety threshold on all 12 tasks, with Cost-N consistently ranging from 0.93 to 0.98 .This shows that the safety advantage of CORMA is not limited to a few favorable environments, but remains stable across both two-constraint and three-constraint tasks. In particular, on BC-v3, CC-v3, PG-v3, PP-v3, and CP-v3, all competing methods violate the constraints, whereas CORMA still achieves feasible reward–safety results of 86 .5/0.98 , 64 .2/0.98 , 86 .8/0.95 , 71 .4/0.96 , and 
+
+82 .3/0.98 , respectively.Several tasks also illustrate the adaptive reward–safety trade-off achieved by CORMA. On CC-v3, CDT-MC and CORMA w/o PoE obtain rewards of 70 .7 and 73 .2, respectively, but their corresponding Cost-N values are 1.18 and 1.26 . CORMA obtains a lower reward of 64 .2,but successfully controls Cost-N at 0.98 . Similarly, on DC-v3 and CG-v3, CORDT achieves slightly higher feasible rewards than CORMA, whereas CORMA preserves a larger safety margin. These results demonstrate that CORMA possesses a certain degree of trajectory stitching ability. The constraint-specific experts extract feasible return information for individual constraints from different trajectories, while the router-guided PoE mechanism coordinates these complementary signals according to the current state and remaining safety budgets. The Mamba action decoder then converts the fused high-level guidance into temporally consistent safe action sequences over long horizons. Compared with CDT-MC, CORMA w/o PoE, and CORDT, CORMA does not achieve safety by substantially sacrificing the average reward. Instead, it provides a more stable reward–safety trade-off, supporting its ability to stitch trajectories from incomplete and constraint-conflicting offline data. 
+
+F.3 Analysis of the Zero-Shot Constraints Generalization 
+
+This subsection further evaluates the zero-shot generalization ability of different methods under unseen safety-budget combinations. All unseen safety-budget combinations considered in this ex-periment are sampled from the slight-shift region. Specifically, we directly deploy the trained policies to a series of v3 tasks without any additional fine-tuning. The normalized reward is used to measure task performance, while Cost-N denotes the maximum normalized violation among all constraints, where Cost-N ≤ 1 indicates that all constraints are satisfied. As shown in Table 7, CDT-MC achieves the highest average reward of 85 .2, but its average Cost-N reaches 1.85 , and it fails to satisfy the safety threshold on all nine tasks. In particular, its Cost-N values reach 2.15 , 2.14 , and 2.50 on BC-v3, DC-v3, and CG-v3, respectively. These results indicate that, although CDT-MC can maintain high task returns under unseen budgets, its policy remains strongly biased toward reward maximization and cannot reliably coordinate multiple simultaneously changing safety constraints. Directly feeding multiple CTG conditions into a Transformer-based sequence model is therefore insufficient to guarantee safe generalization to unseen multi-dimensional budget combinations. CORMA w/o PoE reduces the average Cost-N from 1.85 to 1.48 , demonstrating that the Mamba action decoder provides certain advantages for long-horizon conditional decision-making. Nev-ertheless, this variant satisfies the safety threshold only on PG-v3 and PP-v3, while constraint violations remain on the other seven tasks. In particular, its Cost-N values reach 2.33 and 1.82 
+
+on DC-v3 and CG-v3, respectively. This suggests that, although Mamba improves long-range de-pendency modeling, it remains insufficient for handling conflicts among multiple heterogeneous constraints under unseen budget combinations without explicit constraint-specific RTG estimation and adaptive fusion. CORDT further reduces the average Cost-N to 1.20 and achieves feasible performance on PB-v3, PG-v3, and CG-v3. Compared with CDT-MC and CORMA w/o PoE, these results demonstrate that constraint-specific experts, the router, and PoE fusion improve safety adaptation under unseen budgets. For example, CORDT achieves a reward–safety result of 89 .7/0.99 on CG-v3, satisfying all constraints while maintaining a high return. However, CORDT still violates the safety threshold on BC-v3, CC-v3, DC-v3, CB-v3, PP-v3, and CP-v3. This indicates that, even with constraint-aware high-level RTG guidance, the Transformer-based action decoder cannot consistently translate such guidance into safe long-horizon behavior across different tasks. In contrast, CORMA keeps Cost-N below 1.0 on all nine tasks and is the only method that achieves constraint satisfaction across the entire evaluation suite. Its average Cost-N is 0.97 , substantially lower than the values of 1.85 , 1.48 , and 1.20 obtained by CDT-MC, CORMA w/o PoE, and CORDT, respectively. Meanwhile, CORMA achieves an average reward of 82 .4, which is only 2.8 points lower than that of CDT-MC and is higher than those of CORMA w/o PoE and CORDT. These results show that the safety advantage of CORMA does not arise from overly conservative behavior. Task CDT-MC CORMA w/o PoE CORDT CORMA Reward Cost-N Reward Cost-N Reward Cost-N Reward Cost-N
+
+BC-v3 78.0 2.15 68.5 1.80 72.4 1.45 80.2 0.98 
+
+CC-v3 86.7 1.65 77.2 1.41 75.5 1.28 72.0 0.97 
+
+DC-v3 90.5 2.14 87.0 2.33 85.2 1.65 85.3 0.99 
+
+PB-v3 78.2 1.99 76.4 1.54 75.8 0.99 75.1 0.98 
+
+CB-v3 85.6 1.59 84.8 1.39 84.2 1.08 84.0 0.98 
+
+PG-v3 80.1 1.42 83.3 0.98 81.5 0.97 84.2 0.98 
+
+CG-v3 92.4 2.50 90.8 1.82 89.7 0.99 88.9 0.95 
+
+PP-v3 85.9 1.46 81.4 0.99 84.3 1.12 84.8 0.97 
+
+CP-v3 89.5 1.78 89.6 1.06 88.2 1.27 87.5 0.94 
+
+Average 85.2 1.85 82.1 1.48 81.9 1.20 82.4 0.97 
+
+Table 7: Zero-shot generalization to unseen safety-budget combinations. Reward is normalized to 0–100, and Cost-N denotes the maximum normalized constraint violation. Bold indicates constraint satisfaction ( c ≤ 1), and underlined bold indicates the highest reward among feasible methods. Instead, CORMA substantially improves the stability of constraint satisfaction while maintaining competitive task performance. At the task level, CORMA achieves feasible reward–safety results of 80 .2/0.98 , 72 .0/0.97 , and 
+
+85 .3/0.99 on BC-v3, CC-v3, and DC-v3, respectively, whereas all competing methods violate the constraints on these three tasks. On CB-v3, PP-v3, and CP-v3, CORDT also fails to satisfy the safety threshold, while CORMA maintains Cost-N values of 0.98 , 0.97 , and 0.94 , respectively. These results demonstrate that, even when multiple safety budgets simultaneously deviate from the training distribution, CORMA can still generate more reliable RTG guidance based on the current state and remaining safety budgets. Several tasks further illustrate the adaptive reward–safety trade-off achieved by CORMA. On CC-v3, CDT-MC obtains a high reward of 86 .7, but its Cost-N reaches 1.65 . In comparison, CORMA adjusts the reward to 72 .0 while reducing Cost-N to 0.97 . On CG-v3, CORDT achieves a slightly higher feasible reward of 89 .7, whereas CORMA obtains a reward of 88 .9 with a lower Cost-N of 
+
+0.95 , thereby preserving a larger safety margin. Similarly, both CORDT and CORMA satisfy the constraints on PB-v3, but CORMA trades a small amount of reward for a lower Cost-N .These experimental results verify the complementary effects of constraint-specific RTG model-ing and Mamba-based sequential decision-making. The constraint-specific experts independently predict feasible RTG distributions under different constraints, while the router-guided PoE mecha-nism adaptively fuses these predictions based on the current state and normalized remaining safety budgets. The Mamba action decoder then converts the fused high-level guidance into stable long-horizon actions. Compared with CDT-MC, CORMA w/o PoE, and CORDT, CORMA satisfies all constraints on every evaluated task while maintaining a competitive average reward, demonstrating more reliable zero-shot generalization to unseen multi-dimensional safety-budget combinations. 
+
+F.4 Effect of Trajectory Context Length on Stage-1 Action Decoder Training 
+
+To investigate the effect of trajectory context length on Stage-1 action decoder training, we vary the input sequence length K and compare Transformer- and Mamba-based action decoders. The reported results are averaged over three representative three-constraint tasks, namely DC-v3, PB-v3, and CG-v3. Since K determines the amount of historical state, action, RTG, and CTG information available to the action decoder, this experiment examines whether the two sequence-modeling backbones can effectively exploit longer trajectory contexts under heterogeneous safety constraints. As shown in Table 8, both action decoders achieve relatively high rewards when the context length is small, but these rewards are accompanied by severe constraint violations. At K = 5 ,the Transformer- and Mamba-based decoders obtain average normalized rewards of 89 .8 and 88 .5,respectively, while their average Cost-N values reach 2.44 and 2.21 . This result indicates that short trajectory contexts do not contain sufficient information for the action decoder to infer the long-term effects of current actions on cumulative safety costs. Consequently, both models tend to reproduce K Transformer Mamba 
+
+r ↑ c ↓ r ↑ c ↓
+
+5 89.8 2.44 88.5 2.21 10 86.1 2.12 82.4 1.96 15 85.9 1.96 83.6 1.68 20 80.7 1.61 77.6 1.42 25 79.4 1.58 75.0 1.24 30 75.8 1.15 74.5 1.10 35 79.4 1.37 72.9 1.03 40 80.3 1.58 73.3 0.99 
+
+45 83.8 1.76 74.7 0.96 
+
+50 83.2 1.93 75.1 0.94 
+
+55 84.9 2.10 74.9 0.95 
+
+60 85.6 2.24 74.6 0.97 
+
+Table 8: Effect of sequence length K on Stage-1 action decoder training. Results are averaged over three representative three-constraint tasks: DC-v3, PB-v3, and CG-v3. Reward is normalized to 0– 100, and Cost-N denotes the maximum normalized constraint violation. Bold indicates constraint satisfaction ( c ≤ 1), and underlined bold indicates the highest reward among feasible settings. high-return behavior patterns without adequately controlling multiple constraints. Increasing the context length initially improves the safety performance of both backbones, but their trends differ substantially. For the Transformer-based decoder, the average Cost-N decreases from 2.44 at K = 5 to its lowest value of 1.15 at K = 30 . However, further increasing the context length causes safety performance to deteriorate, with Cost-N rising to 1.58 at K = 40 and 2.24 
+
+at K = 60 . Thus, although a moderately long context helps the Transformer capture additional trajectory information, it does not provide stable safety improvements as the input sequence becomes longer. Moreover, the Transformer-based decoder fails to reduce the average Cost-N below the safety threshold for any tested value of K.In contrast, the Mamba-based decoder benefits more consistently from longer trajectory contexts. Its average Cost-N decreases from 2.21 at K = 5 to 1.10 at K = 30 , and further falls below the normalized safety threshold when K ≥ 40 . At the same context length, Mamba also achieves a lower average Cost-N than the Transformer in every tested setting. For example, at K = 40 , the Transformer-based decoder obtains a Cost-N of 1.58 , whereas the Mamba-based decoder reduces it to 0.99 . These results suggest that the selective state-space mechanism of Mamba can more effectively preserve safety-relevant information over long horizons and exploit historical state– action–return–cost dependencies for multi-constraint action generation. The reward results further reveal a clear reward–safety trade-off. As K increases from 5 to approximately 30 –40 , the rewards of both methods generally decrease while their safety performance improves. This suggests that access to longer safety-related histories encourages the action decoders to generate more cautious behavior. Although the Transformer-based decoder obtains higher rewards than Mamba for most context lengths, these results are consistently associated with Cost-N > 1
+
+and therefore do not constitute feasible reward–safety trade-offs. By comparison, the Mamba-based decoder maintains an average normalized reward between approximately 73 and 75 while keeping its average Cost-N below 1.0 for K ∈ { 40 , 45 , 50 , 55 , 60 }.Among all tested context lengths, K = 50 provides the most favorable average reward–safety trade-off for the Mamba-based action decoder, achieving a normalized reward of 75 .1 and a Cost-N
+
+of 0.94 . Increasing K further to 55 or 60 does not yield additional benefits: the average reward slightly decreases to 74 .9 and 74 .6, while Cost-N increases to 0.95 and 0.97 , respectively. This suggests that excessively long contexts may introduce redundant or less relevant historical informa-tion without improving action generation. We therefore set K = 50 in the subsequent experiments to balance long-horizon dependency modeling, constraint satisfaction, and task performance. Method DC-v3 PB-v3 CG-v3 CP-v3 Average                                                                      
+
+> r↑c↓r↑c↓r↑c↓r↑c↓r↑c↓
+> CORMA w/o 3-stage Training 91.3 2.86 92.1 2.24 88.5 2.65 89.7 2.18 90.4 2.48 CORMA w/ Mean-Regression Router 84.7 1.31 88.6 1.18 85.1 1.35 85.9 1.20 86.1 1.26 CORMA w/o Balanced Router Sampling 85.8 1.17 88.7 1.09 89.6 1.21 86.5 1.11 87.7 1.15 CORMA w/o Expert Freezing 83.1 1.45 87.1 1.28 83.2 1.48 82.5 1.30 84.0 1.38
+> CORMA (Ours) 88.0 0.95 90.2 0.94 91.1 0.90 88.3 0.95 89.4 0.94
+
+Table 9: Ablation study on the three-stage optimization strategy of CORMA across four multi-constraint tasks. Reward ( r) is normalized to 0–100, and Cost-N (c) denotes the maximum normal-ized constraint violation. 
+
+F.5 How Critical Is the Three-Stage Training Strategy? 
+
+To evaluate the effectiveness and generality of the training mechanism in CORMA, we conduct an ablation study on four challenging three-constraint tasks: DC-v3, PB-v3, CG-v3, and CP-v3. We compare the full CORMA with four variants: (1) w/o 3-stage Training, which jointly optimizes the action decoder, constraint-specific experts, and router; (2) w/ Mean-Regression Router, which replaces the PoE negative log-likelihood in Stage III with an MSE loss on the fused RTG mean; (3) w/o Balanced Router Sampling, which samples the constraint-specific subsets according to their original data proportions rather than with equal probability; and (4) w/o Expert Freezing, which updates the expert parameters together with the router during Stage III. As shown in Table 9, the full CORMA achieves the most stable reward–safety trade-off across all four tasks, obtaining an average normalized reward of 89 .4 while maintaining an average Cost-N
+
+of 0.94 . More importantly, it is the only variant that satisfies all constraints on every evaluated task.Jointly optimizing the action decoder, experts, and router produces the highest average reward of 90 .4, but increases the average Cost-N to 2.48 . This substantial safety degradation indicates that simultaneous optimization exposes the router to continuously changing expert distributions and introduces interference among the objectives of the three modules.Replacing the PoE likelihood with mean regression reduces the average Cost-N to 1.26 , but still fails to satisfy the safety thresh-old on all four tasks. This result suggests that aligning only the fused RTG mean is insufficient, because the router cannot exploit the predictive variances of the constraint-specific expert distri-butions.Removing balanced router sampling results in an average Cost-N of 1.15 . Although this variant performs better than joint training and mean regression, it remains unsafe across all evaluated tasks. This confirms that sampling the constraint-specific subsets according to their natural frequen-cies may cause constraints with larger feasible subsets to dominate router optimization.Unfreezing the experts during Stage III further degrades both reward and safety, yielding an average reward of 84 .2 and an average Cost-N of 1.38 . Updating the experts together with the router causes the constraint-specific RTG distributions learned in Stage II to drift, thereby creating non-stationary targets for PoE fusion. Overall, these results demonstrate that sequential module specialization, distributional PoE su-pervision, balanced router sampling, and expert freezing are jointly important for achieving stable multi-constraint RTG estimation and constraint satisfaction.

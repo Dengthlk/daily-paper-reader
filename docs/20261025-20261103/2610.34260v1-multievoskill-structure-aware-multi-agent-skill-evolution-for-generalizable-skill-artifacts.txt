@@ -1,0 +1,558 @@
+Title: MultiEvoSkill: Structure-Aware Multi-Agent Skill Evolution for Generalizable Skill Artifacts
+
+URL Source: https://arxiv.org/pdf/2610.34260v1
+
+Published Time: Tue, 27 Oct 2026 01:37:16 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# MultiEvoSkill: Structure-Aware Multi-Agent Skill Evolution for Generalizable Skill Artifacts 
+
+Kounianhua Du* 1, Jianxing Liu* 1, Ruoshui Shan* 1, Yucheng Zhang* 3,Ke Li 2, Xing Sun 2, Weinan Zhang 11Shanghai Jiao Tong University, 2 Tencent, 3 Purdue Shanghai, China 
+
+{kounianhuadu, wnzhang}@sjtu.edu.cn 
+
+Abstract 
+
+Skill documents are becoming the default adap-tation surface for frozen large language model (LLM) agents, but current skill generators face two key limitations. First, humans and different LLMs differ in how they organize procedural knowledge and approach task solving. Skills authored from a human or single-model per-spective may therefore fail to align with the rea-soning behaviors of other backbones, limiting cross-model generalization. Second, sequen-tial skill descriptions inadequately represent procedures with parallel branches and explicit dependencies, while existing skill optimizers primarily operate on prose and lack explicit sup-port for graph-structured skill evolution. We introduce MultiEvoSkill, a skill-optimization framework comprising three core components: 1) Skill compiler casts the skill as a typed graph with tailored operators, producing a compact, informative representation with explicit proce-dural topology; 2) Heterogeneous agent sys-tem proposes revision advices using collective intelligence, where minimal and informative issues are identified based on multiple sets of experiences. 3) Structure-aware debate and evolution mechanism organizes candidate ed-its into a heterogeneous graph, resolves them under dependency and importance constraints, and distills the collective proposal into the ar-tifact. Multi-dimensional gating ensures the information gain and topological correctness of each evolution. Optimal skills are then ob-tained when the system converges at a consis-tent state. Various experiments and ablations against SOTA methods validate the effective-ness and generalization of MultiEvoSkill. 
+
+1 Introduction 
+
+Large language model (LLM) agents externalise procedural knowledge into skills : reusable natural-language policies that can be loaded by a frozen backbone at run time. Anthropic’s A GENT SKILLS 
+
+standard (Anthropic, 2025a,b) formalizes this inter-face, while recent work treats the skill document it-self as an optimizable artifact, improving it through execution feedback, trajectory distillation, or evo-lutionary search (Yang et al., 2026; Wang et al., 2026; Ni et al., 2026; Agrawal et al., 2025; Tan-jim et al., 2026). Unlike parameter updates, a skill is lightweight to edit, easy to inspect, and can in principle be reused by different frozen models with-out changing their weights or execution harnesses. This makes skill evolution a promising route to persistent agent improvement. Despite this promise, current skill optimization pipelines face two recurring limitations. First, most methods represent a skill as a linear prose docu-ment. Prose is convenient for LLMs to read and write, but its procedural relationships are not ex-posed as explicit, mechanically addressable objects. In high-reasoning-demand domains, such as mathe-matical reasoning, spreadsheet manipulation, work-flow generation, or tool-grounded question answer-ing, successful task solving often requires explicit dependencies among intermediate artifacts, con-straint checks, conditional decisions, and branch-specific recovery steps. Flattening such structure into a sequential paragraph obscures which steps are prerequisites, which branches are mutually ex-clusive, and which constraints must be preserved. The limitation is even more evident when cross-sample generalization is required within a single domain: different samples may require different procedural branches, even though they share the same high-level task family. A single prose trajec-tory tends to over-specify one path or ambiguously mix several paths, making it difficult to reuse the skill across heterogeneous samples. As illustrated in Figure 1a, the graph form makes procedural dependencies and task-conditioned branches ex-plicit, enabling more flexible reuse across heteroge-neous samples. Although recent work has explored structured skill libraries, pseudocode skills, and graph-based skill composition (Li et al., 2026a; 1arXiv:2610.34260v1 [cs.AI] 25 Oct 2026 Xia et al., 2026b; Bai et al., 2026; Shi et al., 2026a; Huang and Huang, 2025), existing graph-oriented approaches primarily focus on inference-time composition, library organization, or program-matic skill networks. Our focus is the joint design of training-time graph editing, heterogeneous evi-dence aggregation, and validation-gated updates to one persistent artifact, rather than inference-local composition or library-level organization. Second, existing skill evolution is often driven by experience from a single backbone or a homo-geneous family of models. However, humans and LLMs do not organize procedural knowledge in the same way, and different LLM families exhibit different planning habits, abstraction levels, tool-use strategies, and failure modes. A skill authored by a human or optimized from one model’s tra-jectories may therefore encode model-specific rea-soning conventions that do not transfer to other backbones. Simply adding more models is not suf-ficient: a naive ensemble that sends every task to every model increases cost and may still fail to dis-till their complementary evidence into a reusable artifact. What is needed is an evolution mechanism that lets heterogeneous models collect distinct ex-perience, critique and refine each other’s diagnoses, and consolidate their collective intelligence into a single skill that remains useful when deployed without an inference-time ensemble. Figure 1b con-trasts single-model skill evolution with collective evolution, where heterogeneous agents exchange complementary evidence and consolidate it into a shared, reusable skill artifact. We introduce MultiEvoSkill, a structure-aware multi-agent framework for evolving generalizable skill artifacts. MultiEvoSkill represents a skill as a typed attributed directed multigraph whose nodes encode actions, decisions, artifacts, and constraints, and whose edges encode ordering, branching, pro-duction, consumption, and semantic dependency relations. This representation makes the topology of a task-solving procedure explicit. It allows one skill to express complex reasoning structures and to activate different branches for different samples within the same domain. On top of this representation, MultiEvoSkill evolves the skill through a heterogeneous multi-agent pipeline. Multiple LLM executors collect contrasting trajectories for the same training items; reflection agents extract graph-grounded failures and reusable successful behaviors; proposer agents debate and revise bounded graph edits; and a Linear Prose Skill              
+
+> First, inspect the target table and understand the user’s request. If the task is a lookup, fi nd the row matching thegiven key and return the value from the speci fi ed column. Otherwise, if it requires aggre-gation, identify the relevant rows, select the numeric range, and compute the requested statistic (e.g., sum or average) . If the task involves formula preservation, detect formula cells and .......
+> Implicit branches Hidden dependencies Unscoped constraints Typed Graph Skill Inspect table Task type? Lookup Locate key row Select column Cell value Aggregate Select range
+> Compute statistic
+> Aggregate result Formula Detect formulas Copy / extend
+> Updated formulas
+> data fl ow
+> Verify output
+> Advantages of Graph Form
+> 1Explicit dependencies & branches
+> 2Reusable shared steps
+> 3Task-conditioned paths NODE TYPES
+> Action Decision Artifact Validation
+
+(a) Prose-form vs. graph-form skills. 
+
+(b) Single-model vs. collective intelligence. 
+
+Figure 1: Illustration of two key advantages of our ap-proach. (a) Graph-form skills explicitly encode pro-cedural dependencies, branch conditions, and reusable actions, unlike linear prose. (b) Collective intelligence enables heterogeneous agents to exchange complemen-tary experience and consolidate it into a single general-izable skill artifact. 
+
+structure-aware revisor composes compatible op-erations into one candidate update. The result is not a committee at test time, but a single frozen skill graph that has absorbed the complementary evidence and reasoning patterns of multiple LLMs during training. 
+
+Contributions. 
+
+• We propose the typed attributed directed skill graph representation coupled with graph-grounded issue and typed graph edit opera-tions that makes procedural topology, typed de-pendencies, and sample-conditioned branches explicit, improving expressiveness for complex reasoning tasks and cross-sample generalization within a domain. 2• We develop a heterogeneous multi-agent evolu-tion pipeline where collective intelligence from multiple LLMs is explored to a high extent by multi-LLM execution, debate-driven reflection evolving, and collective experience reuse. • We propose a multi-dimensional gating mecha-nism that ensures the information gain of evolu-tion and provides compact feedback for the next loop. • MultiEvoSkill transforms collective intelligence into generalizable skill artifacts, which works well under complex domain and offer robust cross-backbone performances. 
+
+2 Related Work 
+
+Skill representations and adaptation surfaces. 
+
+File-based natural-language skills externalise pro-cedural knowledge without modifying model pa-rameters, providing a persistent adaptation sur-face formalised by Anthropic’s A GENT SKILLS 
+
+standard (Anthropic, 2025a,b) and adopted by systems that accumulate reusable experience in skill libraries (Wang et al., 2024; Zhou et al., 2026a). More explicit representations compile prose into typed programs or task-level graphs: Skill-as-Pseudocode introduces typed contracts (Li et al., 2026a), while GraSP constructs and locally repairs inference-time DAGs (Xia et al., 2026b). At a broader level, SkillDAG, PSN, and ASG-SI organise skills into persistent graphs or program-matic networks (Bai et al., 2026; Shi et al., 2026a; Huang and Huang, 2025). 
+
+Skill evolution mechanisms. Skill evolution con-tinuously improves persistent, reusable skill arte-facts by incorporating execution experience and retaining validated revisions for future reuse (Ding et al., 2026; Zhou et al., 2026b). Trajectory-distillation methods compare multiple complete trajectories to isolate reusable sequence-level pat-terns from run-specific noise. Execution-feedback methods instead revise the current skill directly from step-level signals within individual runs, such as errors, unmet requirements, or rewards (Ding et al., 2026). Multi-agent systems divide this process among executors, reflection analysts, pro-posers, and verifiers, while population-based meth-ods explore multiple candidates through muta-tion, recombination, or fitness-guided selection. Reinforcement-learning methods optimise skill generation, selection, or refinement policies using task- or reuse-level rewards accumulated across rollouts. Across these routes, text-space updates com-monly employ bounded insertion, replacement, deletion, or targeted rewriting; structured updates modify the corresponding nodes and relations. Can-didate acceptance is typically controlled by empir-ical improvement or verifier-based validity, while evolution terminates upon verifier satisfaction, lack of further gain, budget exhaustion, or population stability. 
+
+Multi-agent methods for skill evolution. Indi-vidual LLMs are limited in exploring diverse skill updates, motivating multi-agent methods that ex-change information and refine candidate skills col-lectively. Within this framework, proposers gen-erate candidate answers, plans, skills, or edits; re-viewers provide critiques; verifiers assess candi-dates using execution evidence, rules, or scores; revisers modify candidates following critique or evaluation; executors run skills or workflows to produce trajectories, rewards, and errors; and spe-cialist agents contribute distinct domain or task-specific capabilities (Zhang et al., 2026b; Ma et al., 2026; Li et al., 2026b). These roles define functional responsibilities, whereas multi-agent debate (MAD) provides an im-portant interaction paradigm in which peer agents iteratively critique and revise competing proposals (Du et al., 2024; Liang et al., 2024; Chan et al., 2024; Khan et al., 2024; Motger et al., 2026). Ef-fective debate benefits from diverse perspectives and calibrated evidence (Zhu et al., 2026), and commonly terminates through consensus or stabil-ity criteria (Yazici et al., 2026; Hu et al., 2025). Agent contributions are subsequently reconciled through response fusion, patch consolidation, or candidate selection (Jiang et al., 2023; Wang et al., 2025; Ni et al., 2026; Chen et al., 2026; Hwang et al., 2026). 
+
+3 Methodology 
+
+3.1 Overview 
+
+MultiEvoSkill evolves one persistent skill graph using heterogeneous execution evidence, graph-grounded reflection, debated edits, hierarchical merging, and validation-gated updates. Let Dtr ,
+
+Dsel , and Dtest denote disjoint training, selection, and test splits. An initializer constructs G0 from training inputs, or imports a supplied checkpoint. 3Train  
+
+> Batch \(t\)
+> Jurors
+> \(D_{val}\)
+> System Gating
+> Mechanism Gating
+
++       
+
+> Multi-Criteria Gate
+> Experience Pool
+> Failure Lessons
+> Success Experiences
+> \(s_{t-1}\)
+> Trajectories
+> on Batch \(t\)
+> ...
+> Reflectors
+> Trajectory Pool
+> \(k\) issues from other model family
+> Issue Pool
+> Clustering
+> ...
+> Own
+> Issues
+> Peer
+> Issues
+> Own
+> Issues
+> Peer
+> Issues
+> Own
+> Issues
+> Peer
+> Issues
+> Shared
+> Newest
+> Issues
+> Pool
+> Executors
+> Matching
+> Promoted
+> Issues
+> Min Promotion
+> Mean Promotion
+> Jury Quorum
+> DAG
+> Topology
+> Issue Proposal
+> Accept
+> Update
+> Reject
+> Rollback Proposers
+> ...
+> Own Edits
+> Peer E dits
+> Own Edits
+> Peer E dits
+> Own Edits
+> Peer Edits
+> Shared
+> Newest
+> Edits
+> Pool
+> \(k\) edits from other model family
+> Stopping Criteria
+> DELETE_NODE
+> ADD_NODE
+> ...
+> Merge
+> Merge
+> Merge
+> Merge
+> Location
+> Grouping
+> Edits
+> Group 1
+> Edits
+> Group 2
+> Edits
+> Group 3
+> Edits
+> Group N
+> Trajectories
+> on Batch \(t\)
+> Trajectories
+> on Batch \(t\)
+> Hierarchy Merge
+> UPDATE_NODE
+
+Multi-Agent Collective Evolution 
+
+> ...
+
+Multi-Agent Collective Evolution 
+
+> Mature Clusters
+> Support threshold met
+> Immature Clusters
+> Awaiting more support
+> Issue Proposal
+> Issue Proposal
+> Patch
+> Patch
+> Patch
+> Patch
+> Patch
+> \(s_t\)
+
+Figure 2: Overview of MultiEvoSkill. Heterogeneous executors collect evidences for reflection; issue-specific proposer debates produce patches against one fixed parent. A hierarchical revisor merges patches, and the gate commits or rejects the resulting graph. Selection data enter the gate, not proposal generation. 
+
+At step t, all proposals refer to the same parent 
+
+Gt−1 and use a scheduled batch Dt ⊆ Dtr :
+
+ρt = Reflect( Gt−1, Zt),
+
+Bt = Debate( Gt−1, ρ t),G′
+
+t = Merge( Gt−1, Bt),Gt = Gate( Gt−1, G ′
+
+t).
+
+(1) Here Zt contains trajectories and task scores, ρt is the consolidated issue set, and Bt is the edit pool. Executor, reflector, proposer, revisor, and juror are functional roles whose model sets may overlap. Figure 2 summarizes the loop. 
+
+3.2 Skill Compiler 
+
+The compiler represents procedural knowledge with explicit graph objects rather than leaving all relationships implicit in prose. Natural language still supplies node instructions and edge annota-tions; graph structure makes these relationships addressable by the optimizer. 
+
+Definition 3.1 (Typed attributed skill graph) . A skill is a directed multigraph 
+
+G = ( V, E, A, R, ψ, Φ, α ), where ψ : V → A 
+
+and Φ : E → R assign node and edge types, and α associates attributes with graph elements. Nodes represent actions, decisions, artifacts, or constraints; edges represent ordering, branching, production, consumption, or constraint relations. Node attributes encode local instructions and applicability conditions. Edge attributes encode guards and dependency explanations. The executor consumes a rendered representation of the skill. In our implementation, a candidate graph is accepted only if all node and edge references resolve, the graph is acyclic, every executable node is reachable from START and can reach END, and all node and edge types satisfy the declared schema. Table 1 illustrates the correspondence. A para-graph can describe a subgraph, so this is not an invertible prose-to-graph mapping or a span-level source map. 
+
+Definition 3.2 (Graph-grounded issue) . An issue is an evidence-backed diagnosis tied to a specific graph version: 
+
+ρt,k = ( ht, Λk, d k, u k, Ek, w k, ξ k),ht = Hash( Gt−1), Ek̸ = ∅. (2) Here Λk identifies nodes, edges, a subgraph, or a global structural gap; dk describes the deficiency; 4Table 1: Graph–document correspondence for the spreadsheet formula/value branch. Original node IDs are retained.                      
+
+> Graph element Procedural meaning Decision 7 Decide whether results must remain formula-driven.
+> 7true
+> −−→8Create formulas with correct references when recalculation is required.
+> 7false
+> −−−→9Compute and write materialized values when requested.
+> 8→10 ,9→10 Continue to row merging after the se-lected branch. Node 10 label Preserve existing order; append only missing keys. Edge note Explain a guard or ordering rationale.
+
+uk is a reusable correction rule; and Ek contains supporting item IDs. The values wk and ξk esti-mate impact and regression risk. Non-global ref-erences must resolve in Gt−1. A preserve record 
+
+σk = ( bk, a k, Ek) analogously records a successful behavior and its applicability condition. Such evi-dence supports a diagnosis, not a measured repair benefit. 
+
+Definition 3.3 (Typed graph edit) . An edit bi =(ht, k i, O i, η i) targets one issue ki in parent ver-sion ht. It contains an ordered operation list Oi and metadata ηi recording rationale, evidence, expected effects, risk, and confidence. Supported opera-tions are add_node , update_node , delete_node ,
+
+add_edge , and delete_edge .An edit may contain several operations needed for a local repair. Mechanical applicability and behavioral effectiveness remain separate: success-fully applying a patch does not establish that it fixes its target issue. 
+
+3.3 Heterogeneous Evidence and Edit Generation Execution. The current method description uses multiple executors on the same training item. With 
+
+Kexec executor models, each x ∈ D t yields 
+
+τ (j) 
+
+> t,x
+
+= Mj (Gt−1, x ), j = 1 , . . . , K exec . (3) This supplies contrasting model-specific behaviors, but costs more than assigning each item to one executor. It should not be interpreted as disjoint-shard execution. 
+
+Reflection and issue debate. For each item, a reflector Ra examines the trajectory group Tt,x =
+
+{τ (j) 
+
+> t,x
+
+}j and produces a small set of graph-grounded issues. Reflection compares successful and failed trajectories to identify potentially reusable correc-tions. A shared failure is evidence of a recurring problem, not proof that the skill rather than shared model limitations caused it. At debate round r, re-flectors revise their diagnoses using peer feedback: 
+
+ρ(a, 0)  
+
+> t,x
+
+= Ra(Gt−1, x, Tt,x ),ρ(a,r ) 
+
+> t,x
+
+= Ra
+
+ Gt−1, x, Tt,x , ρ (a,r −1)  
+
+> t,x
+
+,ρ(Na,r −1) 
+
+> t,x
+
+.
+
+(4) Here Na denotes the peers shown to reflector a.Final diagnoses are consolidated across the batch. Pending issue clusters accumulate support across batches. Let ϕ(i) embed an issue’s diag-nosis, failure lesson, and proposed rule. An issue joins the most similar representative above thresh-old δ:
+
+C∗(i) = arg max    
+
+> C:s(i,r C)≥δ
+
+s(i, r C ), (5) where s(i, r C ) = cos( ϕ(i), ϕ (rC )) . If no cluster qualifies, a new one is created. The representative 
+
+rC is chosen by average within-cluster similarity. Let PC contain the distinct reflector–sample pairs contributing issues to C. Cluster support is 
+
+u(C) = |P C |. (6) Clusters with u(C) ≥ m become eligible for pro-posal generation and leave the pending pool. Re-peated diagnoses from the same reflector on the same item count once. This threshold need not im-ply support from m distinct samples. Cross-batch graph references must still resolve against the cur-rent parent. 
+
+Issue-specific proposal debate. Let Pi denote proposer i, Dt,k the evidence-linked examples for issue ρt,k , and Ht the retrieved edit history. Initial edits are 
+
+O(0)  
+
+> t,k,i
+
+= Pi(Gt−1, ρ t,k , Dt,k , H t). (7) Each issue is debated independently against the same parent. At later rounds, a proposer receives its own edit and a sparse neighborhood selected preferentially from other model families: 
+
+O(r) 
+
+> t,k,i
+
+= Pi
+
+ Gt−1, ρ t,k , H t, O (r−1)  
+
+> t,k,i
+
+,
+
+{O(r−1)  
+
+> t,k,j
+
+: j ∈ N i}.
+
+(8) Semantic agreement is measured on rendered can-didate skills using embeddings and cosine-based 5clustering. Debate stops on a cross-family cluster quorum, sufficiently high and stable agreement, or the round budget. Agreement controls communica-tion, not acceptance. The final issue-specific edits form Bt.
+
+3.4 Structure-Aware Hierarchical Merging Grouping and consolidation. The revisor checks each edit against Gt−1, excludes struc-turally invalid candidates, and deduplicates equivalent operation sequences. Remaining edits are grouped into bounded minibatches, prioritizing overlapping targets and nearby graph locations. At hierarchy level ℓ, minibatch B(ℓ) 
+
+> t,q
+
+is consolidated as 
+
+δ(ℓ+1)  
+
+> t,q
+
+= Mrev 
+
+ Gt−1,
+
+{(δ(ℓ) 
+
+> t,j
+
+, ρ t,j ) : j ∈ B (ℓ) 
+
+> t,q
+
+}, (9) where δ(ℓ) 
+
+> t,q
+
+represents a patch relative to Gt−1. At higher levels, ρt,j denotes the evidence and issue provenance carried by the corresponding merged patch. The revisor combines compatible correc-tions and resolves conflicts. Minimal rewriting may express complementary input corrections, but should not introduce unrelated goals. This is not closed-set selection of immutable operation IDs. All intermediate patches remain relative to the same 
+
+Gt−1.
+
+Composition and validation. The final opera-tion sequence δt respects operation-application de-pendencies, such as creating a node before adding an incident edge. These differ from task-execution dependencies represented in the skill. Let eGt =
+
+Gt−1 ⊕ δt, where ⊕ applies operations in order and yields ⊥ on failure. Then 
+
+G′ 
+
+> t
+
+=
+
+eGt, δt̸ = ∅, eGt̸ = ⊥,Vstruct ( eGt) = 1 ,Gt−1, otherwise. (10) Only the realized composition receives behavioral validation; constituent edits do not acquire individ-ual causal credit from a successful merge. 
+
+3.5 Multi-Dimensional Gating and Evolution Paired behavioral evaluation. A fixed assign-ment {(Dj
+
+> sel
+
+, E j )}Kval  
+
+> j=1
+
+pairs each juror with selec-tion examples before evolution. Parent and candi-date are evaluated using the same assignment. For a task-specific score R, R(Ej , G ; Dj
+
+> sel
+
+) is defined as the score of skill G executed by juror Ej on selection set Dj
+
+> sel
+
+.
+
+∆j = R(Ej , G ′
+
+> t
+
+; Dj
+
+> sel
+
+)
+
+− R (Ej , G t−1; Dj
+
+> sel
+
+). (11) The gate uses worst-juror change, mean change, and the fraction of jurors with non-decreasing scores: 
+
+minD = min  
+
+> j
+
+∆j ,
+
+meanD = 1
+
+Kval 
+
+X
+
+> j
+
+∆j ,Q = |{ j : ∆ j ≥ 0}| 
+
+Kval 
+
+.
+
+(12) 
+
+Structural and semantic checks. Vstruct checks the graph schema and START-to-END DAG condi-tion in the stated formulation. The topology jury as-sesses whether dependencies are supported by node meanings. High-confidence hard issues include missing prerequisites, contradictory dependencies, and unsupported dependencies; redundancy or am-biguity alone is a warning. Define Vtopo = 1 when no qualifying hard issue is found. This is an LLM-based review, not a proof of semantic correctness. For a graph candidate, acceptance requires 
+
+At = [minD ≥ − ϵ] ∧ [meanD ≥ τ ]
+
+∧ [Q ≥ q0] ∧ [Vstruct = 1] 
+
+∧ [Vtopo = 1] .
+
+(13) The tolerance ϵ ≥ 0 bounds allowed selection-set regression; τ specifies required mean gain. The state update is 
+
+Gt =
+
+(
+
+G′
+
+> t
+
+, At = 1 ,Gt−1, At = 0 . (14) These five predicates implement three behavioral requirements and two validity checks. 
+
+4 Experiments 
+
+4.1 Research Questions 
+
+We conduct empirical studies based on the research questions below: • (RQ1) Can MultiEvoSkill outperform the sota baselines? • (RQ2) How does our graph form skill offers robustness? 6Table 2: Test-set scores across five benchmarks. Bold indicates the best result in a column.                                    
+
+> Method WikiHow ToolAlpaca WebShop SearchQA SpreadsheetBench Trace2Skill 53.04 35.30 28.69 86.88 50.00 CoEvoSkills 53.90 33.13 31.58 87.78 83.93 SkillOpt 53.39 53.54 34.54 88.14 82.14 SkillBoost 54.24 35.81 28.72 80.80 83.21 SkillGen 54.56 33.65 29.12 87.38 58.21 MultiEvoSkill 55.58 53.88 34.77 88.25 86.07
+
+• (RQ3) Does the heterogeneous intelligence brings performance gains? Are there evolved intelligence from the model families? • (RQ4) Does each of the gating mechanism contribute to the final performance? 
+
+4.2 Setup Benchmarks and metrics. Table 2 contains Wik-iHow, ToolAlpaca, WebShop, SearchQA (Dunn et al., 2017) and SpreadsheetBench (Ma et al., 2024). The first three datasets are workflow-planning adapters reporting mean per-instance node F1, rather than interactive environment success; WikiHow uses the WorFBench do-main (Qiao et al., 2024), and SpreadsheetBench uses hard instance accuracy. SearchQA is a context-based question-answering benchmark, us-ing macro-averaged token F1 as its metric. De-clared splits and remaining metric qualifications are given in Appendix B. 
+
+Baselines and model configuration. The com-parison includes feedback-driven SkillOpt (Yang et al., 2026) and SkillBoost (Lin et al., 2026), trajectory-based Trace2Skill (Ni et al., 2026), and multi-agent methods SkillGen (Ma et al., 2026) and CoEvoSkills (Zhang et al., 2026b). All meth-ods use a common authoring backbone, GPT-5.6-LUNA ; MultiEvoSkill additionally uses proposer identifiers G EMINI -3.8-F LASH , M INI MAX -M3, and D EEP SEEK -V4-F LASH . Each method was compared in a fair manner, on the same random seed and data splits, within the scope of budget-equivalent comparisons. 
+
+4.3 Main Results (RQ1) 
+
+MultiEvoSkill obtains the highest reported score on every column. These results demonstrate the exceptional generalization capacity of our frame-work. The superior performance is primarily driven by two core methodological designs: 1) Multi-EvoSkill utilizes topological representation via typed skill graphs instead of traditional linear prose or trajectory-based methods. The explicit topolog-ical structure enables executors to strictly follow prerequisite constraints and branch guards, while allowing for localized, graph-grounded edits to oc-cur during the evolution process without introduc-ing non-local side effects or corrupting orthogonal execution branches. 2) MultiEvoSkill overcomes the biases and blind spots of a single model fam-ily through its multi-agent and -role pipeline. By leveraging contrasting execution trajectories and cross-family peer debates, cognitive weaknesses or missing parameter constraints in one model are systematically compensated by the complementary strengths of other models, ultimately crystallizing robust, high-quality skill artifacts into a unified skill graph. 
+
+4.3.1 (RQ2) Case Study on Skill Forms 
+
+Consider a table-manipulation task family (Table 3) in which samples share an initial inspection step but require different procedures: exact lookup, ag-gregation, formula preservation, or conditional for-matting. A prose-form skill can describe all four branches, yet the executor must infer their con-trol flow and dependencies from text, potentially mixing irrelevant operations, computing before re-solving the target range, or interpreting conditions such as “preserve formulas when possible” incon-sistently across backbones. Repairs may also have non-local effects: adding “always preserve for-mulas” to address one failure can interfere with tasks that explicitly require formula replacement. A typed skill graph instead represents actions, de-cisions, intermediate artifacts, constraints, and vali-dation checks as separately addressable nodes, con-nected by control-flow, data-flow, prerequisite, and branch-guard edges. Shared inspection nodes can lead to distinct branches, with range selection pre-ceding aggregation, formula detection preceding formula modification, and branch-specific checks validating each result; a repair can then target the 7Sample type Required procedure Why prose is fragile Graph behavior           
+
+> Lookup Identify key row and target col-umn; return exact cell value. Aggregation and formatting rules are irrelevant but appear in the same prose skill. Activate lookup branch only; skip aggregation and formatting sub-graphs. Aggregation Infer row filter, select numeric range, compute requested statis-tic, validate units. Dependency order is implicit; model may compute before fully resolving the range. Use explicit prerequisite and data-flow edges from range selection to computation. Formula preserva-tion Detect formula-bearing cells, determine dependency relation, copy or extend formula safely. Global instruction to “compute values” can conflict with formula preservation. Activate formula branch guarded by formula-detection decision node. Conditional for-matting Parse condition, locate cells, ap-ply formatting, verify affected re-gion. Formatting is a separate operation but prose may mix it with value computation. Activate formatting branch with its own validation node.
+
+Table 3: The illustrative prose skill combines several workflows in one paragraph, whereas a typed skill graph explicitly represents different branches for different samples while sharing common upstream nodes. 
+
+relevant branch rather than introduce a globally visible instruction. The distinction is not that natu-ral language cannot express these procedures, but that graph structure makes branch conditions and dependencies explicit targets for inspection and editing. 
+
+4.4 Component Ablations 4.4.1 (RQ3) Collective Intelligence and Evolution 
+
+Table 4: Proposer-panel ablations.                       
+
+> Variant WikiHow ToolAlpaca WebShop w/o δ145.88 27.71 31.53 w/o δ250.75 43.85 32.88 w/o δ350.75 45.69 33.03 w/o δ454.64 51.69 33.45 Full 55.58 53.88 34.77
+
+Table 4 presents the ablation results regard-ing the heterogeneous proposer panel, where δ1
+
+(GPT-5.6-L UNA ), δ2 (G EMINI -3.8-F LASH ), δ3
+
+(D EEP SEEK -V4-F LASH ), and δ4(M INI MAX -M3) are individually removed. Table 4 likewise favors the full proposer panel on all three reported do-mains. The largest drops are 9.70 points on Wiki-How, 26.17 on ToolAlpaca, and 3.24 on WebShop, all in the δ1 row. The other three variants lose 0.94– 10.03 points. ToolAlpaca and WikiHow involve complex API parameter structures or multiple ac-tions and long-horizon logical chains where single models may exhibit systematic blind spots. In con-trast, The collaboration across distinct model archi-tectures enables complementary reasoning paths which combine strong macro-planning with fine-grained tool constraint verification, thereby validat-ing the effectiveness of our heterogeneous collec-tive intelligence design. 
+
+4.4.2 (RQ4) Gating Ablations 
+
+Table 5: Gating ablations.                           
+
+> Variant WikiHow ToolAlpaca WebShop w/o g142.32 45.95 30.53 w/o g241.23 45.40 30.11 w/o g340.84 47.06 31.35 w/o g449.07 46.88 33.31 w/o g553.19 49.02 33.24 Full Gate 55.58 53.88 34.77
+
+Table 5 evaluates the contribution of each com-ponent within our multi-dimensional gating frame-work, including behavioral gates ( g1 : minD, 
+
+g2 : meanD, g3 : Q) and structural/topological gates ( g4 : Vstruct and g5 : Vtopo ) Our gating compo-nents are shown to be essential, as removing any single gate results in performance drops ranging from 1.46 to 14.74 points. • Behavioral Gating ( g1, g 2, g 3): Acting as the em-pirical gain and consensus filter, the absence of minimum degradation checks ( g1) or jury major-ity consensus ( g3) permits sub-optimal or regres-sive patches to infiltrate the skill pool, leading to severe performance drops on interactive tasks like ToolAlpaca (dropping to 45.40 without g2)and WikiHow (dropping to 40.84 without g3). • Structural Gating ( g4, g 5): Serving as the struc-tural legitimacy firewall, removing g4 impairs the system’s ability to filter out malformed graph modifications like dangling nodes or circular de-pendencies. And without g5 verifying whether 8the graph edges encode coherent task dependen-cies, candidate edits with missing prerequisites, contradictory links, or redundant paths may be accepted as positive updates. Removing these gates leads to a prominent drop across workflow-heavy benchmarks. These results confirm that every component of the multi-dimensional gating is vital for guarantee-ing monotonic and structurally sound skill evolu-tion. 
+
+5 Conclusion 
+
+We introduce MultiEvoSkill, a structure-aware multi-agent framework that distills heterogeneous execution experience into a single reusable skill artifact for frozen LLM agents. Its typed graph rep-resentation makes procedural branches and depen-dencies explicit targets for revision, while evidence-grounded reflection, issue-specific debate, and hi-erarchical patch consolidation integrate comple-mentary corrections. Multi-dimensional gating combines behavioral evaluation with structural and semantic checks to control candidate acceptance. MultiEvoSkill achieves the highest reported scores across the five benchmarks. Leave-one-out ablation validates the effectiveness of the collective intelli-gence and evolution mechanism. Ablation on gat-ings justify the effectiveness of each gating config-uration. Together, these findings support structured collective skill evolution as a promising approach to persistent agent improvement. 
+
+Limitations 
+
+A structural validator checks graph admissibility, not all intended task semantics. An LLM topol-ogy jury can miss unsupported dependencies or reject useful edits. Positive gains on a repeatedly reused selection set can overfit that set, and a state-similarity stopping rule does not imply optimality. The graph is a procedural representation rather than a formally verified execution engine. 
+
+AI Use Statement 
+
+Generative AI tools were used to assist with litera-ture search and summarization, code development and debugging, drafting and editing portions of the manuscript. All AI-assisted suggestions, code, and written content were reviewed and, where appli-cable, independently verified by the authors. The authors made all final decisions regarding the re-search methodology, experimental design, analysis, and scientific claims, and take full responsibility for the content of this work. 
+
+References 
+
+Lakshya A Agrawal, Shangyin Tan, Dilara Soylu, Noah Ziems, Rishi Khare, Krista Opsahl-Ong, Arnav Singhvi, Herumb Shandilya, Michael J Ryan, Meng Jiang, Christopher Potts, Koushik Sen, Alexandros G. Dimakis, Ion Stoica, Dan Klein, Matei Zaharia, and Omar Khattab. 2025. Gepa: Reflective prompt evo-lution can outperform reinforcement learning. arXiv preprint arXiv:2507.19457 .Salaheddin Alzubi, Noah Provenzano, Jaydon Bingham, Weiyuan Chen, and Tu Vu. 2026. Evoskill: Auto-mated skill discovery for multi-agent systems. arXiv preprint arXiv:2603.02766 . Verified via OpenAlex on 2026-06-12. Anthropic. 2025a. Agent Skills: A standard for portable agent capabilities. https://www.anthropic.com/ engineering/agent-skills . Anthropic engineer-ing blog and developer documentation. Anthropic. 2025b. Engineering with Agent Skills: Progressive disclosure and skill authoring. https: //docs.anthropic.com/ . Companion engineering documentation to Anthropic Agent Skills. Tong Bai, Zhenglin Wan, Pengfei Zhou, Xingrui Yu, Wangbo Zhao, Yang You, and Ivor W. Tsang. 2026. Skilldag: Self-evolving typed skill graphs for llm skill selection at scale. arXiv preprint arXiv:2606.03056 .Chi-Min Chan, Weize Chen, Yusheng Su, Jianx-uan Yu, Wei Xue, Shanghang Zhang, Jie Fu, and Zhiyuan Liu. 2024. Chateval: Towards better llm-based evaluators through multi-agent debate. In Proceedings of the 12th International Confer-ence on Learning Representations (ICLR) . Origi-nal arXiv preprint arXiv:2308.07201 (2023). DBLP: conf/iclr/ChanCSYXZF024. Kunfeng Chen, Qihuang Zhong, Juhua Liu, and Bo Du. 2026. SkillCAT: Contrastive, assessment-augmented and topology-aware skill self-evolution for LLM agents. Preprint , arXiv:2606.13317. Kexin Ding, Yang Zhou, Can Jin, Feng Tong, Mu Zhou, and Dimitris N. Metaxas. 2026. Agent skill evalu-ation and evolution: Frameworks and benchmarks. 
+
+Preprint , arXiv:2606.11435. Yilun Du, Shuang Li, Antonio Torralba, Joshua B. Tenenbaum, and Igor Mordatch. 2024. Improv-ing factuality and reasoning in language models through multiagent debate. In Proceedings of the 41st International Conference on Machine Learn-ing (ICML) , volume 235 of Proceedings of Machine Learning Research , pages 11733–11763. PMLR. Original arXiv preprint arXiv:2305.14325 (2023). DBLP: conf/icml/Du00TM24. 
+
+9Matthew Dunn, Levent Sagun, Mike Higgins, V. Ugur Güney, Volkan Cirik, and Kyunghyun Cho. 2017. SearchQA: A new Q&A dataset augmented with context from a search engine. 
+
+arXiv preprint arXiv:1704.05179 . DBLP: jour-nals/corr/DunnSHGCC17. Tianyu Hu, Zhen Tan, Song Wang, Huaizhi Qu, and Tianlong Chen. 2025. Multi-agent debate for LLM judges with adaptive stability detection. Preprint ,arXiv:2510.12697. Ken Huang and Jerry Huang. 2025. Audited skill-graph self-improvement for agentic LLMs via verifiable rewards, experience synthesis, and continual memory. 
+
+Preprint , arXiv:2512.23760. Hyunmin Hwang, Jaemin Kim, Choonghan Kim, Hangeol Chang, and Jong Chul Ye. 2026. AgentPSO: Evolving agent reasoning skill via multi-agent parti-cle swarm optimization. Preprint , arXiv:2605.08704. Dongfu Jiang, Xiang Ren, and Bill Yuchen Lin. 2023. LLM-blender: Ensembling large language models with pairwise ranking and generative fusion. In 
+
+Proceedings of the 61st Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers) (ACL) , pages 14165–14178, Toronto, Canada. Association for Computational Linguistics. Original arXiv preprint arXiv:2306.02561. Ruofei Ju, Xinrui Wang, Xin Ding, Yifan Yang, Hao Wu, Shiqi Jiang, Qianxi Zhang, Hao Wen, Xiangyu Li, Weijun Wang, Kun Li, Yunxin Liu, Haipeng Dai, Wei Wang, and Ting Cao. 2026. Embodiskill: Skill-aware reflection for self-evolving embodied agents. 
+
+arXiv preprint arXiv:2605.10332 .Akbir Khan, John Hughes, Dan Valentine, Laura Ruis, Kshitij Sachan, Ansh Radhakrishnan, Edward Grefenstette, Samuel R. Bowman, Tim Rocktäschel, and Ethan Perez. 2024. Debating with more persua-sive LLMs leads to more truthful answers. In Pro-ceedings of the 41st International Conference on Ma-chine Learning (ICML) , volume 235 of Proceedings of Machine Learning Research , pages 23662–23733. PMLR. Original arXiv preprint arXiv:2402.06782. DBLP: conf/icml/KhanHVRSRGBRP24. Xinze Li, Yuhang Zang, Yixin Cao, and Aixin Sun. 2026a. Skill-as-pseudocode: Refactoring skill li-braries to pseudocode for llm agents. arXiv preprint arXiv:2605.27955 .Yixuan Li, Mingshu Cai, Ziyang Xiao, Wanyuan Wang, Yanchen Deng, and Bo An. 2026b. MIND-Skill: Quality-guaranteed skill generation via multi-agent induction and deduction. Preprint ,arXiv:2605.08670. Zhiwei Li and Yong Hu. 2026. Skillhone: A harness for continual agent skill evolution through persistent decision history. arXiv preprint arXiv:2606.08671 .Verified via OpenAlex on 2026-06-12. Persistent decision-history harness for continual skill refine-ment. Tian Liang, Zhiwei He, Wenxiang Jiao, Xing Wang, Yan Wang, Rui Wang, Yujiu Yang, Shuming Shi, and Zhaopeng Tu. 2024. Encouraging divergent thinking in large language models through multi-agent debate. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP) ,pages 17889–17904, Miami, Florida, USA. Associa-tion for Computational Linguistics. Original arXiv preprint arXiv:2305.19118 (2023). Hongqiang Lin, Chao Liu, Xiaofan Bai, Xuan Jin, Yuhong Li, Nenggan Zheng, and Xipeng Cao. 2026. Rethinking self-evolution: A constrained exploration– exploitation process for mitigating skill overfitting. 
+
+Preprint , arXiv:2607.26643. Yuxuan Liu, Zhaochen Su, Lingyun Xie, Yuhao Zhang, Qing Zong, Jiahe Guo, Zhongwei Xie, Yiyan Ji, Yauwai Yim, Hongyu Luo, Xiyu Ren, Chenyu Ruan, Haoran Li, and Yangqiu Song. 2026. Skill-revise: Improving llm-authored agent skills via trace-conditioned skill revision. arXiv preprint arXiv:2606.01139 .Yuchen Ma, Yue Huang, Han Bao, Haomin Zhuang, Swadheen Shukla, Michel Galley, Xiangliang Zhang, and Stefan Feuerriegel. 2026. SkillGen: Veri-fied inference-time agent skill synthesis. Preprint ,arXiv:2605.10999. Zeyao Ma, Bohan Zhang, Jing Zhang, Jifan Yu, Xi-aokang Zhang, Xiaohan Zhang, Sijia Luo, Xi Wang, and Jie Tang. 2024. SpreadsheetBench: Towards challenging real world spreadsheet manipulation. In Advances in Neural Information Processing Sys-tems (NeurIPS) , volume 37, pages 94871–94908. Curran Associates, Inc. Datasets and Benchmarks Track. Original preprint: arXiv:2406.14991. DBLP: conf/nips/MaZZYZZLW024. Quim Motger, Marc Oriol, Jordi Marco, and Xavier Franch. 2026. Multi-agent debate strategies: Survey, taxonomy, and challenges. Preprint ,arXiv:2607.26212. Under review at ACM Comput-ing Surveys. Jingwei Ni, Yihao Liu, Xinpeng Liu, Yutao Sun, Mengyu Zhou, Pengyu Cheng, Dexin Wang, Er-chao Zhao, Xiaoxi Jiang, and Guanjun Jiang. 2026. Trace2skill: Distill trajectory-local lessons into transferable agent skills. arXiv preprint arXiv:2603.25158 .Siru Ouyang, Jun Yan, Yanfei Chen, Rujun Han, Zifeng Wang, Bhavana Dalvi Mishra, Rui Meng, Chun-Liang Li, Yizhu Jiao, Kaiwen Zha, Maohao Shen, Vishy Tirumalashetty, George Lee, Jiawei Han, Tomas Pfister, and Chen-Yu Lee. 2026. Skil-lOS: Learning skill curation for self-evolving agents. 
+
+Preprint , arXiv:2605.06614. Shuofei Qiao, Runnan Fang, Zhisong Qiu, Xiaobin Wang, Ningyu Zhang, Yong Jiang, Pengjun Xie, Fei Huang, and Huajun Chen. 2024. Benchmark-ing agentic workflow generation. arXiv preprint arXiv:2410.07869 .
+
+10 Haochen Shi, Xingdi Yuan, and Bang Liu. 2026a. Evolving programmatic skill networks. Preprint ,arXiv:2601.03509. Yaorui Shi, Yuxin Chen, Zhengxi Lu, Yuchun Miao, Shugui Liu, Qi Gu, Xunliang Cai, Xiang Wang, and An Zhang. 2026b. Skill1: Unified evolution of skill-augmented agents via reinforcement learning. 
+
+Preprint , arXiv:2605.06130. Liyan Tang, Cyrus Rashtchian, Chun-Sung Ferng, An-drew Tomkins, Da-Cheng Juan, and Tu Vu. 2026. WikiSkill: Compiling agent experience into persis-tent knowledge for skill evolution. arXiv preprint arXiv:2608.27454 .Md Mehrab Tanjim, Jayakumar Subramanian, Xiang Chen, Branislav Kveton, Subhojyoti Mukherjee, An-lan Zhang, Sungchul Kim, Somdeb Sarkhel, and Sunav Choudhury. 2026. Mocha: Multi-objective chebyshev annealing for agent skill optimization. 
+
+arXiv preprint arXiv:2605.19330 .Songjun Tu, Chengdong Xu, Qichao Zhang, Yaocheng Zhang, Xiangyuan Lan, Linjing Li, Dong Li, and Dongbin Zhao. 2026. Dynamic dual-granularity skill bank for agentic RL. Preprint , arXiv:2603.28716. Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Man-dlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, and Anima Anandkumar. 2024. Voyager: An open-ended embodied agent with large language models. 
+
+Transactions on Machine Learning Research (TMLR) .Original arXiv preprint arXiv:2305.16291 (2023). DBLP: journals/tmlr/WangX0MXZFA24. Hanyu Wang, Yifan Lan, Bochuan Cao, Lu Lin, and Jinghui Chen. 2026. Skillgrad: Optimizing agent skills like gradient descent. arXiv preprint arXiv:2605.27760 .Junlin Wang, Jue Wang, Ben Athiwaratkun, Ce Zhang, and James Zou. 2025. Mixture-of-agents en-hances large language model capabilities. In 
+
+Proceedings of the 13th International Conference on Learning Representations (ICLR) . Original arXiv preprint arXiv:2406.04692 (2024). DBLP: conf/iclr/WangWAZZ25. Peng Xia, Jianwen Chen, Hanyang Wang, Jiaqi Liu, Kaide Zeng, Yu Wang, Siwei Han, Yiyang Zhou, Xujiang Zhao, Haifeng Chen, Zeyu Zheng, Cihang Xie, and Huaxiu Yao. 2026a. SkillRL: Evolving agents via recursive skill-augmented reinforcement learning. Preprint , arXiv:2602.08234. Tianle Xia, Lingxiang Hu, Yiding Sun, Ming Xu, Lan Xu, Siying Wang, Wei Xu, and Jie Jiang. 2026b. Grasp: Graph-structured skill compositions for llm agents. arXiv preprint arXiv:2604.17870 .Yifan Yang, Ziyang Gong, Weiquan Huang, Qihao Yang, Ziwei Zhou, Zisu Huang, Yan Li, Xuemei Gao, Qi Dai, Bei Liu, Kai Qiu, Yuqing Yang, Dongdong Chen, Xue Yang, and Chong Luo. 2026. Skillopt: Ex-ecutive strategy for self-evolving agent skills. arXiv preprint arXiv:2605.23904 .Iris Yazici, Mert Kayaalp, Stefan Taga, and Ali H. Sayed. 2026. Opinion consensus formation among networked large language models. arXiv preprint arXiv:2601.21540 .Genrui Zhang, Erle Zhu, Jinfeng Zhou, Caiyan Jia, and Hongning Wang. 2026a. Skillevolver: Skill learning as a meta-skill. arXiv preprint arXiv:2605.10500 .Hanrong Zhang, Shicheng Fan, Henry Peng Zou, Yankai Chen, Zhenting Wang, Jiayu Zhou, Chengze Li, Wei-Chieh Huang, Yifei Yao, Kening Zheng, Xue (Steve) Liu, Xiaoxiao Li, and Philip S. Yu. 2026b. CoEvoSkills: Self-evolving agent skills via co-evolutionary verification. Preprint ,arXiv:2604.01687. Huichi Zhou, Siyuan Guo, Anjie Liu, Zhongwei Yu, Ziqin Gong, Bowen Zhao, Zhixun Chen, Men-glong Zhang, Yihang Chen, Jinsong Li, Runyu Yang, Qiangbin Liu, Xinlei Yu, Jianmin Zhou, Na Wang, Chunyang Sun, and Jun Wang. 2026a. Memento-skills: Let agents design agents. arXiv preprint arXiv:2603.18743 . Verified via arXiv API on 2026-06-11. Code: https://github.com/ Memento-Teams/Memento-Skills . Builds on the Memento 2 read–write reflective learning framework; treats reusable skills as structured markdown files and trains a behaviour-level skill router, achieving 26.2% / 116.2% relative gains on GAIA / HLE with-out updating LLM parameters. Yingli Zhou, Shu Wang, Yaodong Su, Wenchuan Du, Yixiang Fang, and Xuemin Lin. 2026b. Acomprehensive survey on agent skills: Taxon-omy, techniques, and applications. Preprint ,arXiv:2605.07358. Xiaochen Zhu, Caiqi Zhang, Yizhou Chi, Tom Stafford, Nigel Collier, and Andreas Vlachos. 2026. Demysti-fying multi-agent debate: The role of confidence and diversity. Preprint , arXiv:2601.19921. 
+
+11 A Routes for Skill Evolution 
+
+Existing methods can be grouped by their up-date signal and search strategy into trajectory distillation, execution-feedback refinement, multi-agent evolution, population-based evolution, and reinforcement-learning-based evolution, as summa-rized in Table 6. 
+
+Table 6: Major routes for agentic skill evolution.                                           
+
+> Route Representative methods
+> Trajectory distillation Trace2Skill (Ni et al., 2026), SkillCAT (Chen et al., 2026), SkillEvolver (Zhang et al., 2026a), Memento-Skills (Zhou et al., 2026a), WikiSkill (Tang et al., 2026) Execution-feedback refinement SkillOpt (Yang et al., 2026), Skill-Boost (Lin et al., 2026), Skill-Grad (Wang et al., 2026), Skill-Revise (Liu et al., 2026), Em-bodiSkill (Ju et al., 2026) Multi-agent evolution CoEvoSkills (Zhang et al., 2026b), SkillGen (Ma et al., 2026), MIND-Skill (Li et al., 2026b), SkillHone (Li and Hu, 2026) Population-based evolution AgentPSO (Hwang et al., 2026), MOCHA (Tanjim et al., 2026), GEPA (Agrawal et al., 2025), EvoSkill (Alzubi et al., 2026) Reinforcement-learning-based D2Skill (Tu et al., 2026), SkillRL (Xia et al., 2026a), SkillOS (Ouyang et al., 2026), Skill1 (Shi et al., 2026b)
+
+B Running Configuration 
+
+All experiments use the following fixed configura-tion in Tables 7 and 8. Common declarations are seed 42, at most two additional batch attempts, two reflection rounds, two peer edits per proposal revi-sion, one to three proposal-revision rounds, issue similarity threshold 0.88, debate similarity thresh-old 0.95, cluster support threshold 2 and hierar-chical merge minibatch size 8. The embedding identifier is text-embedding-3-small .
+
+C Prompt Responsibilities 
+
+Initializer. 
+
+Infer reusable procedures from training inputs and emit nodes, types, attributes, and edges. Avoid reference answers and changes to im-mutable task interfaces. 
+
+Reflector. 
+
+Diagnose trajectory-supported issues, distin-guish reusable lessons from sample-local facts, identify graph locations, and preserve 
+
+Table 7: Evolution hyperparameters used in our experi-ments: initialization examples n0, epochs e, batch size 
+
+b, regression base tolerance ϵ, mean-gain threshold τ ,and non-decrease fraction q0.                                    
+
+> Domain n0ebϵτq0
+> WikiHow 40 440 .03 .01 .5 ToolAlpaca 40 440 .03 .01 .5 WebShop 40 440 .03 .01 .5 SpreadsheetBench 40 440 .10 .02 .5 SearchQA 40 440 .02 .01 .5
+
+Table 8: Dataset split sizes and evaluation protocol.                   
+
+> Domain Train Selection Test WikiHow 157 53 52 ToolAlpaca 56 19 18 WebShop 80 27 26 SpreadsheetBench 80 40 280 SearchQA 400 200 1400
+
+successful behaviors with applicability condi-tions. 
+
+Proposer. 
+
+Produce issue-specific bounded edits, record supporting evidence and expected effects, and revise against peer feedback while retaining the same parent graph. 
+
+Hierarchical revisor. 
+
+Consolidate compatible input corrections, re-solve conflicts, and limit rewriting to sup-ported goals. Retain issue provenance and validate the resulting patch. 
+
+Topology jury. 
+
+Inspect dependency meanings conservatively, distinguish hard issues from warnings, and report confidence and disagreement. A candi-date is rejected if any topology jury identifies a high-confidence hard issue. 12

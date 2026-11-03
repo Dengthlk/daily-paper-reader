@@ -1,0 +1,741 @@
+Title: MRC-MMAgent: Reinforcement Learning for Multi-Role Collaboration in Multimodal Tool-Using Agents
+
+URL Source: https://arxiv.org/pdf/2610.39324v1
+
+Published Time: Fri, 30 Oct 2026 02:45:10 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# MRC-MMAgent: Reinforcement Learning for Multi-Role Collaboration in Multimodal Tool-Using Agents 
+
+# Shengqin Wang ∗, Jie Jin ∗, Xiaofan Li, Wentao Yan, Yu Cheng, Qingsong Hu Yihang Chen, Weilin Luo, Jingyu Gong, Xin Tan, Yuan Xie, Zhizhong Zhang 
+
+East China Normal University, Shanghai Innovation Institute, University College London, Huawei Noah’s Ark Lab 
+
+Abstract 
+
+Multimodal tool-using agents augment vision-language mod-els with access to external information and capabilities, en-abling them to solve knowledge-intensive and visually com-plex tasks that cannot be addressed using visual context alone. However, existing reinforcement learning pipelines largely train single-role agents to search and answer using terminal rewards, overlooking how humans inspect retrieved evidence, reformulate queries, and revise conclusions during search. Consequently, they fail to optimize this self-corrective pro-cess over complete interaction trajectories. We propose MRC-MMAgent, a multi-role collaborative reinforcement learning framework that incorporates trajectory assessment and con-tinuation directly into the executable agent loop. First, the framework establishes a multi-role collaborative loop that in-tegrates solving, inspection, and continuation, enabling the agent to acquire evidence through tools, evaluate the preced-ing trajectory, and resume problem solving when the cur-rent answer is insufficiently supported. Second, we intro-duce a role-coupled learning objective that combines task success, interaction validity, and successful correction with full-trajectory policy optimization across the decisions gen-erated by all roles. Extensive experiments show that, using only the original baseline training set without constructing additional datasets, our method consistently outperforms the corresponding base models and achieves leading or highly competitive performance across benchmarks. 
+
+# Introduction 
+
+Vision-Language Models (VLMs) (Liu et al. 2024; Chen et al. 2024a; Liu et al. 2023; Zhu et al. 2025; Zhang et al. 2024a) have rapidly improved on perception, recognition, and visual question answering, yet many user questions can-not be answered from images alone. Multimodal agents ad-dress this limitation by coupling a foundation model with tools such as reverse image search, text search, region zoom-ing, and retrieval (Chen et al. 2022, 2024b; Yu et al. 2024; Hu et al. 2023; Jiang et al. 2024; Zhang et al. 2024b). Systems such as MMSearch-R1, WebWatcher, DeepEyes2 optimize tool-augmented policies for multimodal search and visual question answering (Wu et al. 2025; Geng et al. 2025; Hong et al. 2025). SenseNova-MARS (Chng et al. 2025) further constructs high-resolution multimodal agent data and pro-poses BN-GSPO for training autonomous tool-using VLMs. 
+
+> ∗
+
+These authors contributed equally. 
+
+Figure 1: Performance comparison of agents across different scales. Each radar chart reports results on the same five eval-uation datasets. These methods establish Reinforcement Learning (RL) as a foundation for developing agents’ core tool-use capabilities. However, prevailing RL formulations train multimodal tool agents as single-role solvers under terminal-answer su-pervision, leaving a critical control process weakly super-vised. This formulation has two limitations: its single-role design lacks a dedicated mechanism for evidence assessment and continuation control, while terminal-only rewards fail to jointly optimize assessment, control, and revision across the full trajectory. First, as illustrated in Figure 3, a single agent loop may retrieve relevant snippets and still answer based on the wrong comparison basis, they lack an explicit, trainable mechanism that connects evidence assessment with trajec-tory control, making it difficult to identify under-supported answers and initiate targeted continuation. Second, as shown in the "reflection" part of Figure 3, where we insert the in-spection stage into the solver’s loop, the reflection merely repeats or rationalizes the initial reasoning. Mirroring hu-man information seeking, the agent assesses the preceding solution trajectory, finalizes the answer when it is sufficiently supported, and otherwise resumes tool use to refine its rea-soning and revise the answer. This conditional assessment-and-continuation process closes the loop over the entire in-teraction, highlighting the importance of full-trajectory op-timization for reliable reasoning. To address these limitations, we propose a multi-role col-laborative reinforcement learning framework for multimodal tool agents. First, we organize solving, inspection, and contin-uation as role-specific behaviors within a unified executable arXiv:2610.39324v1 [cs.CV] 29 Oct 2026 loop. The solver gathers external evidence and proposes a candidate answer, while the inspector assesses whether the accumulated visual–textual observations support it. If the evidence is sufficient, the rollout terminates; otherwise, the Inspector returns control to the solver for targeted tool use and revision. This design turns evidence assessment into a trainable control decision and enables all roles to co-adapt within a shared policy. Second, we formulate a role-coupled learning objective. We define behavioral rewards tailored to solving, inspection, and continuation, and aggregate them into a trajectory-level reward. Full-trajectory GRPO applies the aggregated reward signal to all role decisions rather than confining each role-specific signal to its corresponding role, thereby coupling optimization across the complete trajec-tory. Theoretical analysis and controlled ablations validate both the reward and optimization designs. Using only the MMSearch-R1 training set, with no additional supervised fine-tuning (SFT) trajectories or RL data, our method im-proves upon the base model by 11.1 points. Extensive exper-iments show that, without constructing any extra datasets, our method consistently outperforms the corresponding base models and achieves leading or highly competitive perfor-mance across search-intensive and visually complex bench-marks. Our contributions are: 
+
+• We propose a multi-role collaborative reinforcement learning framework that organizes solving, trajectory in-spection, and continuation within a unified executable loop, enabling evidence-conditioned finalization and tar-geted recovery in multimodal tool use. 
+
+• We formulate a role-coupled learning objective that com-bines a trajectory reward for task success, interaction va-lidity, calibrated finalization, and effective correction with full-trajectory over all generated role decisions. 
+
+• Across diverse multimodal benchmarks, our method de-livers consistent gains over its base models and leading or competitive results among same-scale systems, without auxiliary SFT trajectories or additional training data. 
+
+# Related Work 
+
+Multimodal Tool-Using Agents 
+
+Recent multimodal search and visual question answering agents (Wu et al. 2025; Chng et al. 2025; Hong et al. 2025; Wang et al. 2025a) continuously acquire problem-solving capabilities by training VLMs to use tools. However, most current agents rely on expensive SFT trajectories to regular-ize model behavior, while improving performance through terminal rewards alone. This fixed behavioral regime ne-glects effective evaluation of the model’s reasoning process and further limits the ability to perform meaningful revision. 
+
+Multi-Agent and Multi-Module Tool-Use RL 
+
+Multi-agent frameworks optimize role decomposition among planners, workers, and specialized agents (Li et al. 2025; Mo et al. 2025; Park et al. 2025; Chen et al. 2026a), while other works improve process supervision and multimodal tool use (Tan et al. 2025; Zhang et al. 2026; Dong et al. 2025; Zhao et al. 2026; Hong et al. 2025). Reflection meth-ods such as Look-Back and ReGRPO revisit evidence or use teacher feedback to revise solutions (Yang et al. 2026; Klis-sarov et al. 2026; Zhang and Shou 2026), but do not jointly learn reference-free inspection and recovery within a multi-modal tool loop (see Supp. A for detailed comparisons). In contrast, MRC-MMAgent trains solver, inspector, and con-tinuation within one shared policy, without auxiliary SFT or teacher critiques, using a role-coupled reward and full-trajectory updates to jointly optimize calibrated finalization and successful correction. 
+
+# Method 
+
+Overview 
+
+Figure 2 presents our multi-role collaborative reinforce-ment learning framework, which couples an executable solve–inspect–continue loop with trajectory-level learning. A shared policy πθ is conditioned by frozen prompts S1, S3,and S2 to act as the initial solver, inspector, and continuation solver, respectively. The solver gathers evidence and proposes an answer; without access to the reference answer, correct-ness labels, or future outcomes, the inspector determines whether the trajectory sufficiently supports it and either fi-nalizes or requests targeted continuation. We train all roles with a role-coupled reward for task success, interaction valid-ity, and inspection-guided correction. Full-trajectory GRPO then propagates the group-relative signal to every model-generated decision, allowing the shared policy to co-adapt across the complete interaction. 
+
+Multi-Role Agent Loop 
+
+Each example is a multimodal query q = ( x, u ), where x
+
+denotes one or more images and u is a natural-language question. At loop index k, the solver generates a reasoning– action–answer segment: 
+
+Xk = ( Tk, A k, R k, ..., P k) ∼ πθ (· | hk, S rk ), (1) 
+
+Srk =
+
+S1, k = 0 ,S2, k > 0, (2) where the environment executes actions in Ak and appends their observations to history. The inspector then generates: 
+
+Ck ∼ πθ (· | h′
+
+> k
+
+, S 3), (3) where h′ 
+
+> k
+
+contains the multimodal query, preceding solving trajectory, retrieved visual–textual observations, and candi-date answer Pk, etc. In particular, 
+
+(y⋆, Acc( Pk), yf ) /∈ h′
+
+> k
+
+, (4) where y⋆ denotes the reference answer. Thus, the inspec-tor must assess sufficiency from the trajectory rather than compare Pk with a known answer. Its output Ck contains a rationale and decision dk ∈ { finalize , continue }, verifying evidential support and identifying missing, conflicting, or in-adequately grounded evidence. Finalization returns yf = Pk;continuation converts the identified gap into a frozen bridge message Bk and updates: 
+
+hk+1 = h′ 
+
+> k
+
+⊕ Ck ⊕ Bk, (5) Figure 2: Overview of the proposed multi-role collaborative training framework for multimodal tasks. The Solver iteratively tackles the initial query, while the Inspector analyzes visual-textual trajectories to generate suggestions. Failed agent loops are re-executed based on historical trajectories to ensure convergence. after which the solver resumes under S2 with the existing evidence, rejected candidate, and inspection feedback. The loop ends when the answer is accepted or after at most Nm
+
+continuations. We denote the initial candidate by y0 = P0
+
+and the returned answer by yf .A complete rollout can therefore be represented compactly as: 
+
+τ =  q; S1, X 0; [ S3, C k, S 2, X k]Kk=1 
+
+, (6) where K ≤ Nm, R k collects the frozen tool observations in loop k. The trainable events are: 
+
+M(τ ) = 
+
+> K
+
+[
+
+> k=0
+
+{Tk, A k, P k, C k}, (7) 
+
+E(τ ) = τ \ M (τ ). (8) They decompose by role as: 
+
+M(τ ) = MS1 (τ ) ∪ M I (τ ) ∪ M S2 (τ ), (9) where the subsets contain initial-solver, inspector, and continuation-solver tokens. The context set E(τ ) contains role prompts, tool observations, and bridge messages. These events condition subsequent generation but are not sampled from πθ . Assuming that the environment dynamics are inde-pendent of θ, the trajectory log-likelihood gradient is 
+
+∇θ log pθ (τ | q) = X 
+
+> t∈M (τ)
+
+∇θ log πθ (at | ht). (10) Thus, all policy-generated decisions from solving, inspec-tion, and continuation contribute to the same trajectory-level update, providing the basis for full-trajectory credit assign-ment. Supplementary Material B gives the complete rollout algorithm. 
+
+Role-Coupled Trajectory Reward 
+
+Each rollout receives a reward for final-answer accuracy 
+
+Racc , interaction validity Rfmt , and inspection-guided cor-rection Rcorr . The task evaluator sets Racc ∈ { 0, 1} from 
+
+yf . The format term Rfmt ∈ { 0, 1} requires valid tool calls, a candidate answer before inspection, a coherent control de-cision, and well-formed continuation, preventing malformed interactions from being compensated by answer reward. The correction reward couples the inspector’s evidence-conditioned decision with the solver trajectories before and after inspection. Let Icont (τ ) indicate whether the first in-spection triggers continuation, and let Acc( y) ∈ { 0, 1} be the environment’s post-hoc task evaluator. Neither the ref-erence answer nor the values of Acc( y0) and Acc( yf ) are exposed to the inspector. The Inspector thus assesses eviden-tial sufficiency without answer labels, while its finalization and continuation decisions are optimized from post-hoc tra-jectory outcomes. We define: 
+
+Rcorr (τ ) = 
+
+
+
+0, Icont ∧ Acc( y0) = 1 ,
+
+1, Icont ∧ Acc( y0) = 0 ∧ Acc( yf ) = 1 ,
+
+0.5, Icont ∧ Acc( y0) = 0 ∧ Acc( yf ) = 0 ,
+
+1, ¬Icont ∧ Acc( yf ) = 1 ,
+
+0, ¬Icont ∧ Acc( yf ) = 0 .
+
+(11) Full credit is assigned when the inspector correctly finalizes or when continuation corrects an initially wrong answer. If the inspector rejects an incorrect answer but continuation fails to correct it, partial credit separates the inspection de-cision from the continuation failure. Unnecessary rejection and premature finalization receive no credit. These outcomes score only the completed interaction and never condition the inspection decision in Eq. (4). For clarity, Eq. (11) presents the Nm = 1 case; Ablation Study also evaluate Nm > 1,where the same loop repeats and the reward is computed over the complete trajectory from y0 to yf .The overall reward is: 
+
+R(τ ) = λacc Racc (τ )+ λfmt Rfmt (τ )+ λcorr Rcorr (τ ), (12) with (λacc , λ fmt , λ corr ) = (0 .7, 0.1, 0.2) , prioritizing cor-rectness while retaining pressure for valid interaction and Figure 3: Case Study. The left panel shows a failure case where the current agent loop produces an incorrect answer. The right panel shows that after the inspector reviews the visual-textual trajectory, it detects the failure; the solver then resumes from the accumulated context and successfully corrects the answer. useful revision. Because Rcorr jointly depends on the initial solution, inspection, and continuation outcome, the reward is a coupled function: 
+
+R(τ ) = R(MS1 (τ ), MI (τ ), MS2 (τ )) , (13) rather than a collection of independent role-level objectives. 
+
+Trajectory-Level Policy Optimization 
+
+The role-coupled reward defines the desired behaviors of all roles, while policy optimization determines how its credit is assigned. For each query qb, the old policy samples G
+
+complete rollouts and normalizes their aggregated rewards into group-relative trajectory advantages: 
+
+¯Ab,g = R(τb,g ) − mean g′ R(τb,g ′ )std g′ R(τb,g ′ ) + ϵ . (14) The component rewards are therefore combined before credit assignment rather than routed independently to individ-ual roles. Let mb,g,t mark model-generated tokens, and let cb,g,t ∈ { 0, 1} specify which of these tokens receive trajectory credit. With N cb,g = P 
+
+> t
+
+mb,g,t cb,g,t and im-portance ratio ρb,g,t = πθ (ab,g,t | hb,g,t )/π θold (ab,g,t |
+
+hb,g,t ), the credit-assignment form of GRPO is Let ρb,g,t =   
+
+> πθ(ab,g,t |hb,g,t )
+> πθold (ab,g,t |hb,g,t )
+
+, ¯ρb,g,t = clip( ρb,g,t , 1 − ϵc, 1 + ϵc), and 
+
+Lb,g,t (θ) = min( ρb,g,t ¯Ab,g , ¯ρb,g,t ¯Ab,g ) − βD KL ,b,g,t ,
+
+J (θ; c) = Eb,g 
+
+"
+
+1
+
+N cb,g 
+
+X
+
+> t
+
+mb,g,t cb,g,t Lb,g,t (θ)
+
+#
+
+. (15) Our full-trajectory assignment sets: 
+
+cfull  
+
+> b,g,t
+
+= 1 , A full  
+
+> b,g,t
+
+= mb,g,t ¯Ab,g , Jfull = J (θ; cfull ). (16) Consequently, the aggregated accuracy, validity, and correc-tion signal jointly trains every decision made by the ini-tial solver, inspector, and continuation solver, preserving the complete likelihood in Eq. (10). By contrast, role-selective credit assignment uses atrajectory-dependent mask: 
+
+crole  
+
+> b,g,t
+
+= zb,g,t (τ ) = ft(y0, C, y f , Acc( y0), Acc( yf )) ,
+
+(17) which assigns the advantage only to the role judged locally responsible, such as the inspector when it rejects a correct answer. This is a concrete credit-assignment rule rather than a neutral loss mask. Ignoring clipping and KL regularization, its difference from full-trajectory optimization is: 
+
+grole − gfull = Eb,g 
+
+ ¯Ab,g 
+
+ ¯srole  
+
+> b,g
+
+− ¯sfull 
+
+> b,g
+
+ , (18) where ¯srole and ¯sfull average token score functions over selected-role and all trainable tokens. Because z(τ ) de-pends on policy-generated outcomes and the roles causally affect one another, this difference is generally nonzero. Role-selective assignment therefore changes the optimization tar-get and introduces a post-hoc attribution mismatch relative to the full-trajectory GRPO objective, whereas full-trajectory assignment preserves all decisions contributing to the cou-pled reward and enables joint role adaptation. Supplemen-tary Material C provides a detailed theoretical derivation Method Avg. FVQA-Test InfoSeek SimpleVQA LiveVQA MMSearch 
+
+Direct Answer 
+
+Qwen2.5-VL-7B-Instruct 26.7 26.3 32.0 47.9 19.6 7.6 Qwen3-VL-8B-Instruct 25.0 24.2 23.2 42.9 23.2 11.7 Qwen3-VL-32B-Instruct 31.1 32.2 29.0 45.9 31.6 17.0 GPT-5 50.0 54.4 54.2 61.7 44.4 35.1 Claude-4-Sonnet 40.1 35.3 57.3 50.9 38.5 18.7 Gemini-3-Flash 54.2 56.5 54.9 63.6 38.9 57.3 Gemini-3-Pro 56.5 59.2 56.3 64.1 40.1 62.6 
+
+Agentic Model (zero-shot) 
+
+Qwen2.5-VL-7B-Instruct 32.4 36.0 28.8 42.4 22.5 32.2 Qwen3-VL-8B-Instruct 49.8 53.6 46.2 62.3 39.4 47.4 Qwen2.5-VL-32B-Instruct 51.9 52.2 50.1 65.2 42.2 49.7 Qwen3-VL-32B-Instruct 52.1 54.3 49.9 64.2 42.9 49.1 GPT-4o 55.8 66.3 59.6 63.7 40.1 49.1 Gemini-2.5-Flash 58.2 61.7 53.7 68.8 47.8 59.1 GPT-5 59.6 62.6 56.0 70.6 56.0 52.6 Gemini-3-Flash 60.9 64.9 61.1 67.9 48.1 62.6 Gemini-3-Pro 69.8 72.6 66.5 75.9 59.7 74.3 
+
+Trained Multimodal Tool Agents 
+
+MMSearch-R1-7B 51.1 58.0 49.0 56.4 48.4 43.9 WebWatcher-7B - - - 54.3 51.2 49.1 DeepEyes2-7B - 60.6 51.1 59.4 - 63.7 
+
+MM-DeepResearch-7B 60.8 61.9 58.7 62.0 60.0 61.4 
+
+MRC-MMAgent-7B 62.2 64.0 62.0 62.7 60.3 62.0 SenseNova-MARS-8B 64.6 67.1 61.7 70.2 56.2 67.8 
+
+OpenSearch-VL-8B 67.5 71.5 70.2 71.6 59.6 64.5 
+
+MRC-MMAgent-8B 68.1 74.2 65.6 74.3 61.3 64.9 Table 1: Accuracy comparison on five search-intensive benchmarks. Unlike competing trained agents that use additionally constructed training data, MRC-MMAgent is trained solely on the original baseline (MMSearch-R1) training set. and comprehensive experimental comparisons, which col-lectively demonstrate the effectiveness of our method. 
+
+# Experiments 
+
+Experimental Setup 
+
+Benchmarks. We evaluate on current knowledge-intensive and visually complex tasks. Knowledge-intensive multi-modal search and visual question answering, including FVQA-test (Wu et al. 2025), Infoseek (Chen et al. 2023), SimpleVQA (Cheng et al. 2025), MMsearch (Jiang et al. 2024), and LiveVQA (Fu et al. 2025). Visual grounding and high-resolution perception with V* Bench (Wu and Xie 2024) and HR-Bench 4K/8K (Wang et al. 2025b), testing whether trajectory verification and continuation remain ef-fective beyond search-heavy QA. 
+
+Training and Implementation. We experiment with Qwen2.5-VL-7B-Instruct (Bai et al. 2025) and Qwen3-VL-8B-Instruct (Yang et al. 2025) multimodal tool agents. Ex-periments are conducted on 9× NVIDIA H200 GPUs. For fair comparison, we use Qwen3-32B (Yang et al. 2025) as reference DeepEyes2 and SenseNova-MARS to evaluate the answers. We adopt the three tools: reverse image search, text search, and image zoom. We use a batch size of 128, Model V* Bench 4K 8K 
+
+Direct Answer 
+
+Gemini-2.5-Pro 83.8 87.3 85.4 GPT-4o 67.5 65.0 59.6 LLaVA-onevision 75.4 63.0 59.8 Qwen3-VL-8B-Instruct 86.4 78.9 74.6 
+
+Agentic Model 
+
+SEAL 74.8 - -Monet 83.3 71.0 68.0 Pixel-Reasoner 84.3 72.6 66.1 DeepEyes 83.3 73.2 69.5 Thyme 82.2 77.0 72.0 DeepEyesV2 81.8 77.9 73.8 Mini o3 88.2 77.5 73.3 SenseNova-MARS-8B 92.2 83.1 78.4 
+
+MRC-MMAgent-8B 93.2 82.1 78.5 
+
+∆ (vs Qwen3-VL-8B-Instruct) +6.8 +3.2 +3.9 Table 2: Accuracy on image reasoning benchmarks. 4K and 8K denote HR-Bench 4K and HR-Bench 8K. LR 5e-6, 16K token length, rollout group 8, and 10-turn tool interactions per rollout. The training and test sets are strictly separated with no overlap. The detailed parameter configurations, tool specifications and prompts are listed in Supplementary Material G. 
+
+Baselines. We conduct extensive comparisons against a broad range of baselines, including open-source models (e.g., Qwen (Bai et al. 2025; Yang et al. 2025)), closed-source models (e.g., GPT-5 (OpenAI 2025)), and open-source mul-timodal agents (e.g., MMSearch-R1 (Wu et al. 2025)), among others (Gemini 2025; Anthropic 2025; Yao et al. 2026; Chng et al. 2025; Chen et al. 2026b; Wang et al. 2026; Zhang et al. 2025; Zheng et al. 2025). 
+
+Main Results 
+
+Table 1 and Figure 1 reports the main multimodal search-intensive results. We compare our method with trained multimodal tool agents at the 7B and 8B scales. Our 7B agent surpasses the trained 7B multimodal frameworks on FVQA-Test, InfoSeek, SimpleVQA, and LiveVQA. At the 8B scale, our method remains highly competitive: compared to SenseNova-MARS-8B, we improve FVQA-Test from 67 .1% 
+
+to 74 .2% , SimpleVQA from 70 .2% to 74 .3% , and LiveVQA from 56 .2% to 61 .3% . These results demonstrate that explicit trajectory verification and continuation offer complementary advantages for RL-based tool-use training. Notably, the ab-sence of extra datasets for reinforcement training underscores the robustness of our framework. In addition, our method at-tains the best FVQA-Test and LiveVQA scores among the listed systems, while maintaining competitiveness on others. Table 2 evaluates whether the proposed workflow also transfers to visual grounding and high-resolution perception. Our method achieves the best V* Bench score and the best HR-Bench 8K score among the listed agentic models. The gains over Qwen3-VL-8B-Instruct are + 6.8% on V* Bench, +3.2% on HR-Bench 4K, and + 3.9% on HR-Bench 8K. These results suggest that trajectory verification is also effective when the agent must decide whether visual observations are sufficient before finalizing an answer, rather than only in web-style search tasks. Notably, Supplementary Material H presents a detailed cost comparison, showing that our method achieves leading accuracy with low cost and data efficiency. 
+
+Ablation Study 
+
+Different Workflow Pipeline Performance. Table 3presents a comparison of different reflection framework vari-ants. GRPO, which denotes the single-solver policy under with identical total tokens and tool-call configurations, per-forms far worse than the multi-role collaborative RL frame-work. ReflectAgent integrates reflection into the entire chain-of-thought but still performs single-role optimization. How-ever, its performance is comparable to GRPO, and empirical observations indicate that the reflection mechanism tends to degrade during training. The two-stage RL strategy first trains the solution trajectory and answer, followed by an inspection and update of the complete trajectory. Although this approach leads to certain improvements, it incurs substantially higher training time costs. Our framework effectively overcomes these limitations and achieves optimal performance. Further-more, when the role-coupled reward is removed, leaving only 
+
+Racc and the format reward, we observe a clear drop in model performance. This is because removing the role-coupled re-ward weakens the overall normative constraints of the multi-role framework, thereby hindering effective optimization of multi-role coordination. resulting in a performance decline on FVQA-Test (from 64 .0% to 62 .3% ). Method FVQA-Test MMSearch GRPO 58.3 50.9 ReflectAgent 58.6 52.3 Solver-Inspector(two-stage RL) 59.1 56.0 Ours w/o role-coupled reward 62.3 60.2 Ours 64.0 62.0 
+
+Table 3: The ablation of different inspect and solve workflow with 7B. 
+
+Figure 4: Pie chart visualizations comparing ablation results across model sizes, training approaches, and benchmarks. Orange indicates REJECT, and green indicates PASS. 
+
+Experiments on Framework Adaptability. Table 4 and Figure 4 present ablation studies under various data config-urations, training settings, and model scales. The inspection capability adapts across model sizes; the 8B model achieves a higher one-pass success rate, consistent with stronger models facing easier tasks. Online search outperforms offline search, leading to improved one-pass accuracy. The framework gen-eralizes well across benchmarks of varying difficulty, and on V*Bench, where most trajectories are finalized after the initial solve, full-trajectory credit assignment still reinforces the solver’s decisions, improving one-pass reasoning without relying on continuation-based correction. 
+
+The Ablation Implementation of Multi-Role Training Configuration. To further analyze the impact of individual role training on the overall performance, and to validate the effectiveness of our method, we conduct component-level ab-lation studies on the training states of the Solver and Inspec-tor. In Table 5, Config. 1 trains both solving and inspection roles, Config. 2 trains only the solving roles, Config. 3 trains only the inspection role, and Config. 4 trains neither compo-nent. Our framework consists of two solving stages, denoted Dataset Training Finalize Continue MMSearch Offline 69.0 31.0 MMSearch Online 90.1 9.9 
+
+FVQA Offline 89.8 10.2 FVQA Online 93.9 6.1 
+
+FVQA-7B Offline 34.1 65.9 FVQA-7B Online 39.6 60.4 V* Bench – 99.8 0.2 Table 4: Ablation studies on model scales, training meth-ods, and benchmarks. Finalize indicates that the inspection is passed and the task is completed. Continue indicates that issues exist in the current trajectory and further problem-solving is required. Offline uses the local knowledge base Wiki25, while online search uses the more comprehensive Google Search. Setting Solver Inspector Solver1 Solver2 Err. Acc Config. 1 ✓ ✓ 57.2 72.6 5.3 64.0 
+
+Config. 2 ✓ × 54.3 72.3 10.4 62.2 Config. 3 × ✓ 41.1 53.7 14.7 52.9 Config. 4 × × 18.4 52.9 22.6 51.1 Table 5: Functional ablation under different role-training set-tings with 7B. ✓ indicates that the corresponding role is trained, and × indicates that it is frozen. as Solver1 and Solver2, and one inspection stage. The Solver1 metric measures the probability that the first solving stage an-swers correctly. The Solver2 metric measures the probability that the agent produces the correct answer after second-stage solving or revision. The inspection error metric measures the proportion of incorrect control decisions, where a lower value indicates more reliable trajectory assessment. Over-all accuracy reports the final task accuracy of the complete pipeline. From an overall perspective, even when neither the solv-ing nor inspection role is trained, the framework still performs better than direct inference, suggesting that the solve–inspect–continue process itself is beneficial. As more functional components are trained, performance improves steadily: overall accuracy increases from 51 .1% to 52 .9% 
+
+and 62 .2% , and reaches 64 .0% when solving and inspection are jointly trained. This trend shows that the gain does not come from a single isolated module, but from the coordi-nated improvement of initial solving, trajectory assessment, and second-stage correction. Config. 4 also has weaker for-mat compliance, so we report accuracy on valid trajectories. The interaction between solving and inspection further sup-ports this conclusion. When only the solving roles are trained, Solver2 reaches 72 .3% , indicating strong second-stage cor-rection, but inspection error remains 10 .4% due to untrained inspection, limiting final accuracy. When only the inspec-tion role is trained, inspection error drops significantly, but Solver1 and Solver2 remain weaker, showing that reliable assessment must be paired with a solver that can act on feed-back. When both are jointly trained, Solver1, Solver2, and inspection error all achieve the best or near-best results. This demonstrates that the role-coupled reward simultaneously improves first-attempt gathering, trajectory assessment, and post-inspection correction, leading to the best overall task accuracy. 
+
+Robustness and Effectiveness Analysis. We conduct ex-tensive ablation studies, with all results reported over the first 100 training steps to mitigate the influence of conver-gence fluctuations. Supplementary Material D investigates the effect of the number of inspection-refinement loops. The accuracy curves for the single-loop ( Nm = 1 ) and two-loop (Nm = 2 ) settings almost completely overlap, yielding accu-racies of 50.9 % and 50.3 %, respectively—indicating highly comparable performance. However, the two-loop setting in-creases the average output length from 1,717.5 to 2,751.7 tokens and the average number of tool calls from 2.5 to 2.9, incurring substantial computational overhead. This suggests that additional loops introduce contextual redundancy rather than performance gains; therefore, we adopt Nm = 1 as the default configuration to maintain efficiency without sacrific-ing performance. Furthermore, compared with the baseline, our method achieves notable accuracy improvements with only a marginal increase in token and tool-call costs. This indicates that our approach does not introduce appreciable latency while delivering superior performance, and that it ef-fectively helps the model avoid redundant attempts. Supple-mentary Material E compares the Inspector with and without training. The untrained Inspector marks nearly all trajecto-ries as Continue (98.3 % continue rate), leading to numer-ous unnecessary revisions and an accuracy of only 62.7 %.In contrast, the trained Inspector reduces the continue rate to 60.4 % and improves accuracy to 64.0 %, demonstrating that our multi-role training framework endows the Inspec-tor with effective reasoning capability. Supplementary Ma-terial F presents ablations on the role-coupled reward Rcorr .Over the first 100 training steps, different weight configura-tions (0.1, 0.2, and 0.3) achieve accuracies of 63.1 %, 64.7 %,and 63.6 %, respectively, all substantially outperforming the baseline of 57.3 % with consistent convergence speed. This confirms that our method exhibits strong robustness across various reward settings and that the performance improve-ments do not depend on specific hyperparameter choices. 
+
+# Conclusion 
+
+We propose a multi-role collaborative reinforcement learn-ing framework that internalizes trajectory assessment and continuation decisions into the executable agent loop, en-abling multimodal tool agents to achieve leading or highly competitive performance across multiple benchmarks with-out requiring additional training data. 
+
+# References 
+
+Anthropic, T. 2025. System card: Claude opus 4& claude sonnet 4. https://www-cdn.anthropic.com/ 6d8a8055020700718b0c49369f60816ba2a7c285.pdf. Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; et al. 2025. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 .Chen, B.; Wang, Z.; Yue, Z.; Yan, K.; Yu, C.; Huang, Y.; Liu, Z.; Wen, Y.; Chen, X.; Liu, Y.; et al. 2026a. Videochat-m1: Collaborative policy planning for video understanding via multi-agent reinforcement learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 33772–33783. Chen, S.; Feng, K.; Chen, H.; Huang, W.; Dai, D.; Shou, Q.; Lin, Y.; Yue, X.; Gao, S.; and Pang, T. 2026b. Opensearch-vl: An open recipe for frontier multimodal search agents. arXiv preprint arXiv:2605.05185 .Chen, W.; Hu, H.; Chen, X.; Verga, P.; and Cohen, W. 2022. Murag: Multimodal retrieval-augmented generator for open question answering over images and text. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , 5558–5570. Chen, Y.; Hu, H.; Luan, Y.; Sun, H.; Changpinyo, S.; Ritter, A.; and Chang, M.-W. 2023. Can pre-trained vision and lan-guage models answer visual information-seeking questions? 
+
+arXiv preprint arXiv:2302.11713 .Chen, Z.; Wu, J.; Wang, W.; Su, W.; Chen, G.; Xing, S.; Zhong, M.; Zhang, Q.; Zhu, X.; Lu, L.; et al. 2024a. Internvl: Scaling up vision foundation models and aligning for generic visual-linguistic tasks. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , 24185– 24198. Chen, Z.; Xu, C.; Qi, Y.; and Guo, J. 2024b. Mllm is a strong reranker: Advancing multimodal retrieval-augmented gener-ation via knowledge-enhanced reranking and noise-injected training. arXiv preprint arXiv:2407.21439 .Cheng, X.; Zhang, W.; Zhang, S.; Yang, J.; Guan, X.; Wu, X.; Li, X.; Zhang, G.; Liu, J.; Mai, Y.; et al. 2025. Simplevqa: Multimodal factuality evaluation for multimodal large lan-guage models. In Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision , 4637–4646. Chng, Y. X.; Hu, T.; Tong, W.; Li, X.; Chen, J.; Yu, H.; Lu, J.; Guo, H.; Deng, H.; Xie, C.; et al. 2025. SenseNova-MARS: Empowering Multimodal Agentic Reasoning and Search via Reinforcement Learning. arXiv preprint arXiv:2512.24330 .Dong, G.; Chen, Y.; Li, X.; Jin, J.; Qian, H.; Zhu, Y.; Mao, H.; Zhou, G.; Dou, Z.; and Wen, J.-R. 2025. Tool-star: Em-powering llm-brained multi-tool reasoner via reinforcement learning. arXiv preprint arXiv:2505.16410 .Fu, M.; Peng, Y.; Liu, B.; Wan, Y.; and Chen, D. 2025. LiveVQA: Live Visual Knowledge Seeking. arXiv preprint arXiv:2504.05288 .Gemini. 2025. Gemini-3-pro. https://storage.googleapis. com/deepmind-media/Model-Cards/Gemini-3-Pro-Model-Card.pdf. Geng, X.; Xia, P.; Zhang, Z.; Wang, X.; Wang, Q.; Ding, R.; Wang, C.; Wu, J.; Zhao, Y.; Li, K.; et al. 2025. Web-watcher: Breaking new frontier of vision-language deep re-search agent. arXiv preprint arXiv:2508.05748 .Hong, J.; Zhao, C.; Zhu, C.; Lu, W.; Xu, G.; and Yu, X. 2025. DeepEyesV2: Toward Agentic Multimodal Model. 
+
+arXiv preprint arXiv:2511.05271 .Hu, Z.; Iscen, A.; Sun, C.; Chang, K.-W.; Sun, Y.; Ross, D.; Schmid, C.; and Fathi, A. 2023. Avis: Autonomous visual information seeking with large language model agent. Ad-vances in Neural Information Processing Systems , 36: 867– 878. Jiang, D.; Zhang, R.; Guo, Z.; Wu, Y.; Lei, J.; Qiu, P.; Lu, P.; Chen, Z.; Fu, C.; Song, G.; et al. 2024. Mmsearch: Bench-marking the potential of large models as multi-modal search engines. arXiv preprint arXiv:2409.12959 .Klissarov, M.; Cook, J.; Antognini, D.; Sun, H.; Li, J.; Jaques, N.; Musat, C.; and Grefenstette, E. 2026. Improving Interac-tive In-Context Learning from Natural Language Feedback. 
+
+arXiv preprint arXiv:2602.16066 .Li, Z.; Zhang, H.; Han, S.; Liu, S.; Xie, J.; Zhang, Y.; Choi, Y.; Zou, J.; and Lu, P. 2025. In-the-flow agentic system opti-mization for effective planning and tool use. arXiv preprint arXiv:2510.05592 .Liu, H.; Li, C.; Li, Y.; and Lee, Y. J. 2024. Improved base-lines with visual instruction tuning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recog-nition , 26296–26306. Liu, H.; Li, C.; Wu, Q.; and Lee, Y. J. 2023. Visual instruction tuning. Advances in neural information processing systems ,36: 34892–34916. Mo, Z.; Li, X.; Chen, Y.; and Bing, L. 2025. Multi-Agent Tool-Integrated Policy Optimization. arXiv preprint arXiv:2510.04678 .OpenAI. 2025. Introducing gpt-5. https://openai.com/zh-Hans-CN/index/introducing-gpt-5/. Park, C.; Han, S.; Guo, X.; Ozdaglar, A. E.; Zhang, K.; and Kim, J.-K. 2025. Maporl: Multi-agent post-co-training for collaborative large language models with reinforcement learning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 30215–30248. Tan, W.; Qu, X.; Tu, M.; Ge, M.; Liu, A. T.; Koehn, P.; and Lu, L. 2025. Process-Supervised Reinforcement Learning for Interactive Multimodal Tool-Use Agents. arXiv preprint arXiv:2509.14480 .Wang, H.; Su, A.; Ren, W.; Lin, F.; and Chen, W. 2025a. Pixel reasoner: Incentivizing pixel-space reasoning with curiosity-driven reinforcement learning. arXiv preprint arXiv:2505.15966 .Wang, Q.; Shi, Y.; Wang, Y.; Zhang, Y.; Wan, P.; Gai, K.; Ying, X.; and Wang, Y. 2026. Monet: Reasoning in Latent Visual Space Beyond Image and Language. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 12030–12040. Wang, W.; Ding, L.; Zeng, M.; Zhou, X.; Shen, L.; Luo, Y.; Yu, W.; and Tao, D. 2025b. Divide, conquer and combine: A training-free framework for high-resolution image percep-tion in multimodal large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 7907–7915. Wu, J.; Deng, Z.; Li, W.; Liu, Y.; You, B.; Li, B.; Ma, Z.; and Liu, Z. 2025. MMSearch-R1: Incentivizing LMMs to Search. arXiv preprint arXiv:2506.20670 .Wu, P.; and Xie, S. 2024. V?: Guided visual search as a core mechanism in multimodal llms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 13084–13094. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yang, S.; Niu, Y.; Liu, Y.; Ye, Y.; Lin, B.; and Yuan, L. 2026. Look-back: Implicit visual re-focusing in mllm rea-soning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 11694–11702. Yao, H.; Yin, Q.; Yang, M.; Zhao, Z.; Wang, Y.; Luo, H.; Zhang, J.; and Huang, J. 2026. Mm-deepresearch: A sim-ple and effective multimodal agentic search baseline. arXiv preprint arXiv:2603.01050 .Yu, Y.; Ping, W.; Liu, Z.; Wang, B.; You, J.; Zhang, C.; Shoeybi, M.; and Catanzaro, B. 2024. Rankrag: Unify-ing context ranking with retrieval-augmented generation in llms. Advances in Neural Information Processing Systems ,37: 121156–121184. Zhang, B.; and Shou, M. Z. 2026. ReGRPO: Reflection-Augmented Policy Optimization for Tool-Using Agents. 
+
+arXiv preprint arXiv:2606.31392 .Zhang, R.; Jiang, D.; Zhang, Y.; Lin, H.; Guo, Z.; Qiu, P.; Zhou, A.; Lu, P.; Chang, K.-W.; Qiao, Y.; et al. 2024a. Math-verse: Does your multi-modal llm truly see the diagrams in visual math problems? In European Conference on Com-puter Vision , 169–186. Springer. Zhang, R.; Sun, Q.; Song, C.; Qi, Y.; and Zheng, Z. 2026. VSearcher: Long-horizon multimodal search agent via rein-forcement learning. arXiv preprint arXiv:2603.02795 .Zhang, Y.-F.; Lu, X.; Yin, S.; Fu, C.; Chen, W.; Hu, X.; Wen, B.; Jiang, K.; Liu, C.; Zhang, T.; et al. 2025. Thyme: Think beyond images. arXiv preprint arXiv:2508.11630 .Zhang, Z.; Zhang, Y.; Ding, X.; and Yue, X. 2024b. Vision search assistant: Empower vision-language models as multi-modal search engines. arXiv preprint arXiv:2410.21220 .Zhao, S.; Lin, S.; Li, M.; Zhang, H.; Peng, W.; Zhang, K.; and Wei, C. 2026. PyVision-RL: Forging open agentic vision models via RL. arXiv preprint arXiv:2602.20739 .Zheng, Z.; Yang, M.; Hong, J.; Zhao, C.; Xu, G.; Yang, L.; Shen, C.; and Yu, X. 2025. Deepeyes: Incentivizing" thinking with images" via reinforcement learning. arXiv preprint arXiv:2505.14362 .Zhu, J.; Wang, W.; Chen, Z.; Liu, Z.; Ye, S.; Gu, L.; Tian, H.; Duan, Y.; Su, W.; Shao, J.; et al. 2025. Internvl3: Explor-ing advanced training and test-time recipes for open-source multimodal models. arXiv preprint arXiv:2504.10479 .
+
+# A.Structural Comparison with Representative Reflective and Tool-use RL Methods. 
+
+As summarized in Table 6, our method is clearly distinct from current approaches. Specifically, we train multiple mul-timodal roles simultaneously in a synchronized manner. The Inspector operates in an unsupervised fashion, which aligns closely with real-world application scenarios. Moreover, our approach achieves highly competitive performance without requiring any additional data. 
+
+# B. Pseudo algorithm for Multi Role Tool Agent Rollout 
+
+Algorithm 1 illustrates how multiple roles collaborate to en-sure the successful completion of multimodal agent tasks. 
+
+# C. Why Full-Trajectory GRPO Is Preferable to Role-Selective Masking 
+
+This explains why full-trajectory GRPO is better aligned with our multi-role agent loop than role-selective masking. The derivation follows the likelihood-ratio policy-gradient view of REINFORCE, the clipped surrogate of PPO, and the group-relative advantage construction of GRPO. The core issue is that the solver, inspector, and continuation solver are not independent modules with separable rewards. They are prompt-conditioned behaviors of the same policy, and the final reward is a coupled function of all role decisions. 
+
+Full-Trajectory Objective 
+
+For a query qb, GRPO samples a group of G trajectories from the old policy: 
+
+{τb,g }Gg=1 ∼ πθold (· | qb). (19) The trainable model tokens in a trajectory are 
+
+M(τ ) = MS1 (τ ) ∪ M I (τ ) ∪ M S2 (τ ), (20) where MS1 , MI , and MS2 denote the first solver, inspector, and continuation solver tokens. System prompts, tool obser-vations, and bridge messages are conditioning context and receive no likelihood loss. The role-coupled trajectory reward is 
+
+R(τ ) = λacc Racc (τ )+ λfmt Rfmt (τ )+ λcorr Rcorr (τ ), (21) where Racc evaluates final answer correctness, Rfmt eval-uates interaction validity, and Rcorr evaluates whether inspection-triggered continuation is useful. Following GRPO, we compute a group-relative advantage: 
+
+Ab,g = R(τb,g ) − 1
+
+> G
+
+PGg′=1 R(τb,g ′ )Std g′ [R(τb,g ′ )] + ϵ . (22) Under outcome supervision, GRPO assigns the normalized outcome reward to all sampled output tokens. Analogously, we assign the scalar trajectory advantage to all trainable model tokens: 
+
+Ab,g,t = Ab,g mb,g,t , (23) where mb,g,t = 1 for trainable model-generated tokens and 
+
+mb,g,t = 0 for non-trainable context or padding tokens. Method No extra SFT trajectories Trainable control inspector Reference-free inspection Inspection-triggered continuation Full-trajectory coupled update 
+
+Look-Back × × × × ×
+
+Klissarov et al.(Google) × △ × ✓ ×
+
+VSearcher × × × × ×
+
+PyVision-RL △ × × × ×
+
+Tool-Star × △ △ × ×
+
+VideoChat-M1 △ × × × △
+
+ReGRPO × × × × ✓
+
+MRC-MMAgent (ours) ✓ ✓ ✓ ✓ ✓
+
+Table 6: Structural comparison with representative reflective, multimodal tool-use, and multi-role RL methods. ✓: explicit support; △: partial or indirect support; ×: absent or not a primary training objective. Reference-free inspection means that the inspection decision does not use a teacher critique or ground-truth answer. Full-trajectory coupled update means that one trajectory reward updates all policy-generated role tokens without post-hoc role-selective masking. Ignoring clipping and KL regularization for clarity, the full-trajectory update has the form 
+
+gfull = Eb,g 
+
+"
+
+Ab,g 
+
+Nb,g 
+
+X
+
+> t
+
+mb,g,t ∇θ log πθ (ab,g,t | hb,g,t )
+
+#
+
+,
+
+(24) where 
+
+Nb,g = X
+
+> t
+
+mb,g,t . (25) With PPO-style clipping and KL regularization, the corre-sponding GRPO surrogate can be written as 
+
+Jfull (θ) = Eb,g 
+
+"
+
+1
+
+Nb,g 
+
+X
+
+> t
+
+mb,g,t 
+
+
+
+ℓclip 
+
+> b,g,t
+
+(θ) − βD KL ,b,g,t 
+
+#
+
+.
+
+(26) where ℓclip 
+
+> b,g,t
+
+(θ) denotes the PPO-style clipped surrogate ob-jective: 
+
+ℓclip 
+
+> b,g,t
+
+(θ) = min ( ρb,g,t Ab,g , ¯ρb,g,t Ab,g ) , (27) where the clipped importance ratio is defined as 
+
+¯ρb,g,t = clip ( ρb,g,t , 1 − ϵc, 1 + ϵc) . (28) This matches the reward structure: because R(τ ) scores the complete solve–inspect–continue process, all model de-cisions contributing to the outcome receive the same group-relative signal. 
+
+Role-Selective Masking Objective 
+
+A role-selective masking variant introduces an additional binary mask zb,g,t based on post-hoc role-level correctness, e.g., updating only inspector tokens when the first solver is correct but the inspector rejects, or updating only solver tokens when the inspector is locally correct but the final correction fails. This changes the GRPO surrogate to 
+
+Jmask (θ) = Eb,g 
+
+"
+
+1
+
+N zb,g 
+
+X
+
+> t
+
+mb,g,t zb,g,t eℓb,g,t (θ)
+
+#
+
+. (29) where eℓb,g,t (θ) denotes the KL-regularized clipped surro-gate: 
+
+eℓb,g,t (θ) = ℓclip 
+
+> b,g,t
+
+(θ) − βD KL ,b,g,t . (30) where 
+
+N zb,g = X
+
+> t
+
+mb,g,t zb,g,t . (31) This matches our mask implementation: the role mask di-rectly modifies the token-level loss mask, i.e., the effective loss mask is mb,g,t zb,g,t . The corresponding unclipped gra-dient form is 
+
+gmask = Eb,g 
+
+"
+
+Ab,g 
+
+N zb,g 
+
+X
+
+> t
+
+mb,g,t zb,g,t sb,g,t (θ)
+
+#
+
+. (32) where sb,g,t (θ) denotes the token-level score function: 
+
+sb,g,t (θ) = ∇θ log πθ (ab,g,t | hb,g,t ) . (33) 
+
+Why Masking Introduces Role-Attribution Bias 
+
+The difference between the masked and full updates is 
+
+gmask − gfull = Eb,g 
+
+Ab,g 
+
+ ¯smask  
+
+> b,g
+
+− ¯sfull 
+
+> b,g
+
+ . (34) where ¯smask  
+
+> b,g
+
+is the masked average score function: 
+
+¯smask  
+
+> b,g
+
+= 1
+
+N zb,g 
+
+X
+
+> t
+
+mb,g,t zb,g,t sb,g,t (θ), (35) and ¯sfull  
+
+> b,g
+
+is the corresponding full-trajectory average: 
+
+¯sfull  
+
+> b,g
+
+= 1
+
+Nb,g 
+
+X
+
+> t
+
+mb,g,t sb,g,t (θ). (36) In general, this term is nonzero. Thus, masking is not a lower-variance version of the full objective; it changes the optimization target. To see this more directly, ignore the normalization dif-ference between N zb,g and Nb,g . Then the masking bias is approximately 
+
+Bias mask ≈ − Eb,g 
+
+"
+
+Ab,g 
+
+X
+
+> t
+
+mb,g,t (1 − zb,g,t )sb,g,t (θ)
+
+#
+
+.
+
+(37) This bias vanishes only if the removed tokens are uncor-related with the trajectory advantage: 
+
+Eb,g 
+
+Ab,g 
+
+X
+
+> t:zb,g,t =0
+
+∇θ log πθ (ab,g,t | hb,g,t )
+
+ = 0 . (38) This condition does not hold in our setting: first-solver evi-dence affects inspection, inspector feedback affects continu-ation, and continuation success determines whether rejection was useful. Hence masked tokens can still have causal and statistical influence on the final reward. 
+
+Masking Is Not a Baseline 
+
+The unbiasedness of a standard policy-gradient baseline re-lies on the fact that the baseline does not depend on the sampled action: 
+
+Eτ [b(q)∇θ log pθ (τ | q)] = b(q)∇θ
+
+X
+
+> τ
+
+pθ (τ | q) = 0 .
+
+(39) Thus subtracting an action-independent baseline can reduce variance without changing the expected gradient. Role-selective masking is different. The mask is a post-hoc function of the sampled trajectory: 
+
+zb,g,t = f (y0, C, y f , A (y0), A (yf )) , (40) where y0 is the initial answer, C is the inspector decision, and yf is the final answer. These quantities are generated by the policy itself, so zb,g,t is action-dependent. It cannot be treated as variance-reducing baseline; it removes likelihood-gradient terms and changes the expected update. This is consistent with standard baseline theory: action-independent or state-dependent baselines can reduce vari-ance without changing the expected policy gradient, while action-dependent control variates require a correction term to remain unbiased Role-selective masking has no such cor-rection. 
+
+Failure Modes of Role-Selective Masking 
+
+Correct initial answers may still need solver-side credit. 
+
+If the first solver answers correctly but the inspector incor-rectly rejects, masking may update only the inspector. Yet the solver may have produced weak or ambiguous evidence, making the answer hard to verify. Full-trajectory GRPO can reinforce both better inspection and more verifiable solver trajectories. 
+
+Correct rejection does not imply useful feedback. If the first solver is wrong, the inspector correctly rejects, but con-tinuation fails, masking the inspector assumes the inspector is not responsible. However, the rejection reason may be unin-formative. Full-trajectory optimization encourages feedback that helps downstream correction, not merely a locally cor-rect label. 
+
+Relative advantages can reinforce the wrong local com-ponent. GRPO advantages are group-relative. A trajectory with an imperfect local decision can still receive positive ad-vantage if it outperforms other samples. Masking may pre-serve only selected role tokens and assign them this advan-tage, even when the selected local action was not the source of improvement. 
+
+Figure 5: Comparison of rewards and tool calls for our method and mask-based variant for role-selective optimiza-tion. 
+
+Tool-use credit is weakened. Tool calls are primarily solver tokens. If useful tool use is followed by an inspector error, masking may remove solver tokens and erase positive tool-use credit. Failed trajectories may still keep solver tokens with negative advantage, reducing tool invocation frequency. 
+
+Conclusion The full trajectory likelihood decomposes as 
+
+log πθ (τ ) = X
+
+> X∈{ S1,I,S 2}
+
+X
+
+> t∈M X
+
+log πθ (at | ht). (41) Since the reward is also a coupled function of these roles, 
+
+R(τ ) = R(MS1 , MI , MS2 ), (42) the optimization objective should preserve the full likelihood term. Full-trajectory GRPO assigns the group-relative trajec-tory advantage to all model-generated tokens. Role-selective masking instead optimizes 
+
+log πmask  
+
+> θ
+
+(τ ) = X 
+
+> t∈M (τ)
+
+zt(τ ) log πθ (at | ht), (43) which introduces post-hoc role-attribution bias and breaks the alignment between the coupled reward and the optimized likelihood. This explains why full-trajectory joint optimiza-tion is more effective in our multi-role agent framework. 
+
+The Effectiveness of Objective Optimization. 
+
+To support the effectiveness of our objective optimization method, we conduct a comparative analysis with an ideal mask-based optimization training variant. In this variant, we apply selective gradient updates based on the correctness of the Solver and the Inspector: when the Solver makes an er-ror and the Inspector correctly detects it, only the solution trajectory is optimized; when the Solver is correct but the Inspector misjudges it, only the inspection capability is opti-mized, and so forth. As illustrated in Figure 5, the mask-based optimization leads to a substantial drop in training rewards and a reduction in tool invocation counts. These results sug-gest that our full-trajectory joint training is more conducive to optimizing model performance from a global perspective, further demonstrating the high compatibility between our overall framework and the joint reward design. 
+
+D. Ablation on the Number of Continuation Loops 
+
+To study whether multiple inspection-refinement loops are necessary, we compare our default single-continuation set-ting with a two-continuation variant. In our framework, the Algorithm 1: Multi-Role Tool-Agent Rollout  
+
+> 1:
+
+Init h with query q = ( x, u ), tool schemas, solver prompt 
+
+S1. 
+
+> 2:
+
+j ← 1, n cont ← 0. 
+
+> 3:
+
+while budget remains do  
+
+> 4:
+
+Sample action a ∼ πθ (· | h). 
+
+> 5:
+
+if action is tool call then  
+
+> 6:
+
+Execute tool, append observation to h. 
+
+> 7:
+
+else if action is candidate answer then  
+
+> 8:
+
+Append inspector prompt S3 to h. 
+
+> 9:
+
+Sample c ∼ πθ (· | h). 
+
+> 10:
+
+if c finalizes then  
+
+> 11:
+
+terminate.  
+
+> 12:
+
+else if c requests cont. and ncont <= Nm then  
+
+> 13:
+
+ncont ← ncont + 1 , j ← j + 1 . 
+
+> 14:
+
+Append bridge feedback and S2 to h. 
+
+> 15:
+
+else  
+
+> 16:
+
+terminate.  
+
+> 17:
+
+end if  
+
+> 18:
+
+end if  
+
+> 19:
+
+end while 
+
+Nm Accuracy Avg. Tokens Avg. Tool Calls 1 50.9 1717.5 2.5 
+
+2 50.3 2751.7 2.9 Baseline 45.6 1643.4 2.3 Table 7: Ablation study on the number of continuation loops with 8B in offline. model first produces an initial answer, then the inspector checks whether the current response contains remaining is-sues. If the response passes the inspection, the process ter-minates; otherwise, the model continues solving the problem and produces a revised answer. This forms one continuation loop. The two-continuation variant repeats this inspection-refinement process once more. As shown in Figure 7 and Table 7, the single-continuation and multi-continuation settings achieve broadly compara-ble performance, with two turns performing slightly worse while incurring substantially longer context and more tool calls. Specifically, the average output length increases from 1,717.50 to 2,751.66 tokens, and the average number of tool calls rises from 2.53 to 2.90. These results suggest that the ad-ditional context from more turns may introduce redundancy and potentially increase hallucination. A single inspection turn is sufficient to achieve optimal performance while signif-icantly reducing computational cost, further demonstrating the effectiveness and robustness of our method. We attribute this phenomenon to the non-monotonic na-ture of model-based inspection and refinement. Since the inspector is also implemented by the model, it may occa-sionally reject an already correct or sufficiently reliable an-swer. Additional continuation loops can amplify such false rejections, causing the model to perform unnecessary search, reasoning, or rewriting. This may introduce answer drift and 
+
+Figure 6: Mean Acc on the number of continuation loops. accumulate tool-use noise. Moreover, later refinement states are generated from already-modified intermediate responses, which are more likely to deviate from the training distribution and thus become less stable. This ablation demonstrates an important advantage of our design: the proposed framework does not rely on repeat-edly applying expensive self-correction loops. Instead, a sin-gle targeted inspection-refinement step is sufficient to cap-ture most correctable errors while avoiding over-correction. Therefore, our single-continuation design provides a better accuracy-cost trade-off and improves inference efficiency. 
+
+E. Trained vs. Untrained Inspection. 
+
+Table 8 compares the behavioral capabilities of the Inspec-tor. The untrained variant without reasoning capabilities al-most consistently marks every trajectory as fail, which in-troduces numerous unnecessary modifications and conse-quently degrades performance. In contrast, the trained frame-work achieves the best accuracy while maintaining a more se-lective continuation profile. This demonstrates that through our multi-role training framework, the Inspector acquires robust reasoning capabilities, resulting in significantly im-proved performance. Method Acc Finalize Continue Config. 2 w/ think 62.2 31.5 68.5 Config. 2 w/o think 62.7 1.7 98.3 Ours 64.0 39.6 60.4 Table 8: The abation of inspector’s action on FVQA-Test. 
+
+F. Ablation Study on Role-coupled Reward. 
+
+Table 9 presents the ablation study on our multi-role reward. It can be observed that regardless of the reward ablation, the model consistently and substantially outperforms the base-line, demonstrating the strong robustness of our method. 
+
+G. Detailed experimental parameter settings. 
+
+After experimental verification, we set Nm to 1. Following our training script, we use a training batch size of 128, valida-tion batch size of 512, learning rate 5×10 −6, PPO mini-batch size 128, and micro-batch size 2 per GPU. The maximum prompt and response lengths are both 16K tokens, the roll-out group size is 8, and each multi-turn rollout allows up to 10 assistant turns with a maximum tool-response length of Setting Acc Step 0.2 64.7 100 0.3 63.6 100 0.1 63.1 100 Baseline 57.3 100 Table 9: The abation of inspector’s action on FVQA-Test with 8B in offline. 8192 tokens. We use bfloat16 FSDP training, gradient check-pointing, tensor parallel size 2 for rollout, Ulysses sequence parallel size 2, and asynchronous SGLang rollout. During validation, we report task accuracy using the answer evalua-tor without process reward terms. For image search, we cache results from Google Search, each returning five images with their corresponding titles. For text search during training, we build a local knowledge base by chunking and indexing the Wiki 2025 corpus; during testing, we use the online Google Search API, which incurs low usage cost. For training, we only use the original training sets from MMSearch-R1 and DeepEyes2, without introducing any additional training data, and ensure that training and test sets are strictly separated. All ablation studies and baseline comparisons are conducted under identical configurations. Specific prompts can refer to Supplementary Material I. 
+
+H. Cost-Performance Analysis 
+
+Taking the average accuracy on search-intensive tasks as an example, Table 10 presents a cost-performance compar-ison between our method and current multimodal agent ap-proaches. It can be observed that our method achieves highly competitive performance at significantly lower cost. For in-stance, our method incurs lower cost than MMSearch-R1 while outperforming it by 11.1 % in accuracy. 
+
+I. Prompt Templates for the Multi-Role Agent Loop 
+
+Solver 1 Prompt. This prompt is used as the initial solver system prompt. Listing 1: Solver 1 system prompt. 
+
+#Role You are a step-by-step reasoning assistant. Your task is to solve the problem **one substep at a time** by analyzing provided information and using available tools. ## Guiding Principles 1. **Thought-First:** All outputs MUST begin with a thought enclosed in <thinking> </thinking> tags. Explain your current reasoning, what information is missing, and what to do next. Do not output the previous reasoning chain. 2. **One Action per Turn:** At each turn , you must EITHER: - Issue **one specific tool call** enclosed in <tool_call> </tool_call> tags, - OR provide the **final answer** enclosed in <answer> </answer> tags. 3. **Adaptive Reasoning:** - Base your logic strictly on tool outputs and provided context. - If a previous attempt or search fails, you MUST analyze the failure and use a fundamentally different approach or keywords. - Never repeat the exact same tool call or parameters. 4. **Self-Correction & Reflection Loop :** After you propose an <answer>, a "System Reflection Prompt" will ask you to evaluate it. - Output <PASS> and a reason if the answer is fully verified. - Output <REJECT> and a reason if the answer is flawed, inconsistent, or lacks evidence. - **Continuous Solving:** If you output <REJECT>, you must immediately resume the standard solving process. Your very next response must start with <thinking> to analyze the rejection reason and execute a new tool call to explore a better solution. Continue this "Think-Act-Reflect" cycle until a verified answer is produced. ## Output Format (strict): Always start with <thinking>. Then, depending on the case, output one of the following: 1. If reasoning continues: <thinking> Identify what is known and what is missing. Explain why the following tool call is the most effective next step to resolve the query. </thinking> <tool_call> {"name": "...", "arguments": {...}} </tool_call> 2. If ready to conclude: <thinking> Summarize the key evidence gathered through your reasoning process and derive the answer clearly . </thinking> <answer> Final answer </answer> 
+
+Inspector 1 Prompt. This prompt is inserted after Solver 1 proposes an answer. Listing 2: Inspector 1 reflection prompt. 
+
+System Reflection Prompt: System Reflection: You must act as a strict reasoning auditor. Examine your previous ‘<answer>‘ and the entire search trajectory. Does the answer perfectly and factually address the user’s original question based ONLY on the gathered evidence? Method SFT New Training Dataset Base Dataset Train-time Web Search Test-time Web Search ACC 
+
+MMSearch-R1 × × ✓ ✓ ✓ 51.1 DeepEyes2-7B ✓ ✓ ✓ ✓ ✓ –MM-DeepResearch-7B ✓ ✓ ✓ × ✓ 60.8 
+
+MRC-MMAgent-7B (ours) × × ✓ × ✓ 62.2 
+
+SenseNova-MARS-8B ✓ ✓ ✓ × ✓ 64.6 OpenSearch-VL-8B ✓ ✓ ✓ × ✓ 67.5 
+
+MRC-MMAgent-8B (ours) × × ✓ × ✓ 68.1 
+
+Table 10: Comparison of training data, web-search usage, and accuracy among representative methods. ✓: used; △: partially used; ×: not used. ACC denotes the average accuracy across the evaluated benchmarks. 
+
+- If YES: Output ‘<PASS>‘ followed by abrief reason explaining why the evidence supports it. - If NO: Output ‘<REJECT>‘ followed by abrief reason explaining the exact logical flaw, missing evidence, or hallucination. Do NOT plan the next steps here; just provide the label and the reason (For example, using tool call). 
+
+Solver 2 Prompt. This bridge prompt is inserted when Inspector 1 rejects the previous answer and control returns to the solver. Listing 3: Solver 2 continuation prompt. 
+
+You have rejected the previous answer. Please resume the standard solving process. Start with <thinking> to analyze your rejection reason and explore a new tool call to find the correct answer.

@@ -1,0 +1,1094 @@
+Title: Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning for Interactive Driving Behavior Modeling
+
+URL Source: https://arxiv.org/pdf/2610.33726v1
+
+Published Time: Tue, 27 Oct 2026 00:45:32 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning for Interactive Driving Behavior Modeling 
+
+Longhao Yan, Jinhao Liang, Kaidi Yang 
+
+Abstract —Modeling human driving behavior is fundamental to understanding driver decision-making and supporting au-tonomous vehicles (AVs) in mixed traffic. Reward learning offers a principled way to infer the latent objectives behind driving behaviors, yet most existing methods are formulated in single-agent settings and treat surrounding vehicles as dynamic obsta-cles. Directly extending reward learning to multi-agent scenarios is difficult because the joint action space grows exponentially with the number of interacting vehicles. In addition, existing approaches mainly rely on physical demonstrations and rarely exploit human feedback during reward recovery. To address these limitations, this paper proposes a Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning (HFG-MAIRL) framework for interactive driving behavior modeling. First, we develop a multi-agent maximum-entropy inverse reinforcement learning module that explicitly models each vehicle and its directly interacting neighbors in a localized Markov game, while using aggregated traffic states to capture the influence of the broader traffic environment. The resulting coupled multi-vehicle responses are approximated through finite marginal-response iterations over factorized vehicle-level policies, avoiding explicit enumeration of the full joint action space. Second, we incorporate human feedback as ordinal preference supervision through a Bradley–Terry likelihood. In our experiments, driver emotion labels are used as one instantiation of such feedback and converted into pairwise ordinal preference constraints. Experi-ments on the AIDE dataset show that HFG-MAIRL outperforms representative IRL baselines in decision modeling and produces interpretable feedback-aligned reward patterns. 
+
+Index Terms —Multi-Agent Inverse Reinforcement Learning (MAIRL), Human Feedback, Reward Learning, Driving Behavior Modeling, Driver Emotion. 
+
+I. I NTRODUCTION 
+
+# ALTHOUGH autonomous vehicles (AVs) promise to trans-form future mobility, their large-scale deployment re-mains challenged by the inherently human-oriented nature of transportation systems. In such systems, AVs operate alongside human-driven vehicles (HDVs) in mixed traffic, with their decision-making shaped by interactions with surrounding hu-man drivers and the social expectations embedded in traffic en-vironments. This calls for a principled understanding of human driving behavior at two complementary levels [1]–[8]. First, understanding the behaviors of surrounding human drivers is essential for anticipating potential conflicts and enabling 
+
+The authors are with the Department of Civil and Environ-mental Engineering, National University of Singapore, Singapore 117576. Email:longhao.yan@u.nus.edu, jh.liang0523@gmail.com, kaidi.yang@nus.edu.sg. Corresponding author : Kaidi Yang. This research was supported by the Singapore Ministry of Education (MOE) under its AcRF Tier 1 Grant (A-8000404-01-00). 
+
+safer decision-making. Second, understanding the rationale underlying these behaviors is important for developing AV decision-making frameworks that are more human-like and socially compatible. Most existing approaches to human driving behavior mod-eling focus on predicting the short-term intent of surrounding agents (e.g., drivers or human traffic participants) based on historical trajectories [9]–[17]. For instance, Ref. [11] pro-posed a deep learning framework integrated with a driving risk map that explicitly incorporates spatial risk priors to enhance interactive trajectory prediction of surrounding vehicles in highway scenarios. Ref. [12] developed an encoder-decoder network architecture combined with parameterized transfer learning to capture complex vehicle interactions, improving the adaptability of the trajectory prediction model across different traffic domains. Ref. [13] introduced a prediction framework that fuses global and local history information, tailored for complex unsignalized roundabouts, to capture multi-scale spatial-temporal interactions. However, these approaches do not explicitly capture the underlying decision-making process and may therefore generalize poorly to scenarios beyond their training data, such as behavioral shifts in response to AVs. To uncover the underlying decision-making process behind driving behaviors, recent studies have attempted to infer, from expert demonstrations, the objectives or rewards that human drivers seek to optimize [18]–[24]. For example, Ref. [19] applied inverse reinforcement learning (IRL) to infer risk-averse reward functions for human drivers at unsignalized intersections, explicitly modeling their trade-offs between safety and efficiency. Ref. [20] utilized deep IRL to extract implicit reward maps from expert demonstrations, enabling agents to learn nuanced social navigation rules based on scene geometry. Ref. [23] employed IRL to model human car-following dynamics, specifically quantifying how drivers adapt their underlying reward preferences when influenced by AVs. However, these approaches often consider single-agent settings, where each human driver is modeled in isolation, and surrounding agents are treated as part of the environment rather than strategic participants whose decisions mutually influence one another. As a result, the learned reward func-tions may not fully capture the strategic interactions that shape driving decisions in real-world traffic. Only a few recent studies have explicitly modeled multi-driver interactions through multi-agent IRL (MAIRL) [25]–[30]. For example, Ref. [26] framed driver interactions as a decentralized multi-agent problem, utilizing adversarial IRL to simultaneously arXiv:2610.33726v1 [cs.AI] 24 Oct 2026 2
+
+recover the underlying reward functions of interacting vehicles and generate realistic trajectories. Ref. [27] developed a game-theoretic IRL approach to quantify diverse social patterns and coupled decision-making during complex driving interactions. Ref. [28] proposed a hierarchical MAIRL framework that incorporates the concept of driving responsibility to capture socially compatible interactive behaviors. These studies high-light the need to extend driving reward learning from isolated agents to interaction-aware multi-agent settings. Nevertheless, this extension remains computationally challenging, as the joint action space grows exponentially with the number of interacting vehicles, making direct joint-policy inference in-tractable in realistic traffic scenarios. Moreover, rewards learned solely from trajectory demon-strations may not necessarily reflect the true objectives of human drivers. Even when the learned rewards generate be-haviorally plausible trajectories, they may primarily reflect sta-tistical regularities in observed data rather than the subjective considerations behind human driving decisions. One potential solution is to incorporate human feedback signals, which are increasingly available in various forms (e.g., emotion, verbal comments, satisfaction ratings), as an additional source of information for interpreting and constraining the learned rewards. Such signals can reveal drivers’ relative preferences across different traffic states, actions, or interaction outcomes, thereby providing qualitative guidance on which situations should be assigned higher or lower rewards. However, little attention has been paid to incorporating human feedback signals into the learning of human driving rewards. 
+
+Statement of Contributions: To address the aforementioned gaps, we propose a Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning (HFG-MAIRL) framework for interactive driving behavior modeling. Our contribution is two-fold. First, we develop a MAIRL framework that recovers interaction-aware reward functions from coupled multi-vehicle driving demonstrations. Unlike single-agent formulations that treat surrounding vehicles as part of the environment, our framework models vehicles as strategic agents whose decisions are mutually influenced through their interactions. To enable tractable reward learning, we explicitly model each vehicle and its directly interacting neighbors while representing broader traffic conditions through aggregated traffic states. Second, to enhance the behavioral relevance of the learned rewards, we develop a human-feedback-guided component that incorpo-rates available human feedback as ordinal preference super-vision through a Bradley–Terry likelihood, thereby mitigating the ambiguity of trajectory-only reward learning and better aligning the learned rewards with drivers’ subjective responses to traffic interactions. In this paper, we use driver emotion as an example instantiation of such human feedback. To the best of our knowledge, this is among the first attempts to incorporate human feedback signals into driving reward learning. The remainder of this paper is organized as follows. Sec-tion II presents the problem formulation. Section III details the methodology of the proposed HFG-MAIRL framework. Section IV evaluates the proposed framework on a multimodal driving dataset. Section V concludes the paper and presents future work. II. P ROBLEM FORMULATION 
+
+We consider an interactive driving scene represented by an interaction graph G = ( V, E), where V is the set of vehicles and E is the set of pairwise interaction edges. An edge (i, j ) ∈E indicates that vehicle j may influence the subsequent motion of vehicle i, such as when the two vehicles are successive in the same lane or adjacent in neighboring lanes. The set of direct neighbors of vehicle i is defined as Ni = {j ∈ V | 
+
+(i, j ) ∈ E} . Here, we adopt the realistic assumption that the interaction topology evolves slowly over time. For notational simplicity, the explicit time indices of G, E, and Ni are omitted when no ambiguity arises. The driving process is discretized into time steps indexed by t, with a fixed sampling interval ∆t. At time step t,the state of vehicle i ∈ V is xi,t = ( px,i,t , p y,i,t , v i,t , ψ i,t ,ai,t , ω i,t ), where px,i,t and py,i,t denote the longitudinal and lateral positions, vi,t is the longitudinal speed, ψi,t is the heading angle, ai,t is the longitudinal acceleration, and ωi,t 
+
+is the yaw rate. The joint state of all vehicles is denoted by 
+
+xt = {xi,t }i∈V .
+
+We define a sequence of decision epochs indexed by κ,with consecutive epochs separated by Hdec ∆t. Let nκ denote the time step corresponding to the beginning of decision epoch κ. The corresponding decision interval is [nκ, n κ+1 ),where nκ+1 = nκ + Hdec . At decision epoch κ, vehicles observe historical interaction states and select actions to be executed over the subsequent decision interval. The historical states of all vehicles in the scene constitute a global historical interaction context: X κ = {xnκ−h}Hobs  
+
+> h=0
+
+.
+
+During a driving episode, a driver monitoring system may provide interval-level human feedback annotations derived from in-cabin signals, such as video recordings of the driver’s facial expressions, to characterize the driver’s subjective re-sponse (e.g., emotion). Let Vfb ⊆ V denote the subset of vehicles for which such feedback annotations are available. For vehicle i ∈ V fb , the feedback associated with decision interval κ is represented by a categorical label ei,κ ∈ H fb ,where Hfb is a finite set of feedback categories. As decision intervals are short relative to changes in the driver’s subjective state, such feedback labels are assumed to remain constant within an interval but may vary across intervals. The goal of this study is to recover interaction-aware reward functions that rationalize real-world multi-vehicle in-teractions, based on demonstrations that include observed interaction contexts, joint actions, and available human feedback. Specifically, we define the demonstration dataset as D =
+
+n 
+
+ζ(m), E(m)fb 
+
+o Mm=1 
+
+, where M is the num-ber of demonstration episodes indexed by m. In each episode m, Tm is the number of decision intervals, E(m)fb 
+
+is the available human feedback annotations denoted by 
+
+E(m)fb =
+
+n
+
+e(m) 
+
+> i,κ
+
+i ∈ V (m)fb , κ = 0 , . . . , T m − 1
+
+o
+
+, and ζ(m) =
+
+n
+
+X (m) 
+
+> κ
+
+, a∗(m)
+
+> κ
+
+oTm−1
+
+> κ=0
+
+, X (m)
+
+> Tm
+
+
+
+contains the historical inter-action contexts X (m) 
+
+> κ
+
+and demonstrated joint decisions a∗(m)
+
+> κ
+
+in all decision epochs in episode m. Our proposed methodol-ogy is presented next. 3
+
+III. M ETHODOLOGY 
+
+As illustrated in Fig. 1, we propose a Human-Feedback-Guided Multi-Agent Inverse Reinforcement Learning (HFG-MAIRL) framework for interactive driving behavior modeling through reward learning from multi-vehicle demonstrations and human feedback. Section III-A formulates the multi-vehicle driving process as a finite-horizon Markov game with interaction-aware reward functions. Building on this formulation, Section III-B develops a maximum-entropy-based MAIRL approach that learns context-dependent reward weights from demonstrated multi-vehicle decisions through iterative marginal-response inference. To make MAIRL tractable, we localize the interaction graph to each focal vehi-cle and its directly interacting neighbors, while the influence of vehicles outside the local graph is retained from aggregated traffic states. Section III-C incorporates available human feed-back as ordinal preference supervision to constrain the relative rewards of the corresponding demonstrated decisions. 
+
+A. Markov Game Formulation for Interactive Driving 
+
+We formulate the sequential interaction among vehicles as a finite-horizon Markov game, in which each vehicle selects a motion decision while accounting for the simultaneous deci-sions of surrounding vehicles. The Markov game is denoted by 
+
+M = ( V, S, {O i}i∈V , {A i}i∈V , P, {ri}i∈V , ρ 0, γ, T ), where 
+
+V is the set of vehicles, S is the global decision-state space, 
+
+Oi is the observation function of vehicle i, Ai is its action space, P is the transition kernel, ri is its reward function, ρ0
+
+is the initial-state distribution, γ ∈ [0 , 1] is the discount factor, and T is the episode horizon. 
+
+State. At decision epoch κ, the global state is defined by the historical interaction context introduced in Section II, i.e., 
+
+sκ = X κ, which contains the historical states of all vehicles over the observation horizon. 
+
+Observation. The observation of each vehicle is repre-sented by oi,κ = Oi(sκ) =
+
+
+
+X i,κ , X rel 
+
+> Ni,κ
+
+
+
+, con-sisting of the vehicle’s own state history X i,κ =
+
+{xi,n κ−h}Hobs  
+
+> h=0
+
+and the relative state histories X rel  
+
+> Ni,κ
+
+=
+
+{Rel( xj,n κ−h, x i,n κ−h) | j ∈ N i, h = 0 , . . . , H obs } of its di-rectly interacting neighbors, where Rel( ·, ·) is the state of neighboring vehicles relative to vehicle i.
+
+Action. At decision epoch κ, vehicle i selects an action 
+
+ai,κ ∈ A i(sκ) = {1, . . . , K } corresponding to a candidate trajectory τi,κ = Fi(sκ, a i,κ ), where Fi(·) denotes the tra-jectory generation function that maps the current decision state and selected action to a trajectory over the subsequent decision interval. The resulting candidate trajectory set is 
+
+Ωi,κ = {Fi(sκ, k )}Kk=1 , and the joint action space at decision epoch κ is Aκ = Q 
+
+> i∈V
+
+Ai(sκ).The trajectory generation function Fi(sκ, k ) maps action index k to its corresponding terminal anchor (∆ sk, ∆dk) and generates the associated trajectory according to the current state of vehicle i. For action index k ∈ {1, . . . , K }, the terminal anchor (∆ sk, ∆dk) is the k-th element obtained by uniformly discretizing the prescribed longitudinal and lateral displacement ranges [∆ smin , ∆smax ] and [∆ dmin , ∆dmax ].Thus, the same action index corresponds to the same terminal-anchor specification across vehicles. Given the selected an-chor, the corresponding trajectory is generated in the Frenet frame using quintic polynomials sk(ξ) = P5 
+
+> r=0
+
+cr ξr and 
+
+dk(ξ) = P5 
+
+> r=0
+
+lr ξr , where ξ ∈ [0 , H dec ∆t] denotes the local continuous time within the decision interval. The polynomial coefficients are determined by the current vehicle state, the se-lected terminal anchor, and the endpoint kinematic conditions. Specifically, to ensure continuity across consecutive intervals, the longitudinal and lateral trajectories in the Frenet frame at the beginning of each interval ( ξ = 0 ) match the positions, velocities, and accelerations at the end of the preceding interval. After discretization, the remaining kinematic states are obtained from the generated trajectory, yielding a finite action space. The joint action aκ = {ai,κ }i∈V determines the within-interval motion of all vehicles. 
+
+Transition. After executing the actions over the decision inter-val [nκ, n κ+1 ), the next state is obtained by rolling out the vehicle kinematics according to sκ+1 = G(sκ, aκ), where 
+
+G(·) denotes the trajectory-rollout transition that maps the current state and joint action to the state at the next decision epoch. 
+
+Reward. The reward function of each vehicle is represented by 
+
+ri(sκ, aκ) = θ⊤ 
+
+> ind ,i,κ
+
+eϕind (τi) + θ⊤ 
+
+> int ,i,κ
+
+eΦint ,i (τi, τj ), (1) where eϕind and eΦint ,i denote the normalized individual and aggregated interaction feature vectors, respectively. Their raw feature representations are defined as follows: 
+
+ϕind (τi) = ϕeff (τi), ϕ lon comf (τi), ϕ lat comf (τi)⊤ ,
+
+ϕint (τi, τj ) = [ ϕTHW (τi, τj ), ϕ InvTTC (τi, τj ), ϕ ell (τi, τj )] ⊤ .
+
+(2) The individual features describe the efficiency and comfort of vehicle i, while the interaction features characterize its safety-related and spatial interactions with vehicle j. Here, the interactive feature vector in Eq. (1) aggregates the pairwise interaction features between vehicle i and all its directly interacting neighbors as Φint ,i (τi, τj ) = P 
+
+> j∈N i
+
+ϕint (τi, τj ),where the second argument of Φint ,i collectively represents the trajectories of the directly interacting neighbors in Ni.Their corresponding context-dependent weights are learned in Section III-B. Below, we introduce each term of the features. 
+
+(i) Efficiency. The efficiency feature penalizes deviation from a reference speed: 
+
+ϕeff (τi) = − 1
+
+Hdec + 1 
+
+> Hdec
+
+X
+
+> h=0
+
+ vi,h − vref 
+
+vref 
+
+2
+
+, (3) where vi,h is the longitudinal speed of vehicle i at local step 
+
+h, and vref is the reference speed, which is set to represent the typical driving speed of the considered traffic scene. 
+
+(ii) Comfort . We consider both longitudinal and lateral comfort terms to ensure stable driving. The longitudinal term penalizes excessive acceleration: 
+
+ϕlon comf (τi) = − 1
+
+Hdec + 1 
+
+> Hdec
+
+X
+
+> h=0
+
+|ai,h |
+
+amax 
+
+, (4) 4
+
+Fig. 1: Diagram of the proposed human-feedback-guided MAIRL framework for interactive driving behavior modeling. while the lateral comfort term penalizes excessive yaw rate: 
+
+ϕlat comf (τi) = − 1
+
+Hdec + 1 
+
+> Hdec
+
+X
+
+> h=0
+
+|ωi,h |
+
+ωmax 
+
+, (5) where amax and ωmax denote the prescribed maximum mag-nitudes of longitudinal acceleration and yaw rate, respectively, and are used for normalization. 
+
+(iii) Time headway. The estimated time headway is penalized to enhance safety: 
+
+ϕTHW (τi, τj ) = − max 
+
+> h=0 ,...,H dec
+
+wfront  
+
+> ij
+
+(h) 1max(THW ij (h), ϵ ) ,
+
+(6) where THW ij (h) = ( px,j,h − px,i,h )/ max( vi,h , ϵ ) estimates the time headway as the ratio between forward spacing and speed. Binary variable wfront  
+
+> ij
+
+(h) ∈ { 0, 1} indicates whether vehicle j is a same-lane leader of vehicle i. A small ϵ > 0 is used to avoid numerical instability. 
+
+(iv) Inverse time-to-collision (TTC). The inverse-TTC captures imminent same-lane longitudinal collision risk: 
+
+ϕInvTTC (τi, τj ) = − max 
+
+> h=0 ,...,H dec
+
+wfront  
+
+> ij
+
+(h) 1TTC ij (h) + ϵ ,
+
+(7) where TTC ij (h) = ( px,j,h − px,i,h )/(vi,h − vj,h + ϵ) when 
+
+wfront  
+
+> ij
+
+(h) = 1 and vi,h > v j,h , and is set to +∞ otherwise. 
+
+(v) Anisotropic social distance. The anisotropic social-distance feature captures directional spatial proximity between interact-ing vehicles: 
+
+ϕell (τi, τj ) = − max 
+
+> h=0 ,...,H dec
+
+exp 
+
+
+
+− (∆ px,h )2
+
+2σ2
+
+> x
+
+− (∆ py,h )2
+
+2σ2
+
+> y
+
+
+
+.
+
+(8) where ∆px,h = px,j,h − px,i,h and ∆py,h = py,j,h − py,i,h 
+
+denote the longitudinal and lateral relative displacements of vehicle j with respect to vehicle i, respectively. We set σx >σy to impose greater sensitivity to lateral proximity. Following [31], we normalize all six reward features after aggregating the pairwise interaction features. Each feature is normalized as efj = fj /α j , where αj is the 95th percentile of nonzero absolute values of the corresponding feature in the training set. The normalization scales remain fixed throughout training and evaluation. 
+
+Policy objective. Under a joint policy profile π = ( πi, π−i)
+
+with −i indicating all other vehicles, the expected discounted return of vehicle i over a finite horizon is 
+
+Ji(πi, π−i) = Eρ0,P,πi,π−i
+
+"T −1X
+
+> κ=0
+
+γκri(sκ, aκ)
+
+#
+
+. (9) Given the policies of the other vehicles π−i, vehicle i seeks to optimize its own policy: 
+
+π∗ 
+
+> i
+
+∈ arg max 
+
+> πi
+
+Ji(πi, π−i). (10) Because the reward and state transition depend on the joint actions, the optimal response of each vehicle generally de-pends on the policies of the other interacting vehicles. The resulting Markov game therefore provides a forward model of interactive driving decisions, which will subsequently be used to infer the context-dependent reward weights from demonstrations. 
+
+B. Localized Multi-Agent Inverse Reinforcement Learning 
+
+With the Markov game formulated above, this subsection leverages MAIRL to infer the parameters θint ,i,κ and θind ,i,κ 5
+
+in Eq. (1) from interactive driving demonstrations, which char-acterize driver preferences over different performance criteria. However, directly applying MAIRL in typical traffic scenarios may require a large interaction graph. In particular, while a vehicle’s decision depends on its neighboring vehicles, those neighbors’ decisions are also influenced by their own neigh-bors. Accounting for such dependencies therefore requires the interaction graph to extend beyond the immediate neighbor-hood and, recursively, across a potentially large portion of the traffic system. Explicitly modeling such a large interaction graph poses two challenges. First, it requires demonstration datasets covering a correspondingly large portion of the traffic system, which are typically unavailable. Second, it substan-tially increases the computational complexity of solving the Markov game. To address these challenges, we construct a local interaction graph for each vehicle that explicitly includes only the vehicle itself and its immediate neighbors. This confines both the Markov game computation and the required demonstration data to a small local graph. To retain the influence of vehicles outside this graph, we represent their collective effects on each neighboring vehicle through aggregated traffic states, analogous to mean-field states. This localized representation therefore captures the influence of the broader traffic environ-ment while substantially reducing the required data coverage and computational complexity. Accordingly, the presentation of our methodology is divided into two parts. We first present the MAIRL formulation for the general Markov game, and then describe how it is applied to traffic scenarios through a localized Markov game with aggregated traffic states. 
+
+1) Maximum-Entropy-Based MAIRL: Given the Markov-game formulation above, we use MAIRL to infer the reward weights from interactive driving demonstrations. Following the maximum-entropy principle, the inverse problem is formulated probabilistically. Rather than assuming that the demonstrated actions are strictly optimal, actions with higher expected re-turns are assigned higher probabilities, and the reward weights are learned by maximizing the likelihood of the observed actions. Instead of independently estimating the reward weights for each vehicle at every decision epoch, we generate them from the vehicle observation using a shared context encoder fctx (·)
+
+with learnable parameters η. For vehicle i at decision epoch 
+
+κ, its reward weights are generated by 
+
+θi,κ (η) = softplus ( fctx (oi,κ ; η)) , (11) where θi,κ = [θ⊤
+
+> ind ,i,κ
+
+, θ⊤
+
+> int ,i,κ
+
+]⊤, with θind ,i,κ =[θeff ,i,κ , θ lon comf ,i,κ , θ lat comf ,i,κ ]⊤ and θint ,i,κ =[θTHW ,i,κ , θ InvTTC ,i,κ , θ ell ,i,κ ]⊤. Note that sharing the encoder across vehicles allows demonstrations from different vehicles to jointly inform preference learning, while conditioning on oi,κ allows the inferred reward weights to vary across vehicles and traffic contexts. For a given reward model, evaluating the likelihood of a demonstrated action requires computing the joint policy 
+
+πκ(aκ | oκ) at each epoch κ, which can be computationally expensive, as the size of the joint action space grows exponen-tially with the number of interacting vehicles. To reduce the computational burden, we approximate the joint policy using vehicle-level marginal policies, where each vehicle maintains its own policies and iteratively responds to the policies of others (see, e.g., [32]): 
+
+πκ (aκ | oκ) ≈ Y
+
+> i∈V
+
+πi,κ (ai | oi,κ ) , oκ = {oi,κ }i∈V .
+
+(12) It is worth noting that although Eq. (12) factorizes the joint policy, it does not remove the coupling among vehicle de-cisions. Each marginal policy is updated in response to the current marginal policies of the other vehicles, while their interactions remain captured through the reward and transition dynamics. Iterating these updates therefore allows changes in one vehicle’s policy to affect the policies of the others without explicitly computing the full joint policy. At marginal-response iteration q, vehicle i evaluates each candidate action against the current marginal policies of the other vehicles, i.e., 
+
+Q(q) 
+
+> i,κ
+
+(ai) = Ea−i,κ ∼Q 
+
+> j∈V\{ i}π(q)
+> j,κ (·| oj,κ )
+
+"
+
+ri (sκ, (ai, a−i,κ )) + γV i,κ +1 Oi
+
+
+
+G sκ, (ai, a−i,κ )!# 
+
+.
+
+(13) Here, Vi,κ +1 denotes the continuation value at the successor state generated by G for each candidate joint action. It is computed recursively by generating candidate trajectories, updating context-dependent reward weights, and performing marginal-response inference at each successor state. The ex-pectation can be estimated by sampling the other vehicles’ actions from their factorized marginal policies, with terminal condition Vi,T m (·) = 0 for episode m.Vehicle i then updates its marginal response according to 
+
+π(q+1)  
+
+> i,κ
+
+(ai | oi,κ ) = exp 
+
+
+
+βQ (q) 
+
+> i,κ
+
+(ai)
+
+X
+
+> eai∈A i(sκ)
+
+exp 
+
+
+
+βQ (q) 
+
+> i,κ
+
+(eai)
+
+ , (14) where β > 0 is the inverse-temperature parameter. The corresponding soft value is 
+
+V (q+1)  
+
+> i,κ
+
+(oi,κ ) = 1
+
+β log X
+
+> ai∈A i(sκ)
+
+exp 
+
+
+
+βQ (q) 
+
+> i,κ
+
+(ai)
+
+
+
+. (15) For a finite episode, the value computation proceeds back-ward from κ = T − 1 to κ = 0 , evaluating continuation values at the successor states induced by candidate joint ac-tions. At each decision epoch, the continuation-value function 
+
+Vi,κ +1 (·) is held fixed while the coupled marginal policies are approximated by unrolling Nresp marginal-response iterations. After Nresp iterations, the resulting action value, marginal policy, and soft value are referred to as the finalized response quantities and denoted by Qi,κ (ai), πi,κ (ai | oi,κ ), and 
+
+Vi,κ (oi,κ ), respectively. The inverse-learning step then adjusts context-encoder pa-rameters η by assigning high likelihood to the demonstrated 6
+
+multi-vehicle decisions under the finalized response distribu-tions. For demonstration episode m, the demonstrated tra-jectory of vehicle i at decision epoch κ is matched to the candidate in Ωi,κ with the closest terminal displacement 
+
+(∆ s∗
+
+> i,κ
+
+, ∆d∗
+
+> i,κ
+
+), and the corresponding candidate index is taken as the demonstrated action a∗
+
+> i,κ
+
+.Using the finalized action values as maximum-entropy de-cision scores, the demonstrated-action log-likelihood is 
+
+log eπi,κ 
+
+ a∗ 
+
+> i,κ
+
+| oi,κ 
+
+ = βQ i,κ (a∗
+
+> i,κ
+
+)−log X
+
+> ai∈A i,κ
+
+exp ( βQ i,κ (ai)) .
+
+(16) The episode-level MAIRL loss is 
+
+L(m)MAIRL = −
+
+> Tm−1
+
+X
+
+> κ=0
+
+X
+
+> i∈V (m)
+
+I(m) 
+
+> i,κ
+
+log eπ(m)
+
+> i,κ
+
+
+
+a∗(m) 
+
+> i,κ
+
+| o(m)
+
+> i,κ
+
+
+
+,
+
+(17) where I(m) 
+
+> i,κ
+
+indicates whether vehicle i has a valid demon-strated action at decision epoch κ. For a mini-batch B, the MAIRL loss is 
+
+LMAIRL = 1
+
+|B| 
+
+X
+
+> m∈B
+
+L(m)MAIRL . (18) 
+
+2) Localized Markov Game with Aggregated Traffic States: 
+
+To make the Markov game tractable with locally available driving demonstrations, we localize the interaction graph by explicitly retaining only each focal vehicle and its directly interacting neighbors. Simply truncating the graph, however, would neglect the influence of vehicles outside the local graph, which can still affect the decisions of the explicitly represented vehicles through the surrounding traffic condi-tions. We therefore summarize these external vehicles using fixed-dimensional aggregated traffic states within the localized Markov game. Overall, such localization affects two compo-nents of the original Markov-game formulation: (i) the ob-servation of each explicitly represented vehicle is augmented with the aggregated traffic state to retain the influence of the surrounding traffic, and (ii) the forward-safety interaction of a frontmost vehicle is evaluated against a virtual proxy constructed from the aggregated traffic state when no real leading vehicle is explicitly represented. 
+
+Aggregated traffic state . The observation oi,κ is augmented with an aggregated traffic state Hρi,κ = {ρi,n κ−h}Hobs  
+
+> h=0
+
+, repre-senting a short history of local traffic densities around vehicle 
+
+i. Specifically, the surrounding region is partitioned into eight lane-aligned cells D8 = {F, F L, L, BL, B, BR, R, F R }, cor-responding to front, front-left, left, rear-left, rear, rear-right, right, and front-right cells around vehicle i, respectively. Each cell covers approximately one lane in width and 20–30 m longitudinally, and ρdi,t denotes the traffic density within cell 
+
+d ∈ D 8 at time step t. The cells are oriented according to the local direction of the lane occupied by vehicle i, and their densities are collected as ρi,t = [ ρFi,t , ρ F L i,t , ρ Li,t , ρ BL i,t , ρ Bi,t , ρ BR i,t ,ρRi,t , ρ F R i,t ]⊤.This representation retains spatial coverage of the surround-ing traffic while avoiding explicit modeling of every vehicle. Directly interacting neighbors are represented at the micro-scopic level, whereas vehicles beyond the local interaction graph are summarized at the macroscopic level through traffic density. The latter retain the aggregate traffic information within each local cell while sacrificing vehicle-level resolu-tion, thereby providing complementary information about the broader traffic environment. Such local traffic densities can be obtained or estimated from onboard perception or other available traffic measurements. 
+
+Virtual proxy for forward-safety evaluation . The aggregated traffic state also modifies the forward-safety evaluation for a frontmost vehicle in the local interaction graph. Although such a vehicle has no explicitly represented leader, traffic beyond the local graph can still constrain its forward motion. Since the time-headway and inverse-TTC features require a reference vehicle trajectory, we construct a virtual proxy from the aggregated traffic state as an equivalent leader. For each nonempty lane ℓ, let fℓ,κ denote its frontmost ex-plicitly represented vehicle. Its virtual proxy at decision epoch 
+
+κ is characterized by zvir  
+
+> ℓ,κ
+
+=
+
+h
+
+gvir 
+
+> ℓ,κ
+
+, v vir 
+
+> ℓ,κ
+
+i⊤
+
+. The equivalent gap 
+
+gvir  
+
+> ℓ,κ
+
+is determined as the inverse of the local traffic density around fℓ,κ , and clipped between physical bounds gmin and 
+
+gmax . The equivalent speed vvir  
+
+> ℓ,κ
+
+is set to the local mean traffic speed. The virtual proxy is constructed at decision epoch κ
+
+from the aggregated traffic state, and its trajectory is then generated over the current decision interval from its gap and speed. For the frontmost vehicle fℓ,κ , the virtual proxy serves only as an equivalent leader for evaluating the forward-safety components of the interaction feature. Accordingly, 
+
+ϕvir int 
+
+ τi,κ , ¯τ vir 
+
+> ℓ,κ
+
+ = ϕTHW 
+
+ τi,κ , ¯τ vir 
+
+> ℓ,κ
+
+ , ϕ InvTTC 
+
+ τi,κ , ¯τ vir 
+
+> ℓ,κ
+
+ , 0⊤ .
+
+(19) where the first two components are evaluated using the virtual-proxy trajectory in the same manner as for a real leading vehicle. The social-distance component is set to zero because the proxy represents aggregated traffic rather than a physical vehicle. The virtual proxy is generated exogenously from the aggregated traffic state and is therefore not treated as an agent in the Markov game, with no action, policy, reward, or demonstrated-action likelihood of its own. 
+
+C. Human-Feedback-Guided Preference Alignment 
+
+The MAIRL approach developed above aims to infer reward weights from interactive driving demonstrations, but demon-strations alone only provide behavioral evidence and may not fully reveal the subjective preferences underlying the observed decisions. For example, similar driving behaviors may lead to different subjective evaluations depending on the driver’s perceived comfort, safety, or satisfaction. To reduce this ambi-guity, we incorporate human feedback, represented by interval-level labels characterizing the driver’s subjective response to the experienced driving behavior (e.g., emotional responses), which is assumed to be available for a subset of vehicles 
+
+Vfb ⊆ V . Such feedback can be readily obtained from increas-ingly common in-cabin driver monitoring modalities, such as video recordings of facial expressions, and subsequently processed or annotated into feedback labels. By providing sub-jective evaluations associated with demonstrated state-action 7
+
+pairs, human feedback offers complementary supervision for aligning the learned reward with human preferences. Human feedback is associated with each demonstration instance χ = (m, κ ), where m indexes the demonstra-tion episode and κ indexes the decision interval within that episode. Following the definitions in the Markov game, the corresponding instance contains the global interaction state 
+
+sχ = s(m) 
+
+> κ
+
+, the vehicle-specific observation oχi = Oi(sχ), the demonstrated joint decision a∗,χ = a∗(m) 
+
+> κ
+
+with corresponding interval-level trajectory τ ∗,χ i = Fi(sχ, a ∗,χ i ), and the available human feedback label eχi = e(m) 
+
+> i,κ
+
+for each feedback-available vehicle i ∈ V fb .Instead of directly converting categorical human feedback into numerical reward values, we use it only to establish pref-erence orderings over the corresponding demonstrated state-action pairs. To this end, we introduce a task-specific scoring function S : Hfb → R to assign an ordinal preference level to each feedback category. For two instances χ+ = ( m+, κ +)
+
+and χ− = (m−, κ −), the feedback indicates that χ+ is preferred to χ− by driver i if S(eχ+ 
+
+> i
+
+) > S (eχ− 
+
+> i
+
+). Feedback categories with the same score are treated as ties and do not form preference pairs. Accordingly, the preference set for feedback-providing vehicle i is 
+
+Ci, pref =
+
+n
+
+(χ+, χ −) S(eχ+ 
+
+> i
+
+) > S (eχ− 
+
+> i
+
+)
+
+o
+
+. (20) This construction uses the feedback only to determine relative preference and does not impose arbitrary cardinal differences between feedback categories. Since each feedback label characterizes the subjective re-sponse to an experienced state-action pair, we evaluate the learned reward directly on the corresponding demonstrated instance as U χi = ri (sχ, a∗,χ ). Human feedback is then used to constrain the relative ordering of these rewards rather than their absolute values. Specifically, for each preference pair 
+
+(χ+, χ −) ∈ C i, pref , the learned reward is expected to satisfy 
+
+U χ+ 
+
+> i
+
+> U χ− 
+
+> i
+
+.To incorporate this ordinal supervision into learning, we adopt a Bradley–Terry model, under which the probability that the learned reward assigns the feedback-consistent ordering is 
+
+Pi
+
+ (χ+, χ −) ∈ C i, pref 
+
+ = σ
+
+
+
+U χ+ 
+
+> i
+
+− U χ−
+
+> i
+
+
+
+, i ∈ V fb (21) where σ(x) = 1 /(1 + exp( −x)) is the sigmoid function. For each mini-batch containing at least one preference pair, the preference loss for vehicle i is defined as 
+
+Li, pref = − 1
+
+|C B 
+
+> i, pref
+
+|
+
+X
+
+> (χ+,χ −)∈C B
+> i, pref
+
+log σ
+
+
+
+U χ+ 
+
+> i
+
+− U χ−
+
+> i
+
+
+
+.
+
+(22) Here, CB 
+
+> i, pref
+
+denotes the preference pairs of vehicle i con-structed from the decision instances available in mini-batch 
+
+B. If no preference pair is available, Li, pref is set to zero. The total preference loss over all feedback-providing vehi-cles in the mini-batch is 
+
+Lpref = X
+
+> i∈V fb
+
+Li, pref . (23) Since the preference likelihood is determined by reward margins, excessively scaling the reward weights can increase the confidence of the inferred ordering without providing additional preference information. We therefore regularize the magnitude of the learned reward weights, 
+
+Lreg = 1
+
+|B| 
+
+X
+
+> m∈B
+> Tm−1
+
+X
+
+> κ=0
+
+X
+
+> i∈V (m)
+
+I(m) 
+
+> i,κ
+
+θ(m)
+
+> i,κ
+> 22
+
+X
+
+> i∈V (m)
+
+I(m) 
+
+> i,κ
+
++ ϵ . (24) The final training objective combines behavioral inference from multi-agent demonstrations with preference alignment from human feedback, i.e., 
+
+L = LMAIRL + λpref Lpref + λreg Lreg . (25) where the MAIRL term LMAIRL encourages the learned reward to explain observed driving decisions, while the prefer-ence term Lpref further constrains its ordering using subjective human feedback. Their combination allows the reward model to remain behaviorally grounded while better reflecting human preferences. The overall training procedure of the proposed HFG-MAIRL framework is summarized in Algorithm 1. IV. R ESULTS 
+
+In this section, we present experiments evaluating the proposed HFG-MAIRL method. Section IV-A introduces the benchmark algorithms. Section IV-B describes the dataset and implementation details. Section IV-C evaluates HFG-MAIRL against representative IRL baselines and analyzes the learned reward structure. Sections IV-D and IV-E present the ablation study and sensitivity analysis of key components and parameter settings, respectively. 
+
+A. Benchmarks 
+
+The following reward-learning benchmarks are compared to evaluate the proposed method.  
+
+> •
+
+Adversarial IRL (AIRL) [33]: This benchmark formu-lates IRL as an adversarial learning problem, where a discriminator distinguishes expert trajectories from gen-erated trajectories and induces the reward from its output. AIRL enables expressive reward learning without relying on an explicitly parameterized feature-weight structure.  
+
+> •
+
+Margin IRL [34]: This benchmark adopts a margin-based reward-learning objective that maximizes the dif-ference between expert and candidate trajectory rewards using a squared hinge loss. Unlike the maximum-entropy principle, it directly enforces a reward margin between demonstrated and alternative driving decisions.  
+
+> •
+
+Variational Bayesian IRL [35]: This benchmark treats reward parameters as latent variables and approximates their posterior distribution through variational inference. It provides probabilistic reward recovery with uncer-tainty modeling but does not explicitly incorporate human feedback preference supervision or iterative neighboring-vehicle responses. 8
+
+Algorithm 1 Training Procedure of HFG-MAIRL 
+
+Input: Demonstration dataset D, candidate number K, feed-back scoring function S(·), loss weights λpref and 
+
+λreg , response iterations Nresp , and training epochs 
+
+Nepoch 
+
+Output: Learned context-encoder parameters η 
+
+> 1:
+
+Estimate and fix the normalization scales {αj }6 
+
+> j=1
+
+from the training data  
+
+> 2:
+
+Initialize η 
+
+> 3:
+
+for epoch = 1 to Nepoch do  
+
+> 4:
+
+for each mini-batch B ⊂ D do  
+
+> 5:
+
+for each episode m ∈ B do  
+
+> 6:
+
+Construct localized interaction graphs, aggre-gated traffic states, observations o(m) 
+
+> i,κ
+
+, and virtual proxies for lane-frontmost vehicles  
+
+> 7:
+
+Set V (m) 
+
+> i,T m
+
+(·) ← 0 
+
+> 8:
+
+for κ = Tm − 1 down to 0 do  
+
+> 9:
+
+Generate candidate trajectories Ω(m) 
+
+> i,κ
+
+and reward weights θ(m) 
+
+> i,κ
+
+using Eq. (11)  
+
+> 10:
+
+Initialize π(0 ,m ) 
+
+> i,κ
+
+uniformly over the candi-date actions  
+
+> 11:
+
+for q = 0 to Nresp − 1 do  
+
+> 12:
+
+Evaluate Q(q,m ) 
+
+> i,κ
+
+using Eq. (13), with con-tinuation values recursively computed at the successor states induced by candidate joint actions  
+
+> 13:
+
+Update π(q+1 ,m ) 
+
+> i,κ
+
+and V (q+1 ,m ) 
+
+> i,κ
+
+using Eq. (14) and Eq. (15)  
+
+> 14:
+
+end for  
+
+> 15:
+
+Set Q(m) 
+
+> i,κ
+
+, π(m) 
+
+> i,κ
+
+, and V (m) 
+
+> i,κ
+
+as the finalized response quantities  
+
+> 16:
+
+Match each valid demonstrated trajectory to the candidate with the closest terminal displacement to obtain a∗(m) 
+
+> i,κ
+> 17:
+
+end for  
+
+> 18:
+
+Compute L(m)MAIRL using Eq. (16) and Eq. (17)  
+
+> 19:
+
+end for  
+
+> 20:
+
+Compute LMAIRL using Eq. (18)  
+
+> 21:
+
+Construct feedback preference pairs CB 
+
+> i, pref
+
+using Eq. (20)  
+
+> 22:
+
+Evaluate U χi = ri(sχ, a∗,χ ) and compute Lpref 
+
+using Eqs. (22)–(23)  
+
+> 23:
+
+Compute Lreg using Eq. (24) and joint loss L
+
+using Eq. (25)  
+
+> 24:
+
+Update η by back-propagation through the un-rolled marginal-response inference  
+
+> 25:
+
+end for  
+
+> 26:
+
+end for  
+
+> •
+
+MaxEnt IRL [31]: This benchmark adopts a single-agent Maximum Entropy IRL formulation that treats surround-ing vehicles as dynamic environmental factors without explicitly modeling their mutual decision responses. It represents a probabilistic reward-learning approach based solely on demonstrated driving behaviors.  
+
+> •
+
+HFG-MAIRL (Ours) : The proposed method formulates interactive driving as a finite-horizon Markov game and learns context-dependent reward functions from multi-vehicle demonstrations. Directly interacting vehicles are modeled explicitly through marginal-response inference, while broader traffic influences are represented through aggregated traffic states and a passive virtual forward-safety proxy. Available human feedback is further incor-porated as ordinal preference supervision for the learned reward. The benchmark comparison evaluates whether explicitly modeling multi-vehicle responses and incorporating comple-mentary human preference information improve reward-based reconstruction of demonstrated driving decisions. 
+
+B. Experiment Setup and Implementation Details 
+
+Fig. 2: Illustration of the multimodal driver emotion dataset used in this work. AIDE captures naturalistic on-road driving with synchronized multi-view videos annotated with five emo-tion categories. In this study, we instantiate the general human-feedback formulation using driver emotion annotations. The proposed framework itself is not restricted to emotion feedback and can accommodate other categorical or ordinal feedback signals from which pairwise preferences can be constructed. 
+
+1) Dataset: We utilize the AIDE dataset [36] to eval-uate the proposed framework in naturalistic on-road driv-ing scenarios. Naturalistic datasets containing both traffic-scene observations and synchronized driver-state annota-tions are scarce, and AIDE provides paired observations of driver states and surrounding traffic through synchronized in-cabin, front, left, and right camera recordings. Each sam-ple consists of a 3-second driving clip with 45 frames per view and is annotated with an emotion category e ∈{Anxiety , Peace , Weariness , Happiness , Anger }. Vehicle trajec-tories are obtained through YOLO-based detection and multi-object tracking [37] and projected into a bird’s-eye-view coor-dinate system. Only lane-changing and forward-driving scenes are included, as these scenarios contain explicit multi-vehicle interactions while providing sufficient trajectory observations for reward inference. The dataset is split at the clip level into training, validation, and test sets with an approximate ratio of 70%/15%/15%. The validation set is used exclusively for model selection and configuration determination. After all model configurations and default hyperparameters are fixed, the test set is used for benchmark comparison, ablation studies, and sensitivity analysis. Fig. 2 presents representative examples from the AIDE dataset. 
+
+2) Implementation Details: We implement all benchmark methods using the hyperparameter settings reported in their original publications, with minor adaptations to ensure com-patibility with the action representation used in our evaluation. For a fair comparison, all methods use the same trajectory can-9
+
+didate generation procedure, terminal-anchor sets, observation horizons, and traffic observations. HFG-MAIRL uses an observation horizon and decision interval of Tobs = Tdec = 1 .0 s . Candidate terminal anchors are uniformly discretized over longitudinal and lateral dis-placement ranges [smin , s max ] and [dmin , d max ], whose bounds are estimated from the 5th and 95th percentiles of the training trajectories. The same anchor specification is used across vehicles, and the default action space contains K = 20 
+
+trajectory candidates. Each candidate action corresponds to a 16-point trajectory segment over the subsequent decision interval. For reward-feature construction, the reference speed is set to 
+
+vref = 15 .0 m /s. The acceleration and yaw-rate normalization constants are amax = 3.0 m /s2 and ωmax = 0.5 rad /s,respectively. The anisotropic social-distance scales are set to 
+
+σx = 10 .0 m and σy = 2 .0 m , where σy < σ x increases sen-sitivity to lateral proximity during adjacent-lane interactions. The context encoder fctx is implemented as a two-layer multilayer perceptron with a hidden dimension of 32 and outputs context-dependent weights for the individual and in-teraction reward features. Multi-vehicle decision coupling is approximated using Nresp = 3 marginal-response iterations at each decision epoch. Each episode contains Tm = 2 decision intervals, with the discount factor and inverse-temperature parameter set to γ = 1 .0 and β = 1 .0, respectively. The emotion scoring function S(e) maps Happiness to 2, 
+
+Peace to 1, and Anxiety , Weariness , and Anger to 0. These scores are used only to construct ordinal preference relations Happiness ≻ Peace ≻ { Anxiety , Weariness , Anger } and are not treated as numerical reward targets. Any alternative numer-ical values that preserve this ordering would yield exactly the same set of preference pairs. Although the general formulation permits feedback for any subset Vfb ⊆ V , AIDE provides emotion annotations only for the ego driver. We therefore set 
+
+Vfb = {ego } and apply the preference loss only to the reward of the feedback-annotated ego vehicle. All learnable models are trained using the Adam optimizer with a learning rate of 0.001 and a batch size of 8. The default preference-loss and regularization weights are set to 
+
+λpref = 1 .0 and λreg = 10 −4, respectively. All benchmark, ablation, and sensitivity experiments follow the same training and evaluation protocol. All models are implemented in Py-Torch and trained on a high-performance computing platform equipped with NVIDIA H100 and A40 GPUs. 
+
+C. Performance Analysis 
+
+We evaluate HFG-MAIRL on the test set by measuring how accurately the learned policy reconstructs demonstrated vehicle behaviors. At each decision interval, the policy selects the highest-probability trajectory candidate for each vehicle based on vehicle states and traffic history updated using the observed trajectories. The selected trajectories are compared with expert trajectories for all vehicles. We report Average Displacement Error (ADE) and Final Displacement Error (FDE) for spatial accuracy, Speed Deviation Error (SDE) and Acceleration Deviation Error (AccDE) for kinematic accuracy, and Heading Deviation Error (HDE) for heading consistency. Results are reported as mean ± standard deviation over five random seeds. Table I compares HFG-MAIRL with representative IRL benchmarks. HFG-MAIRL achieves the lowest reconstruction errors across all five metrics, with an ADE of 0.32 m, FDE of 0.95 m, SDE of 1.06 m/s, AccDE of 1.99 m/s 2,and HDE of 0.10 rad. Compared with AIRL, HFG-MAIRL reduces ADE, FDE, SDE, AccDE, and HDE by 85.5%, 83.2%, 68.3%, 56.6%, and 44.4%, respectively. The other three IRL baselines achieve substantially lower errors than AIRL but remain considerably less accurate than HFG-MAIRL. In particular, compared with MaxEnt IRL, which achieves the strongest overall reconstruction performance among these baselines, HFG-MAIRL further reduces ADE by 76.5%, FDE by 68.0%, SDE by 36.1%, AccDE by 24.3%, and HDE by 28.6%. The comparatively small performance differences among Margin IRL, Variational Bayesian IRL, and MaxEnt IRL, together with their larger gap from HFG-MAIRL, suggest that changing the conventional IRL learning objective alone is insufficient to achieve the reconstruction accuracy obtained by the proposed interaction-aware framework. The largest relative improvements of HFG-MAIRL are observed in ADE and FDE, indicating that its advantage is particularly pronounced in recovering the spatial outcome of demonstrated decisions. The simultaneous reductions in SDE, AccDE, and HDE further show that the improvement extends to the associated motion dynamics. 
+
+Value of human-feedback-guided reward interpretation. Be-yond reconstructing demonstrated decisions, HFG-MAIRL aims to recover reward structures that reflect the interaction preferences associated with human feedback. Figs. 3 and 4 ex-amine the learned reward structure for the feedback-annotated vehicle from two complementary perspectives. Fig. 3 compares the relative composition of the learned context-dependent reward-feature weights across emotion-labeled interaction contexts using the normalized features. 
+
+Happiness places relatively greater emphasis on time headway, longitudinal comfort, and inverse time-to-collision, whereas 
+
+Peace is characterized primarily by lateral and longitudinal comfort. Anxiety assigns a relatively large weight to in-verse time-to-collision, indicating greater relative emphasis on imminent closing risk. Weariness places greater emphasis on anisotropic social distance and inverse time-to-collision, while Anger assigns relatively high weights to efficiency and anisotropic social distance. These differences show that the context-dependent reward model does not associate all driving situations with a fixed preference structure, but instead cap-tures diverse trade-offs across interaction contexts associated with different human responses. Fig. 4 provides a complementary view by grouping the learned interval-level rewards of demonstrated vehicle de-cisions according to emotion label. Happiness and Peace 
+
+generally receive higher learned rewards, whereas Anger , Anx-iety , and Weariness exhibit lower and more dispersed reward distributions. This overall separation is consistent with the ordinal preference construction, where Happiness and Peace 10 
+
+TABLE I: Comparison of trajectory reconstruction errors between HFG-MAIRL and representative IRL benchmarks.                                                                                 
+
+> Benchmark ADE (m) FDE (m) SDE (m/s) AccDE (m/s 2)HDE (rad)
+> AIRL 2.20 ±0.13 5.65 ±0.35 3.34 ±0.19 4.58 ±0.19 0.18 ±0.01
+> Margin IRL 1.43 ±0.17 3.19 ±0.40 1.75 ±0.22 2.63 ±0.24 0.16 ±0.01
+> Variational Bayesian IRL 1.39 ±0.17 3.14 ±0.41 1.75 ±0.22 2.63 ±0.24 0.14 ±0.01
+> MaxEnt IRL 1.36 ±0.17 2.97 ±0.40 1.66 ±0.21 2.63 ±0.24 0.14 ±0.01
+> HFG-MAIRL 0.32 ±0.03 0.95 ±0.11 1.06 ±0.11 1.99 ±0.19 0.10 ±0.01
+
+Fig. 3: Relative composition of learned context-dependent reward weights for normalized features, grouped by emotion label. receive higher feedback scores than the three lower-score emotion categories. The three lower-score categories are not required to exhibit a strict internal ordering because they share the same preference score and therefore do not form preference pairs with one another. Although Anger , Anxiety ,and Weariness share the same preference score and receive no explicit ordering constraints, their reward distributions still differ, indicating that the behavior-based MAIRL objective and context-dependent reward model capture additional preference structure beyond the ordering explicitly imposed by human feedback. 
+
+D. Ablation Study 
+
+We evaluate the contributions of four key components in HFG-MAIRL through ablation experiments: the aggregated traffic state, virtual forward-safety proxy, marginal-response inference, and human feedback supervision. Each component is removed individually, with the remaining model structure and evaluation settings kept unchanged. Table II summarizes the resulting performance. 
+
+Value of the aggregated traffic state. We evaluate the contribu-tion of the aggregated traffic state to vehicle observations by removing it from the context representation while retaining its use for constructing the virtual forward-safety proxy. Without this component, ADE increases from 0.32 m to 0.34 m, FDE 
+
+Fig. 4: Learned reward distributions grouped by emotion label. from 0.95 m to 0.97 m, SDE from 1.06 m/s to 1.09 m/s, AccDE from 1.99 m/s 2 to 2.03 m/s 2, and HDE from 0.10 rad to 0.11 rad. The degradation is modest but consistent across all five metrics. This pattern is consistent with the role of the aggregated traffic state as a complementary representation of broader traffic conditions: directly interacting neighbors already provide detailed vehicle-level interaction information, while the aggregated state supplies additional context from traffic beyond the explicitly modeled local interactions. Its removal therefore does not eliminate the primary interaction information, but reduces the broader contextual information available for context-dependent reward inference. 
+
+Value of the virtual forward-safety proxy. We evaluate the contribution of the virtual proxy by removing it from HFG-MAIRL. The virtual proxy provides a forward-safety refer-ence for a lane-frontmost vehicle when no physical leader is explicitly represented in the localized interaction graph. Removing this component increases ADE from 0.32 m to 0.33 m, SDE from 1.06 m/s to 1.09 m/s, AccDE from 1.99 m/s 2 to 2.03 m/s 2, and HDE from 0.10 rad to 0.11 rad, while FDE remains unchanged at 0.95 m at the reported precision. The relatively small overall effect is consistent with the specialized role of the virtual proxy: it is activated only when an explicitly represented physical leader is unavailable and contributes only to the forward-safety components of the interaction reward. The modest degradation therefore suggests that the proxy supplements the localized interaction model with useful forward-traffic constraints without becoming a dominant source of decision information. 
+
+Value of marginal-response inference. We evaluate the contri-11 
+
+bution of marginal-response inference by disabling the itera-tive updates of neighboring-vehicle responses while retaining the remaining interaction components. Removing marginal-response inference increases ADE from 0.32 m to 0.47 m, FDE from 0.95 m to 1.40 m, SDE from 1.06 m/s to 1.61 m/s, AccDE from 1.99 m/s 2 to 2.90 m/s 2, and HDE from 0.10 rad to 0.15 rad. The substantial and consistent degradation across spatial, kinematic, and heading metrics indicates that iterative response modeling affects the overall evaluation of decisions. In HFG-MAIRL, each vehicle evaluates its candidate actions under the current response distributions of the other interacting vehicles, and the resulting policies are iteratively updated. Disabling this process removes the propagation of mutual decision responses across vehicles, leading to less accurate reconstruction of the demonstrated interactive decisions. These results provide empirical support for explicitly accounting for coupled multi-vehicle responses during reward inference. 
+
+Value of human feedback preference supervision. We evaluate the contribution of human feedback supervision by remov-ing the preference loss from HFG-MAIRL. Without human feedback supervision, ADE increases from 0.32 m to 0.46 m, FDE from 0.95 m to 1.36 m, SDE from 1.06 m/s to 1.56 m/s, AccDE from 1.99 m/s 2 to 2.81 m/s 2, and HDE from 0.10 rad to 0.13 rad. Notably, the human feedback does not directly supervise trajectory positions or kinematic quantities, and it provides only ordinal constraints on the rewards associated with demonstrated decisions. The broad degradation observed after removing this supervision indicates that these additional reward-ordering constraints help distinguish among behav-iorally plausible reward structures and improve the resulting evaluation of trajectory candidates. Together with the emotion-grouped reward structures shown in Figs. 3 and 4, the results show that human feedback is a complementary source of supervision that contributes both to reward interpretation and to behavioral reconstruction beyond trajectory demonstrations alone. 
+
+E. Sensitivity Analysis 
+
+We further evaluate the effects of two key parameters in HFG-MAIRL through sensitivity analysis: the number of trajectory candidates K and the preference-loss weight λpref .Each parameter is varied individually, with the remaining model structure and evaluation settings kept unchanged. Ta-ble III summarizes the resulting performance. † indicates the default setting. 
+
+Sensitivity analysis on trajectory candidate number. We eval-uate the effect of the number of trajectory candidates K by varying the size of the discrete action space. Increasing K
+
+from 10 to 20 improves all five reconstruction metrics, with ADE and FDE decreasing from 0.42 m and 1.18 m to 0.32 m and 0.95 m, respectively. This improvement is consistent with the action representation of HFG-MAIRL: a larger candidate set provides finer coverage of feasible terminal displacements and reduces the mismatch between demonstrated trajectories and the available discrete actions. Increasing K further to 30 reduces ADE, FDE, SDE, and AccDE to 0.30 m, 0.85 m, 0.93 m/s, and 1.77 m/s 2, respectively, while HDE increases slightly from 0.10 rad to 0.12 rad. Thus, increasing candidate resolution generally improves spatial and kinematic recon-struction, although the benefit is not uniform across all motion characteristics. The default K = 20 therefore provides strong reconstruction performance with a smaller action space, while 
+
+K = 30 offers additional accuracy on several metrics at the cost of evaluating more candidate actions during marginal-response inference. 
+
+Sensitivity analysis on preference-loss weight. We evaluate the effect of the preference-loss weight λpref by varying the contribution of human-feedback-derived ordinal preference su-pervision during reward learning. Reconstruction performance remains relatively stable across λpref ∈ 0.5, 1.0, 2.0. The default λpref = 1 .0 achieves the lowest ADE, FDE, SDE, and AccDE of 0.32 m, 0.95 m, 1.06 m/s, and 1.99 m/s 2,respectively, while HDE remains 0.10 rad across the three evaluated settings at the reported precision. The limited varia-tion across this range indicates that the learned behavior is not highly sensitive to the exact weighting of the preference term. This stability is consistent with the joint learning objective, in which the MAIRL likelihood continues to ground the reward in demonstrated driving decisions while the preference term provides complementary ordinal supervision. The default 
+
+λpref = 1 .0 achieves the lowest or tied-lowest reconstruction errors across the evaluated test-set settings, while the limited variation across the three settings indicates robustness to mod-erate changes in the strength of human feedback supervision. V. C ONCLUSION 
+
+In this paper, we propose HFG-MAIRL, a human-feedback-guided multi-agent inverse reinforcement learning framework for interactive driving behavior modeling. HFG-MAIRL for-mulates interactive driving as a finite-horizon Markov game and learns context-dependent reward functions from multi-vehicle demonstrations. It models coupled vehicle interac-tions through iterative marginal-response inference, represents broader traffic influences using aggregated traffic states, in-troduces a virtual forward-safety proxy when no physical leader is explicitly represented, and incorporates available human feedback as complementary ordinal preference su-pervision beyond trajectory demonstrations. Experimental re-sults on the AIDE dataset show that HFG-MAIRL consis-tently improves reconstruction accuracy over representative IRL baselines across spatial, kinematic, and heading metrics. The learned reward-feature compositions and emotion-grouped reward distributions further reveal interpretable variations in driving preferences across interaction contexts associated with different human responses. This work suggests several directions for future research. First, we plan to integrate the learned human reward model into large-scale mixed-traffic simulations to investigate how human-aligned driving preferences influence traffic-level ef-ficiency, safety, and interaction dynamics. Second, we plan to incorporate continuous multimodal human-state signals, such as physiological and behavioral responses, to provide more detailed preference information and better reflect how human responses change over time during complex driving interactions. 12 
+
+TABLE II: Comparison of trajectory reconstruction errors for HFG-MAIRL with different component ablations. 
+
+Configuration ADE (m) FDE (m) SDE (m/s) AccDE (m/s 2) HDE (rad) 
+
+w/o Aggregated Traffic State 0.34 ± 0.04 0.97 ± 0.10 1.09 ± 0.11 2.03 ± 0.17 0.11 ± 0.01 
+
+w/o Virtual Proxy 0.33 ± 0.03 0.95 ± 0.11 1.09 ± 0.11 2.03 ± 0.19 0.11 ± 0.01 
+
+w/o Marginal Response 0.47 ± 0.05 1.40 ± 0.17 1.61 ± 0.17 2.90 ± 0.29 0.15 ± 0.01 
+
+w/o Human Feedback 0.46 ± 0.04 1.36 ± 0.13 1.56 ± 0.15 2.81 ± 0.25 0.13 ± 0.01 
+
+HFG-MAIRL 0.32 ± 0.03 0.95 ± 0.11 1.06 ± 0.11 1.99 ± 0.19 0.10 ± 0.01 
+
+TABLE III: Sensitivity analysis of trajectory reconstruction errors for HFG-MAIRL with varying hyperparameters. 
+
+Axis Setting ADE (m) FDE (m) SDE (m/s) AccDE (m/s 2) HDE (rad) 
+
+K 10 0.42 ± 0.02 1.18 ± 0.08 1.40 ± 0.09 2.56 ± 0.16 0.13 ± 0.01 
+
+K 20 † 0.32 ± 0.03 0.95 ± 0.11 1.06 ± 0.11 1.99 ± 0.19 0.10 ± 0.01 
+
+K 30 0.30 ± 0.03 0.85 ± 0.12 0.93 ± 0.11 1.77 ± 0.19 0.12 ± 0.01 
+
+λpref 0.5 0.33 ± 0.03 0.96 ± 0.11 1.07 ± 0.11 2.01 ± 0.19 0.10 ± 0.01 
+
+λpref 1.0 † 0.32 ± 0.03 0.95 ± 0.11 1.06 ± 0.11 1.99 ± 0.19 0.10 ± 0.01 
+
+λpref 2.0 0.33 ± 0.03 0.96 ± 0.11 1.09 ± 0.11 2.04 ± 0.19 0.10 ± 0.01 
+
+REFERENCES [1] Q. Wang, H. Dong, F. Ju, W. Zhuang, C. Lv, L. Wang, and Z. Song, “Adaptive leading cruise control in mixed traffic considering human behavioral diversity,” IEEE Transactions on Intelligent Transportation Systems , vol. 25, no. 6, pp. 5059–5070, 2023. [2] M. Garg and M. Bouroche, “Can connected autonomous vehicles improve mixed traffic safety without compromising efficiency in realistic scenarios?” IEEE Transactions on Intelligent Transportation Systems ,vol. 24, no. 6, pp. 6674–6689, 2023. [3] P. Hang, Y. Zhang, and C. Lv, “Brain-inspired modeling and decision-making for human-like autonomous driving in mixed traffic environ-ment,” IEEE Transactions on Intelligent Transportation Systems , vol. 24, no. 10, pp. 10 420–10 432, 2023. [4] J. Wang, Y. Zheng, K. Li, and Q. Xu, “Deep-lcc: Data-enabled predictive leading cruise control in mixed traffic flow,” IEEE Transactions on Control Systems Technology , vol. 31, no. 6, pp. 2760–2776, 2023. [5] C. Lu, C. Lv, J. Gong, W. Wang, D. Cao, and F.-Y. Wang, “Instance-level knowledge transfer for data-driven driver model adaptation with homogeneous domains,” IEEE Transactions on Intelligent Transporta-tion Systems , vol. 23, no. 10, pp. 17 015–17 026, 2022. [6] C. Lu, F. Hu, D. Cao, J. Gong, Y. Xing, and Z. Li, “Transfer learning for driver model adaptation in lane-changing scenarios using manifold alignment,” IEEE transactions on intelligent transportation systems ,vol. 21, no. 8, pp. 3281–3293, 2019. [7] J. Zhang, X. Guo, Z. Fu, Y. Liu, and Y. Ding, “Noncooperative-game-theory-based driver-automation shared steering control consider-ing driver steering behavior characteristics,” IEEE Internet of Things Journal , vol. 11, no. 17, pp. 28 465–28 479, 2024. [8] A. Rasch, C. Flannagan, and M. Dozza, “When is it safe to complete an overtaking maneuver? modeling drivers’ decision to return after passing a cyclist,” IEEE Transactions on Intelligent Transportation Systems ,vol. 25, no. 11, pp. 15 587–15 599, 2024. [9] R. P. Bhattacharyya, D. J. Phillips, B. Wulfe, J. Morton, A. Kuefler, and M. J. Kochenderfer, “Multi-agent imitation learning for driving simulation,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 1534–1539. [10] J. Sun and J. Kim, “Modelling two-dimensional driving behaviours at unsignalised intersection using multi-agent imitation learning,” Trans-portation Research Part C: Emerging Technologies , vol. 165, p. 104702, 2024. [11] X. Liu, Y. Wang, K. Jiang, Z. Zhou, K. Nam, and C. Yin, “Interactive trajectory prediction using a driving risk map-integrated deep learning method for surrounding vehicles on highways,” IEEE Transactions on Intelligent Transportation Systems , vol. 23, no. 10, pp. 19 076–19 087, 2022. [12] Y. Zhang, T. Zhao, C. Hu, J. Chen, Y. Lu, and C. Du, “Interactive vehicle trajectory prediction based on parameterized transfer learning using encoder–decoder network,” IEEE Transactions on Intelligent Transportation Systems , 2025. [13] Y. Ye, C. Wang, W. Zhao, B. Zhang, and Y. Zhang, “Tp-glif: Trajectory prediction of surrounding vehicles in unsignalized roundabouts based on global-local history information fusion,” IEEE Transactions on Intelligent Transportation Systems , 2025. [14] C. Zhao, T. Ji, A. Song, Y. Ji, C. Wang, and Y. Du, “Pmi-transformer: Parking memory interaction transformer for vehicle intent prediction via cooperative vehicle-infrastructure systems,” IEEE Transactions on Intelligent Transportation Systems , 2025. [15] Z. Huang, Y. He, G. Gu, Y. Liu, Z. Zhang, and X. Zhang, “Physics-aware spatial–temporal vehicle trajectory prediction with discriminative learning,” IEEE Transactions on Intelligent Transportation Systems ,2026. [16] L. Yan, J. Liang, and K. Yang, “Bi-level control of weaving sections in mixed traffic environments with connected and automated vehicles,” 
+
+IEEE Transactions on Intelligent Transportation Systems , 2025. [17] H. Taghavifar, C. Hu, C. Wei, A. Mohammadzadeh, and C. Zhang, “Behaviorally-aware multi-agent rl with dynamic optimization for au-tonomous driving,” IEEE Transactions on Automation Science and Engineering , vol. 22, pp. 10 672–10 683, 2025. [18] J. Sun, L. Yu, P. Dong, B. Lu, and B. Zhou, “Adversarial inverse rein-forcement learning with self-attention dynamics model,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 1880–1886, 2021. [19] M. Geng, Z. Cai, Y. Zhu, X. Chen, and D.-H. Lee, “Multimodal vehicular trajectory prediction with inverse reinforcement learning and risk aversion at urban unsignalized intersections,” IEEE Transactions on Intelligent Transportation Systems , vol. 24, no. 11, pp. 12 227–12 240, 2023. [20] T. Kathuria, K. Liu, J. Jang, X. J. Yang, and M. Ghaffari, “Learning implicit social navigation behavior using deep inverse reinforcement learning,” IEEE Robotics and Automation Letters , 2025. [21] Y. Sun, Y. Chu, T. Xu, J. Li, and X. Ji, “Inverse reinforcement learning based: Segmented lane-change trajectory planning with consideration of interactive driving intention,” IEEE Transactions on Vehicular Technol-ogy , vol. 71, no. 11, pp. 11 395–11 407, 2022. [22] B. Yang, Y. Lu, R. Wan, H. Hu, C. Yang, and R. Ni, “Meta-irlsot++: A meta-inverse reinforcement learning method for fast adaptation of trajectory prediction networks,” Expert Systems with Applications , vol. 240, p. 122499, 2024. [23] X. Wen, S. Jian, and D. He, “Modeling the effects of autonomous vehicles on human driver car-following behaviors using inverse rein-forcement learning,” IEEE Transactions on Intelligent Transportation Systems , vol. 24, no. 12, pp. 13 903–13 915, 2023. [24] D. Schultner, L. Molleman, and B. Lindström, “Feature-based reward learning shapes human social learning strategies,” Nature Human Be-haviour , vol. 9, no. 10, pp. 2183–2198, 2025. [25] H. Radtke, H. Bey, M. Sackmann, and T. Schön, “Predicting driver behavior on the highway with multi-agent adversarial inverse rein-forcement learning,” in 2023 IEEE Intelligent Vehicles Symposium (IV) .IEEE, 2023, pp. 1–8. 13 
+
+[26] G. Zheng, H. Liu, K. Xu, and Z. Li, “Objective-aware traffic simulation via inverse reinforcement learning,” arXiv preprint arXiv:2105.09560 ,2021. [27] Y. Liu, X. Zhao, Y. Tian, and J. Sun, “Sociality probe: Game-theoretic inverse reinforcement learning for modeling and quantifying social patterns in driving interaction,” IEEE Transactions on Intelligent Trans-portation Systems , vol. 25, no. 12, pp. 20 841–20 853, 2024. [28] T. Li, N. Xu, S. Feng, H. Askari, B. H. G. Barbosa, and K. Guo, “Responsibility-based socially compatible driving behavior modeling verified by hierarchical multi-agent inverse reinforcement learning,” 
+
+IEEE Transactions on Intelligent Transportation Systems , 2025. [29] G. Lanzaro and T. Sayed, “Evaluating driver-pedestrian interaction behavior in different environments via markov-game-based inverse re-inforcement learning,” Expert Systems with Applications , vol. 260, p. 125405, 2025. [30] N. Mehrabi, S. P. H. Boroujeni, and A. Razi, “Turbo-irl: Enhancing multi-agent systems using turbo decoding-inspired deep maximum en-tropy inverse reinforcement learning,” Expert Systems with Applications ,vol. 296, p. 128754, 2026. [31] Z. Huang, J. Wu, and C. Lv, “Driving behavior modeling using natu-ralistic human driving data with inverse reinforcement learning,” IEEE transactions on intelligent transportation systems , vol. 23, no. 8, pp. 10 239–10 251, 2021. [32] R. Zhang, Z. Ren, and N. Li, “Gradient play in stochastic games: sta-tionary points, convergence, and sample complexity,” IEEE Transactions on Automatic Control , vol. 69, no. 10, pp. 6499–6514, 2024. [33] J. Fu, K. Luo, and S. Levine, “Learning robust rewards with adversarial inverse reinforcement learning,” arXiv preprint arXiv:1710.11248 , 2017. [34] E. Bashir and M. Luštrek, “Inverse reinforcement learning through max-margin algorithm,” Intelligent Environments , p. 190, 2021. [35] R. Wei, S. Zeng, C. Li, A. Garcia, A. D. McDonald, and M. Hong, “A bayesian approach to robust inverse reinforcement learning,” in 
+
+Conference on Robot Learning . PMLR, 2023, pp. 2304–2322. [36] D. Yang, S. Huang, Z. Xu, Z. Li, S. Wang, M. Li, Y. Wang, Y. Liu, K. Yang, Z. Chen et al. , “Aide: A vision-driven multi-view, multi-modal, multi-tasking dataset for assistive driving perception,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 20 459–20 470. [37] G. Jocher, J. Qiu, and A. Chaurasia, “Ultralytics YOLO,” Jan. 2023. [Online]. Available: https://github.com/ultralytics/ultralytics 
+
+Longhao Yan received the B.Eng. degree and M.Eng. degree in School of Electronics and Con-trol Engineering from Chang’an University, Xi’an, China, in 2019 and 2022 respectively. He is currently working towards a Ph.D. degree with the National University of Singapore. His research interests in-clude vehicle control and trajectory prediction of intelligent transportation system. 
+
+Jinhao Liang received the B.S. degree from School of Mechanical Engineering, Nanjing University of Science and Technology, Nanjing, China, in 2017, and Ph.D. degree from School of Mechanical En-gineering, Southeast University, Nanjing, China, in 2022. Now he is a Research Fellow with Department of Civil and Environmental Engineering, National University of Singapore. His research interests in-clude vehicle dynamics and control, and autonomous vehicles. 
+
+Kaidi Yang (Member, IEEE) is an Assistant Pro-fessor in the Department of Civil and Environmental Engineering at the National University of Singapore. Prior to this, he was a postdoctoral researcher with the Autonomous Systems Lab at Stanford University. He obtained a PhD degree from ETH Zurich and M.Sc. and B.Eng. degrees from Tsinghua Univer-sity. His main research interest is the operation of future mobility systems enabled by connected and automated vehicles (CAVs) and shared mobility.

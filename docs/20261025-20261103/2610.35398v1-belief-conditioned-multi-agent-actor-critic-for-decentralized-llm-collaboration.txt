@@ -1,0 +1,936 @@
+Title: Belief-Conditioned Multi-Agent Actor Critic for Decentralized LLM Collaboration
+
+URL Source: https://arxiv.org/pdf/2610.35398v1
+
+Published Time: Tue, 27 Oct 2026 02:36:04 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Belief-Conditioned Multi-Agent Actor Critic for Decentralized LLM Collaboration 
+
+Tianle Chen Shuo Liu Christopher Amato ∗
+
+Khoury College of Computer Sciences, Northeastern University, Boston, MA, 02215, USA 
+
+{chen.tianle, liu.shuo2, c.amato}@northeastern.edu 
+
+## Abstract 
+
+Recent work has explored optimizing LLM collaboration through Multi-Agent Reinforcement Learning (MARL), but many approaches still rely on predefined workflows, limiting efficiency and scalability. Decentralized LLM collaboration is challenging because agents execute independently with limited communication, share a joint objective, and must infer useful information from communication traces. In this paper, we propose BCMAAC , a Belief-Conditioned Multi-Agent 
+
+Actor-Critic method that maintains beliefs over contextual information and uses them to facilitate training. Experiments on Minecraft game-playing, web searching and tool-using tasks show that BCMAAC improves task performance and collab-orative behavior compared to naive actor-critic baselines. The improvements are particularly pronounced in multi-turn tasks with richer contextual information, where belief modeling provides a clear advantage. 
+
+## 1 Introduction 
+
+Recent advances in LLMs have motivated researchers to use them as intelligent agents and interact with environment in multiple turns Yao et al. [2022]. Many works use reinforcement learning with verifiable rewards (RLVR), where rewards are derived from verifiable signals such as rules and unit tests [Lambert et al., 2024, Guo et al., 2025, Kimi Team et al., 2025, Liu et al., 2025, Guo et al., 2025]. Compare with reinforcement learning from human feedback (RLHF) that trains a reward model using human preference data, RLVR typically has lower cost, greater scalability, and more objective feedback in scenarios where task success can be automatically verified [Lambert et al., 2024, Guo et al., 2025]. Existing works have employed multi-LLM collaboration to improve performance. Prompt-based approaches for multi-agent systems have demonstrated improved problem-solving through role assignment and agent-to-agent communications [Du et al., 2024, Qian et al., 2024, Wu et al., 2023]. However, they often follow a manually designed interaction protocols. Recent work has combined reinforcement learning approaches with LLM collaboration. For instance, CoLLM-CC [Liu et al., 2026] is a multi-agent actor-critic (MAAC) methods that utilize centralized value estimation while keeping decentralized execution. Despite the advantages of MAAC in LLM collaboration, it faces many challenges. Given the partial observability of the task, the policy is a pre-trained LLM, and actions are generated as sequences of natural language tokens. Action selection relies not only on task reasoning but also on inferences about the environment and the other agents’ internal states, thereby increasing the difficulty of decision-making and optimization. Furthermore, the problem of long-horizon sparse rewards is another challenge, making it difficult to capture effective learning signals in a timely manner. This manifests as rewards that are typically delayed, sparse, and concentrated in the terminal state, 
+
+> ∗Corresponding author. 40th Conference on Neural Information Processing Systems (NeurIPS 2026). Workshop: PTA: From Pretrained Representations to Acting Agents. arXiv:2610.35398v1 [cs.AI] 26 Oct 2026
+
+making it hard for the model to determine which intermediate communications, inferences, or the environmental interactions indeed contributed to the final success. We study decentralized LLM collaboration optimized with RLVR, focusing on environmental state estimation and the other agents’ intention inference. We propose BCMAAC, a belief-conditioned multi-agent actor-critic method. BCMAAC uses a recurrent belief encoder to maintain latent belief context from structured side information and conditions this context onto each LLM actor; during the training phase, a centralized critic aggregates the multi-agent belief context to estimate the value, while the execution phase remains decentralized, with each agent relying solely on its own history and local belief context for decision-making. Our contributions can be summarized as follows. (i) We propose BCMAAC. BCMAAC learns execution-time belief context from structured side information and uses it for both actor conditioning and centralized value estimation. (ii) We show that explicit belief context is particularly useful for long-horizon, partially observable collaboration, where useful actions depend on persistent hidden state, the specific information of other agents, and delayed or sparse feedback. This gives agents an intermediate representation for deciding what to do and communicate across turns. (iii) Experiments on collaboration tasks show that BCMAAC outperforms MAAC. And the ablation show that both task-belief and partner-action auxiliary signals help improve performance. 
+
+## 2 Related Works 
+
+LLM-based multi-agent collaboration. Recent work uses multiple LLM agents to solve tasks that are difficult for a single model. Multi-agent debate improves the answer by independent reasoning and iterative refinement [Du et al., 2024]. ChatDev organizes role-specialized agents along a structured software-development pipeline [Qian et al., 2024]. AutoGen provides a general framework in which conversable agents cooperate with tools and optional human input [Wu et al., 2023]. CAMEL relies on role-playing between agents, which cooperate through prompting [Li et al., 2023]. These systems demonstrate the benefits of communication and task decomposition. However, their collaboration strategies are largely specified by prompts, leaving the collaboration pattern fixed and unable to improve with task experience. 
+
+RL for LLM collaboration. Besides prompt engineering, recent studies also train multi-LLM systems. MAGRPO jointly trains cooperating LLM agents on joint rewards without a critic [Liu et al., 2025]. Dr. MAS investigates stability issues arising in GRPO-style critic-free training of multi-agent LLM systems. They improve performance by normalizing each agent’s advantage with its own reward statistics [Feng et al., 2026]. MAPoRL trains multiple LLMs with verifier-based rewards to encourage collaborative behavior [Park et al., 2025]. MARFT gives a general formulation for reinforcement fine-tuning of LLM multi-agent systems [Liao et al., 2025]. Most closely related is MAAC, which formulates LLM collaboration as cooperative MARL. It adopts centralized training with decentralized execution, with a centralized critic and shared rewards, for long-horizon collaboration [Kraemer and Banerjee, 2016, Liu et al., 2026]. Unlike prompt-defined systems, these methods allow collaboration policies to adapt to task feedback. Nevertheless, they usually use raw interaction histories as context. The actor and critic must reconstruct task state and the knowledge of other agents from long textual histories, making representation learning difficult. 
+
+Partner modeling and belief learning in MARL. Early methods condition an agent’s policy on observed opponent behavior or infer another agent’s hidden goal [He et al., 2016, Raileanu et al., 2018]. Later work learns more general representations of agents’ latent characteristics from their behavioral histories [Rabinowitz et al., 2018, Papoudakis et al., 2021]. Also some research improves agent collaboration by learned communication [Foerster et al., 2016, Sukhbaatar et al., 2016, Das et al., 2019]. These methods usually assume low-dimensional observations, compact policies, or continuous communication. In contrast, LLM agents act over long textual histories and communication, making belief and partner modeling more challenging. 23 Background 
+
+3.1 Decentralized LLM Collaboration 
+
+In decentralized LLM collaboration, given a task, each agent is provided with a natural language prompt. The process can be described as a multi-turn interaction. Each agent maintains its own context locally and generates a response based on its own policy. The responses of all agents are aggregated within the environment into a joint action, after which the environment updates the task state based on this joint action and returns new observations, feedback, and rewards. When generating actions, each agent rely on its own local observations, historical context, received messages, and tools to which it has access. Agents can exchange information through the communication channels. The communication itself is part of the action. And decentralized execution supports parallel reasoning and reduces context pressure on individual agents. 
+
+3.2 LLM Dec-POMDP Formulation 
+
+We formulate decentralized LLM collaboration as a cooperative Dec-POMDP [Oliehoek and Amato, 2016, Liu et al., 2025], denoted by M = ⟨I , V, C, M, S, {O i}i∈I , {A i}i∈I , R, T, H, γ ⟩. Here, 
+
+I = {1, . . . , n } is the set of n LLM agents, V is the token vocabulary, C is the context-window length, M is the maximum response length, H is the episode horizon, and γ ∈ [0 , 1] is the discount factor. The global state space is S = Ssys × S usr , where Ssys denotes the system-accessible state and Susr the user-hidden state. At turn t, the global state is st = ( ssys  
+
+> t
+
+, s usr  
+
+> t
+
+) ∈ S .Each agent i has a local observation space Oi, with joint observation space O = ×i∈I Oi. At turn t,agent i receives a local observation oi,t ∈ O i, typically represented as a natural-language prompt, and the joint observation is ot = ( oi,t )i∈I ∈ O . Each agent also has an action space Ai, with joint action space A = ×i∈I Ai. An action is a generated response sequence ai,t = ( a1
+
+> i,t
+
+, a 2
+
+> i,t
+
+, . . . , a mi,t  
+
+> i,t
+
+),where mi,t ≤ M and thus Ai ⊆ V ≤M . The joint action is at = ( ai,t )i∈I ∈ A . The environment evolves according to T : S × A → ∆( S), with st+1 ∼ T (· | st, at). The joint reward is given by 
+
+R : Ssys × A → R, with rt = R(ssys  
+
+> t
+
+, at).Agent i acts from its local history hi,t = ( oi, 0, a i, 0, o i, 1, a i, 1, . . . , a i,t −1, o i,t ), represented within a context window of at most C tokens. The joint history is ht = ( hi,t )i∈I . Each policy maps a local history to a distribution over response sequences, πθi (ai,t | hi,t ), and the joint policy is 
+
+πθ = {πθi }i∈I . Under decentralized execution, πθ (at | ht) = Q 
+
+> i∈I
+
+πθi (ai,t | hi,t ). At the token level, πθi (ai,t | hi,t ) = Qmi,t  
+
+> μ=1
+
+πθi (aμi,t | hi,t , a <μ i,t ).The objective is to maximize the discounted expected return over the episode, J(θ) =
+
+Eπθ [PH−1 
+
+> t=0
+
+γtrt], yielding the optimal joint policy π∗ = arg max π Eπ [PH−1 
+
+> t=0
+
+γtrt]. An episode trajectory is τ = (o0, a0, r 0, o1, a1, r 1, . . . , oH−1, aH−1, r H−1, oH ). The discounted return from turn t is Gt = PH−1 
+
+> ℓ=t
+
+γℓ−trℓ, and the corresponding joint value on the joint history is 
+
+V π (ht) = Eπ [PH−1 
+
+> ℓ=t
+
+γℓ−trℓ | ht].
+
+3.3 MAAC 
+
+In centralized-training decentralized-execution MAAC [Liu et al., 2026], each actor depends only on its local history at execution time, πθi (ai,t | hi,t ). During training, a centralized critic estimates the team value. We write Vϕ(ht) = Eπ [Gt | ht] to indicate that the critic is conditioned on the joint history. The corresponding advantage estimate is ˆAt = rt + γV ϕ(ht+1 ) − Vϕ(ht), and the actor objective uses the log-probability of the complete response sequence, 
+
+LMAAC  
+
+> π
+
+= − X
+
+> t
+
+X
+
+> i∈I
+
+ˆAt log πθi (ai,t | hi,t ). (1) MAAC reduces the variance of Monte Carlo returns by bootstrapping from a learned value function and propagates terminal rewards back to intermediate turns. However, MAAC remains limited by the difficulty of extracting task-relevant state from long histories. It also lacks explicit modeling of the knowledge of other agents and future actions. 34 Belief-Conditioned MAAC 
+
+4.1 BCMAAC Formulation 
+
+Each episode samples a task ξ ∼ D , which determines the environment Env . Besides the language history hi,t , each agent receives structured side information xi,t ∈ X i that can be constructed at execution time; the joint side information is xt = ( xi,t )i∈I . The key constraint is that xi,t only depends on information available to agent i at execution time , including received communication. BCMAAC maintains a latent belief through a recurrent belief encoder fψ , yielding 
+
+(ci,t , z i,t +1 , ˆbi,t , ˆpi,t ) = fψ (xi,t , z i,t ). (2) Here, zi,t is the recurrent state carried across turns, ci,t is the belief context passed to the actor and critic. And ˆbi,t is a task belief prediction, and ˆpi,t is a partner action prediction. The BCMAAC actor is conditioned on local history and local belief context, πθi (ai,t | hi,t , c i,t ). For an LLM actor, the action remains a response sequence. The predictions ˆbi,t and ˆpi,t are train-time auxiliary heads, supervised by per-turn targets b∗ 
+
+> i,t
+
+and p∗
+
+> i,t
+
+. These targets are produced by a labeling rule Γξ . For Γξ , it reads the completed trajectory τ together with the environment’s internal state, and writes down the ground truth that the agents could not observe. Such privileged information is used only during training. During training, the centralized critic aggregates all agent contexts. Let ct = Joint( {ci,t }i∈I ).
+
+Joint( ·) may be implemented by concatenation with fixed order. The critic estimates the joint value 
+
+Vϕ(ct) = Eπ [Gt | ct].
+
+The BCMAAC advantage is ˆAt = rt + γV ϕ(ct+1 ) − Vϕ(ct), and the actor and critic losses are 
+
+Lπ = − X
+
+> t
+
+X
+
+> i∈I
+
+ˆAt log πθi (ai,t | hi,t , c i,t ), (3) 
+
+LV = X
+
+> t
+
+(Vϕ(ct) − rt − γV ϕ(ct+1 )) 2 . (4) 
+
+4.2 Theoretical Properties 
+
+Let Ft denote the information available before sampling the joint action at turn t. The joint context 
+
+ct is computed as a compressed representation of the execution information in Ft. Then ct is 
+
+Ft-measurable. Remark 4.1 shows that replacing Gt with Gt − β(ct) does not change the expected value of the policy gradient estimate; the form is entirely analogous to the score-function baseline identity [Williams, 1992]. 
+
+Remark 4.1 . Let ct be fixed before sampling the current joint action at, and let β(ct) be independent of the current action. Then replacing Gt with Gt − β(ct) does not change the expectation of the policy-gradient estimator: 
+
+Eπ
+
+"X
+
+> i∈I
+
+∇θi log πθi (ai,t | hi,t , c i,t ) ( Gt − β(ct)) 
+
+#
+
+= Eπ
+
+"X
+
+> i∈I
+
+∇θi log πθi (ai,t | hi,t , c i,t )Gt
+
+#
+
+.
+
+Proof. Conditioning on Ft, β(ct) is pre-action and does not depend on ai,t . Since the joint policy factorizes, marginalizing over a−i,t reduces each term to a single-agent identity. Using 
+
+πθi ∇θi log πθi = ∇θi πθi ,
+
+Eai,t ∼πθi [∇θi log πθi (ai,t | hi,t , c i,t )β(ct) | F t]= β(ct)∇θi
+
+X
+
+> ai,t
+
+πθi (ai,t | hi,t , c i,t ) = 0 .
+
+Therefore the baseline term contributes zero in expectation. By linearity and then taking expectation over Ft, the two policy-gradient estimators have the same expectation. 4Proposition 4.2 shows the ideal case: when the learned context is sufficient for future return, it loses no value-relevant information compared to the full-history context (proof in Appendix B). 
+
+Proposition 4.2. If the joint belief context ct is sufficient for future return in the sense that 
+
+Eπ [Gt | F t, ct] = Eπ [Gt | ct],
+
+then the value conditioned on all available information equals the value conditioned on context: 
+
+V π (Ft) = V π (ct).
+
+Remark 4.3 notes that the auxiliary losses supply the belief encoder with a per-turn representation signal, which is especially useful when task rewards are sparse. 
+
+Remark 4.3 . In sparse-reward tasks where task reward is concentrated near the end of the episode, return-driven representation learning depends on discounted returns. In BCMAAC, the belief encoder also receives gradients from 
+
+Laux = X
+
+> t
+
+X
+
+> i∈I
+
+λbℓb(ˆbi,t , b∗
+
+> i,t
+
+) + λpℓp(ˆ pi,t , p∗
+
+> i,t
+
+),
+
+where the labels b∗ 
+
+> i,t
+
+and p∗ 
+
+> i,t
+
+are generated from the trajectory by the labeling rule Γξ (τ ). These auxiliary gradients compare predictions directly with per-turn labels. Thus, whenever such labels are available, the belief encoder receives an additional per-turn representation signal, indicating that BCMAAC supplies an additional source of representation learning for state estimation and the modeling of agents. 
+
+4.3 BCMAAC Algorithm Recurrent Belief Encoder Aux heads Agent 1 Agent n joint action joint belief Centralized Critic Environment Rollout Buffer +
+
+Figure 1: Illustration of the BCMAAC framework. Figure 1 and Algorithm 1 summarize the full training procedure, which has three components: trajectory collection, auxil-iary label generation, and actor-critic up-dates. After each rollout, one-step TD tar-gets are computed, and auxiliary labels are generated by {y∗
+
+> i,t
+
+}i,t ← Γξ (τ ), where 
+
+y∗ 
+
+> i,t
+
+= ( b∗
+
+> i,t
+
+, p∗
+
+> i,t
+
+) collects the task-belief and partner-action targets that supervise the auxiliary predictions ˆyi,t = ( ˆbi,t , ˆpi,t ).For auxiliary supervision, ℓb is a masked BCE loss for task-belief prediction and 
+
+ℓp a cross-entropy loss for partner-action prediction, with the mask ωi,t 
+
+excluding unlabeled task-belief entries. Summing over agents and turns gives 
+
+Lb = P
+
+> t
+
+P 
+
+> i∈I
+
+ℓb(ˆbi,t , b∗
+
+> i,t
+
+) and Lp =P
+
+> t
+
+P 
+
+> i∈I
+
+ℓp(ˆ pi,t , p∗
+
+> i,t
+
+), and the auxiliary objective is Laux = λbLb + λpLp.During training, contexts are recomputed from the stored structured side information, 
+
+(cbi,t , z bi,t +1 , ˆbbi,t , ˆpbi,t ) ← fψ (xbi,t , z bi,t ),and cbt = Joint( {cbi,t }i∈I ). Given a rollout buffer B, BCMAAC computes one-step TD advantages. The critic is optimized by TD regression, the actors by advantage-weighted response log-probabilities, and the belief encoder by the combined value, policy, and auxiliary losses. Thus, with a value-loss weight λV , ϕ is updated only by the value loss, θi by the policy loss, and ψ by λV LV + Laux + Lπ .During execution, the centralized critic and auxiliary heads are not required. Each agent recursively computes (ci,t , z i,t +1 ) ← fψ (xi,t , z i,t ) and samples ai,t ∼ πθi (· | hi,t , c i,t ). Since xi,t is constructed only from agent i’s execution-time information, ci,t is local as well. Thus BCMAAC preserves decentralized execution: πθ (at | ht, ct) = Q 
+
+> i∈I
+
+πθi (ai,t | hi,t , c i,t ).
+
+5Algorithm 1 BCMAAC  
+
+> 1:
+
+Input: Task distribution D; initial parameters (θ, ψ, ϕ ); 
+
+> 2:
+
+for epoch e = 1 , . . . , E do  
+
+> 3:
+
+Initialize rollout buffer B ← ∅  
+
+> 4:
+
+for rollout k = 1 , . . . , K roll do  
+
+> 5:
+
+Sample ξ ∼ D ; reset ξ; initialize hi, 0, x i, 0, z i, 0 and trajectory τ ← ∅  
+
+> 6:
+
+for turn t = 0 , . . . , H − 1 do  
+
+> 7:
+
+Receive current prompt oi,t and structured observation xi,t ; update local history hi,t  
+
+> 8:
+
+(ci,t , z i,t +1 , ˆbi,t , ˆpi,t ) ← fψ (xi,t , z i,t ), ∀i 
+
+> 9:
+
+Sample ai,t ∼ πθi (· | hi,t , c i,t ), ∀i; execute at in Env  
+
+> 10:
+
+Observe (ot+1 , xt+1 , r t); append transition to τ 
+
+> 11:
+
+end for  
+
+> 12:
+
+Compute one-step TD targets; generate labels {(b∗
+
+> i,t
+
+, p∗
+
+> i,t
+
+)}i,t ← Γξ (τ ); add τ to B 
+
+> 13:
+
+end for  
+
+> 14:
+
+Initialize losses ¯LV , ¯Lπ , ¯Laux ← 0 
+
+> 15:
+
+for trajectory τ b ∈ B do  
+
+> 16:
+
+Reset recurrent states zbi, 0 ← 0, ∀i 
+
+> 17:
+
+for transition t in τ b do  
+
+> 18:
+
+Recompute local contexts and auxiliary predictions via fψ , ∀i 
+
+> 19:
+
+Form joint context cbt and advantage ˆAbt 
+
+> 20:
+
+Accumulate value, policy, and auxiliary losses  
+
+> 21:
+
+end for  
+
+> 22:
+
+end for  
+
+> 23:
+
+Update critic ϕ ← ϕ − αV ∇ϕ(λV ¯LV ) 
+
+> 24:
+
+Update actors θi ← θi − απ ∇θi
+
+¯Lπ , ∀i ∈ I  
+
+> 25:
+
+Update encoder ψ ← ψ − αψ ∇ψ (λV ¯LV + ¯Lπ + ¯Laux ) 
+
+> 26:
+
+end for  
+
+> 27:
+
+Output: Belief encoder fψ and joint policy πθ
+
+## 5 Experiments 
+
+5.1 Setup Minecraft Collaboration. Minecraft games (Figure 2) are long-horizon testbeds with explicit physical state and partial observability. Each agent observes only its local view and received messages, where the agents maintain environment beliefs, track the other agents’ progress, avoid redundant exploration, and coordinate actions through communication. In Bridge Building , two agents start on opposite sides of a damaged gap and should construct a safe connected path within limited turns. The gap contains visually ambiguous pillars that may either provide useful support or indicate hazardous regions, where nearby construction incurs large penalties. Because pillar types are initially hidden, agents must explore informative viewpoints, communicate discoveries, and coordinate bridge segments from both sides. In Resource Gathering , resource cells contain different amounts of wood, stone, and iron, and agents must satisfy all collection targets within a fixed horizon. Agents have asymmetric extraction capabilities, so they may observe resources that only the other agents’ can collect. Effective collaboration therefore requires separating actionable observations from information that should be communicated. At each turn, agents specify broadcast resource facts, movement paths, and extraction targets, and extraction is only allowed near the final location. 
+
+Web Collaboration. In Web Collaboration, agents operate in an open-ended environment. The relevant state is not a location or block layout, but the progress of the search process: what evidence each agent has collected, which sources still look promising, whether the available evidence is enough to support an answer, and what the other agent are likely to do next. As the dominant reward is given after the final answer is checked, agents receive little direct feedback while searching. They should decide whether to continue gathering evidence, share partial findings, wait for more information from the other agents, or commit to an answer. In Cross-Lingual Gathering , agents gather cross-lingual information sources [Longpre et al., 2021] and produce a final answer. Agents should bridge language 6Table 1: Evaluation results across Minecraft, Web, and Tool collaboration. AC denotes single-agent actor-critic method; Parallel and Pipeline represents 2 test-time prompt-based multi-agent collaboration methods; MAAC is the centralized-critic multi-agent actor-critic baseline; BCMAAC-P and BCMAAC-B are variants that only partner-action and task-belief auxiliary beliefs, respectively. Success is the success rate and match score is the normalized answer-matching score, both are reported as percentages and averaged over evaluation runs. Standard deviations are reported in subscripts.                                                                  
+
+> Minecraft Web Tool Method
+> Resource Bridge Cross-Lingual Multi-Source Stateful Filesystem Gathering Building Gathering Gathering Tool Wrangling Success (%) Success (%) Match Score (%) Match Score (%) Success (%) Success (%) Raw Model 0.0±0.00.0±0.045 .0±0.011 .3±0.033 .3±0.053 .8±0.0
+> AC 70 .1±5.730 .1±7.251 .9±3.419 .7±3.855 .8±7.566 .9±8.0
+> Parallel 0.0±0.00.0±0.037 .3±1.016 .9±2.733 .0±5.625 .3±0.0
+> Pipeline 0.0±0.00.0±0.035 .8±1.618 .0±0.026 .7±0.04.6±4.2
+> MAAC 78 .4±8.980 .6±10 .345 .1±3.947 .6±2.859 .2±6.158 .9±8.0
+> BCMAAC-P 83 .7±5.389 .3±9.850 .9±0.949 .4±3.564 .5±11 .264 .6±2.6
+> BCMAAC-B 88 .9±8.584 .8±13 .651 .6±6.553 .3±6.470 .4±6.371 .2±5.0
+> BCMAAC 92 .8±3.794 .4±9.653 .2±5.158 .5±2.377 .5±6.473 .0±1.9
+
+and phrasing differences, convert locally retrieved information into evidence useful to the other agents, and decide whether evidence from different languages supports the same answer. Simple parallel search may improve coverage, but without modeling what the other agent have found, agents can still duplicate search effort or submit incomplete answers too early, leading to inefficiencies in the collaboration process. In Multi-Source Gathering , agents aggregate evidence from multiple sources [Chen et al., 2020]. A single source may provide only partial evidence, multiple sources can be redundant or conflicting, and the final answer depends on combining evidence across sources. Effective collaboration requires agents to know not only what they have found, but also what the other agents have covered, what remains missing, and whether the agents are ready to answer. 
+
+(a) Bridge Building (b) Resource Gathering 
+
+Figure 2: Minecraft tasks. (a) In Bridge Building ,agents start at the blue beacon endpoints and must construct a white-block bridge under limited vision. Brown wooden pillars are safe, whereas gray stone pillars with wolves are dangerous decoys. (b) In 
+
+Resource Gathering , agents with complementary tools observe only local regions and collect from trees, stone, and minerals of iron. 
+
+Tool Collaboration. The tool-using task, one agent inspect the environment, while the other can modify it. Information acquisition and ex-ecution must occur in separate turns. The in-specting agent must retrieve and communicate the necessary facts, after which the acting agent can execute. In Stateful Tool , we adapt Apple ToolSandbox [Lu et al., 2025] into a two-agent setting, where a phone environment contains contacts, messages, reminders, and device set-tings. Two agents are conducting tasks such as retrieving the latest message, disabling cellular data, or rescheduling a reminder, are provided in natural language. The state inspector has read-only access, and the tool executor can modify the environment, send messages, and submit the final answer. Arguments such as phone numbers, contact IDs, and timestamps can be retrieved by the inspector and communicated in a prior turn before the executor use them. Each agent produces a structured JSON action specifying broadcast facts, information requests, the intended next step, a readiness indicator, at most one tool call, and an optional final answer. Filesystem Wrangling is adapted from the multi-turn GorillaFileSystem 
+
+task in BFCL V3 [Patil et al., 2025]. It uses a deterministic in-memory filesystem that can be regarded as a miniature MCP server accessed by two clients with restricted permissions. The explorer has read-only tools, including ls , find , cat , and grep , while the editor has write tools such as mkdir ,
+
+touch , echo , mv , cp , and rm . Since the editor cannot inspect the filesystem, the explorer must 70 500 1k 1.5k 2k Training Step 0246810 12 14 Return 
+
+> BCMAAC MAAC
+
+(a) Minecraft | Resource Gathering 0 1k 2k 3k 4k 5k 6k 7k Training Step 1.0 1.2 1.4 1.6 1.8 2.0 Return  
+
+> BCMAAC MAAC
+
+(b) Web | Cross-Lingual Gathering 0 1k 2k 3k 4k Training Step 1.0 1.5 2.0 2.5 3.0 3.5 Return  
+
+> BCMAAC MAAC
+
+(c) Tool | Stateful Tool 0 500 1k 1.5k 2k 2.5k Training Step 0246810 12 Return 
+
+> BCMAAC MAAC
+
+(d) Minecraft | Bridge Building 0 500 1k 1.5k 2k Training Step 0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 Return  
+
+> BCMAAC MAAC
+
+(e) Web | Multi-Source Gathering 0 1k 2k 3k 4k 5k Training Step 1.5 2.0 2.5 3.0 3.5 Return  
+
+> BCMAAC MAAC
+
+(f) Tool | Filesystem Wrangling 
+
+Figure 3: A comparison between BCMAAC (red) and MAAC (blue) across the six tasks. The y-axis denotes the expected return, and the x-axis denotes the environment steps. Results are all averaged over five runs, and shaded regions indicate the standard deviation. Curves are smoothed using a time-weighted exponential moving average. communicate all relevant paths. Hard operations such as mv , cp , rm , and rmdir are permitted only when the source path has been found in a previous turn; also, paths discovered in the current turn cannot be consumed immediately by the editor. 
+
+5.2 Results 
+
+Table 1 reports the main evaluation results. BCMAAC achieves the best performance on all six tasks. Trained multi-agent methods substantially outperform single-agent AC on tasks that can be ef-fectively decomposed across agents, particularly Resource Gathering , Bridge Building , Multi-Source Gathering , and Stateful Tool , indicating that these tasks are not merely tests of individual model capa-bilities, but require task decomposition, complementary information, and cross-agent collaboration. In contrast, collaboration based solely on prompts (Parallel, Pipeline) fails to consistently improve performance, indicating that simply adding agents without learning effective collaboration meth-ods is insufficient . For standard deviations, BCMAAC exhibits comparable or lower variability than MAAC overall, indicating that it can improve stability; BCMAAC-P and BCMAAC-B show higher standard deviations than full BCMAAC on many tasks, indicating that BCMAAC with two auxiliary objectives not only improve average performance but provide a complementary regularization effect. Tasks with low parallelism are an exception, the most typical being Filesystem Wrangling : the Editor can only act on paths that the Explorer has already found and communicated in the previous turn, making the two roles more akin to a sequential pipeline than a parallel division of labor. Consequently, a single-agent AC (66.9%) that handles both reading and writing and eliminates the need for cross-agent handoffs is inherently strong, even outperforming the decentralized MAAC (58.9%). Even so, BCMAAC can still track the Editor’s readiness status, outperforming the single-agent approach with 73.0%, indicating that what truly matters is effective collaboration. Compared to MAAC, BCMAAC’s largest gain occurs in Stateful Tool (59.2% →77.5%, +18 .3), followed by Resource Gathering (78.4% →92.8%) and Filesystem Wrangling (58.9% →73.0%). Both 
+
+Stateful Tool and Resource Gathering require maintenance of hidden state, the former must track which facts the executor still lacks and when to submit them, while the latter must remember resource locations and coordinate with agents of different capabilities. This is exactly the setting where belief context helps. While MAAC already performs strongly on Bridge Building , yet BCMAAC still improves from 80.6% to 94.4%, indicating that structured belief remains beneficial for collab-oration quality. On Web tasks, BCMAAC also consistently outperforms MAAC. Cross-Lingual 
+
+8Gathering shows moderate gains (45.1% →53.2%), while Multi-Source Gathering is even greater (47.6% →58.5%), consistent with the task structure, as multi-source question-answering relies more on complementary evidence. 
+
+Our ablation studies demonstrate that the two auxiliary signals are complementary. BCMAAC-P and BCMAAC-B perform between MAAC and the full BCMAAC on all tasks, indicating that both partner-action prediction and task-belief supervision can improve upon the original MAAC critic. BCMAAC-B performs better on Resource Gathering , Cross-Lingual Gathering , Multi-Source Gath-ering , and the two Tool tasks, all of which center on maintaining the state of resources/evidence/tools and the other agents’ readiness; BCMAAC-P performs better on Bridge Building , where coordinating the other agents’ actions and dividing construction tasks is particularly important. The full BCMAAC achieves the best overall performance, demonstrating that combining the modeling of task beliefs with partner actions yields the best collaboration. 
+
+5.3 Analysis 
+
+Figure 3 shows the performance on six tasks. Overall, BCMAAC converges faster, achieves higher rewards, and is more stable than MAAC on most tasks, as the structured belief context improves advantage estimation. In Filesystem Wrangling , BCMAAC overtakes MAAC and maintains a markedly higher, less volatile reward. This is consistent with better tracking of Editor readiness and more accurate timing of hard actions. In Resource Gathering , BCMAAC likewise improves more smoothly, suggesting that the belief encoder captures resource states, remaining objectives, and the other agents’ capabilities useful for intermediate decisions. In Bridge Building and Stateful Tool , the methods are initially similar, but BCMAAC converges to a higher final reward. Gains are smaller on the Web tasks: BCMAAC maintains a modest advantage in Multi-Source Gathering , while Cross-Lingual Gathering 
+
+remains noisy and shows improvement at end. The task-belief and partner-action objectives help track retrieved evidence and answer readiness, reducing redundant searches and premature responses. Results suggest that BCMAAC benefits from latent collaboration state explicitly rather than recon-structing it solely from raw histories. Its centralized critic estimates returns from structured joint beliefs, while the auxiliary objectives provide dense turn-level supervision when communication and exploration produces little immediate reward. In nearly fully observable tasks, or when short histories are sufficient, the advantage of BCMAAC may be limited. Its effectiveness depends on whether the reduction in estimation error outweighs the information lost through compression. In the partially observable, long-horizon tasks studied in this paper, this trade-off falls clearly on BCMAAC’s side. 
+
+## 6 Conclusion 
+
+We study decentralized LLM collaboration and introduce BCMAAC. BCMAAC maintains structured belief context during execution, performs centralized value estimation from joint belief context during training, and preserves decentralized decision-making at inference time. BCMAAC consistently outperforms MAAC and improves training stability across Minecraft, Web, and tool-based collabo-ration tasks. The gains are strongest when agents must track latent state, integrate the information of other agents, coordinate delayed actions, and combine evidence from multiple sources. These results establish structured belief conditioning as an effective mechanism for decentralized LLM collaboration. Our study has a few limitations. Although our framework is applicable to multiple agents, all six tasks are two-agent tasks, as the characteristics of the tasks we designed are best suited for pairing the two agents into complementary roles. For example, in Filesystem Wrangling , the toolset splits cleanly into read-only commands and write commands, so an explorer with read-only permissions and an editor with write permissions can be paired accordingly. 
+
+## References 
+
+Wenhu Chen, Hanwen Zha, Zhiyu Chen, Wenhan Xiong, Hong Wang, and William Yang Wang. HybridQA: A dataset of multi-hop question answering over tabular and textual data. In Findings 
+
+9of the Association for Computational Linguistics: EMNLP 2020 , pages 1026–1036, Online, 2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.findings-emnlp.91. URL 
+
+https://aclanthology.org/2020.findings-emnlp.91/ .Abhishek Das, Théophile Gervet, Joshua Romoff, Dhruv Batra, Devi Parikh, Mike Rabbat, and Joelle Pineau. TarMAC: Targeted multi-agent communication. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learning Research , pages 1538–1546. PMLR, 2019. Yilun Du, Shuang Li, Antonio Torralba, Joshua B. Tenenbaum, and Igor Mordatch. Improving factuality and reasoning in language models through multiagent debate. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pages 11733–11763. PMLR, 2024. URL https://proceedings.mlr.press/v235/ du24e.html .Lang Feng, Longtao Zheng, Shuo He, Fuxiang Zhang, and Bo An. Dr. MAS: Stable reinforcement learning for multi-agent LLM systems. arXiv preprint arXiv:2602.08847 , 2026. doi: 10.48550/ arXiv.2602.08847. URL https://arxiv.org/abs/2602.08847 .Jakob N. Foerster, Ioannis Alexandros Assael, Nando de Freitas, and Shimon Whiteson. Learning to communicate with deep multi-agent reinforcement learning. In Advances in Neural Information Processing Systems , volume 29, 2016. Daya Guo, Dejian Yang, Haowei Zhang, et al. DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning. Nature , 645:633–638, 2025. doi: 10.1038/s41586-025-09422-z. He He, Jordan Boyd-Graber, Kevin Kwok, and Hal Daumé, III. Opponent modeling in deep reinforcement learning. In Proceedings of the 33rd International Conference on Machine Learning ,volume 48 of Proceedings of Machine Learning Research , pages 1804–1813. PMLR, 2016. Kimi Team, Angang Du, Bofei Gao, et al. Kimi k1.5: Scaling reinforcement learning with LLMs. 
+
+arXiv preprint arXiv:2501.12599 , 2025. doi: 10.48550/arXiv.2501.12599. URL https://arxiv. org/abs/2501.12599 .Landon Kraemer and Bikramjit Banerjee. Multi-agent reinforcement learning as a rehearsal for decentralized planning. Neurocomputing , 190:82–94, 2016. doi: 10.1016/j.neucom.2016.01.031. Nathan Lambert, Jacob Morrison, Valentina Pyatkin, et al. Tulu 3: Pushing frontiers in open language model post-training. arXiv preprint arXiv:2411.15124 , 2024. doi: 10.48550/arXiv.2411.15124. URL https://arxiv.org/abs/2411.15124 .Guohao Li, Hasan Abed Al Kader Hammoud, Hani Itani, Dmitrii Khizbullin, and Bernard Ghanem. CAMEL: Communicative agents for “mind” exploration of large language model society. In 
+
+Advances in Neural Information Processing Systems , volume 36, pages 51991–52008, 2023. Main Conference Track. Junwei Liao, Muning Wen, Jun Wang, and Weinan Zhang. MARFT: Multi-agent reinforcement fine-tuning. arXiv preprint arXiv:2504.16129 , 2025. doi: 10.48550/arXiv.2504.16129. URL 
+
+https://arxiv.org/abs/2504.16129 .Shuo Liu, Tianle Chen, Zeyu Liang, Xueguang Lyu, and Christopher Amato. LLM collaboration with multi-agent reinforcement learning. arXiv preprint arXiv:2508.04652 , 2025. doi: 10.48550/ arXiv.2508.04652. URL https://arxiv.org/abs/2508.04652 .Shuo Liu, Tianle Chen, Ryan Amiri, and Christopher Amato. Learning decentralized LLM collaboration with multi-agent actor critic. arXiv preprint arXiv:2601.21972 , 2026. doi: 10.48550/arXiv.2601.21972. URL https://arxiv.org/abs/2601.21972 .Shayne Longpre, Yi Lu, and Joachim Daiber. MKQA: A linguistically diverse benchmark for multilingual open domain question answering. Transactions of the Association for Computational Linguistics , 9:1389–1406, 2021. doi: 10.1162/tacl_a_00433. URL https://aclanthology. org/2021.tacl-1.82/ .10 Jiarui Lu, Thomas Holleis, Yizhe Zhang, Bernhard Aumayer, Feng Nan, Haoping Bai, Shuang Ma, Shen Ma, Mengyu Li, Guoli Yin, Zirui Wang, and Ruoming Pang. ToolSandbox: A stateful, conversational, interactive evaluation benchmark for LLM tool use capabilities. In Findings of the Association for Computational Linguistics: NAACL 2025 , pages 1160–1183. Association for Computational Linguistics, 2025. doi: 10.18653/v1/2025.findings-naacl.65. URL https: //aclanthology.org/2025.findings-naacl.65/ .Frans A. Oliehoek and Christopher Amato. A Concise Introduction to Decentralized POMDPs .SpringerBriefs in Intelligent Systems. Springer, 2016. doi: 10.1007/978-3-319-28929-8. Georgios Papoudakis, Filippos Christianos, and Stefano V. Albrecht. Agent modelling under partial observability for deep reinforcement learning. In Advances in Neural Information Processing Systems , volume 34, pages 19210–19222, 2021. Chanwoo Park, Seungju Han, Xingzhi Guo, Asuman Ozdaglar, Kaiqing Zhang, and Joo-Kyung Kim. MAPoRL: Multi-agent post-co-training for collaborative large language models with reinforcement learning. arXiv preprint arXiv:2502.18439 , 2025. doi: 10.48550/arXiv.2502.18439. URL 
+
+https://arxiv.org/abs/2502.18439 .Shishir G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh, Ion Stoica, and Joseph E. Gonzalez. The berkeley function calling leaderboard (BFCL): From tool use to agentic evaluation of large language models. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , pages 48371–48392. PMLR, 2025. URL https://proceedings.mlr.press/v267/patil25a.html .Chen Qian, Wei Liu, Hongzhang Liu, Nuo Chen, Yufan Dang, Jiahao Li, Cheng Yang, Weize Chen, Yusheng Su, Xin Cong, Juyuan Xu, Dahai Li, Zhiyuan Liu, and Maosong Sun. ChatDev: Communicative agents for software development. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 15174–15186, Bangkok, Thailand, 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.acl-long.810. URL https://aclanthology.org/2024.acl-long.810/ .Qwen Team. Qwen3-4B-Instruct-2507. Hugging Face model card, 2025. URL https:// huggingface.co/Qwen/Qwen3-4B-Instruct-2507 .Neil Rabinowitz, Frank Perbet, H. Francis Song, Chiyuan Zhang, S. M. Ali Eslami, and Matthew Botvinick. Machine theory of mind. In Proceedings of the 35th International Conference on Machine Learning , volume 80 of Proceedings of Machine Learning Research , pages 4218–4227. PMLR, 2018. Roberta Raileanu, Emily Denton, Arthur Szlam, and Rob Fergus. Modeling others using oneself in multi-agent reinforcement learning. In Proceedings of the 35th International Conference on Machine Learning , volume 80 of Proceedings of Machine Learning Research , pages 4257–4266. PMLR, 2018. Sainbayar Sukhbaatar, Arthur Szlam, and Rob Fergus. Learning multiagent communication with backpropagation. In Advances in Neural Information Processing Systems , volume 29, 2016. Ronald J. Williams. Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine Learning , 8:229–256, 1992. doi: 10.1007/BF00992696. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, Ahmed Hassan Awadallah, Ryen W. White, Doug Burger, and Chi Wang. AutoGen: Enabling next-gen LLM applications via multi-agent conversation. arXiv preprint arXiv:2308.08155 , 2023. doi: 10.48550/arXiv.2308.08155. URL https://arxiv.org/ abs/2308.08155 .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 ,2025. doi: 10.48550/arXiv.2505.09388. URL https://arxiv.org/abs/2505.09388 .Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. React: Synergizing reasoning and acting in language models. arXiv preprint arXiv:2210.03629 ,2022. 11 A Experimental Settings 
+
+A.1 Tasks and Datasets 
+
+We evaluate on six decentralized, two-agent collaboration tasks. Minecraft tasks are based on the game Minecraft, where agents interact through structured actions on the map of the game; Web tasks use datasets. Agents observe different information sources; Tool tasks use deterministic stateful environments (a simulated phone assistant and an in-memory filesystem). Agents operate through structured tool calls. Table 2: Dataset splits and primary metrics.                      
+
+> Task Split Horizon Metric
+> Resource Gathering 7/74success Bridge Building 6/34success Cross-Lingual 120 /30 2match score Multi-Source 30 /15 3match score Stateful Tool 25 /15 4success Filesystem Wrangling 22 /13 4success
+
+Resource Gathering. The map of the dataset sizes include 8 × 8, 9 × 9, and 10 × 10 . Each cell may contain a tuple of (wood, stone, iron) resources. The task goal is gathering enough required instances. Each turn, an agent’s decision is limited to a movement path and at most 2 extraction targets. The view radius is 2 and the maximum path length is 4. Extraction succeeds only when the target cell lies within Manhattan distance 2 of the agent’s final position. The two agents have asymmetric tools: one can harvest wood while the other can harvest stone and iron. Thus, communication is necessary, as an agent may observe resources that are useful to its teammate. Success is defined as achieving the task goal. 
+
+Bridge Building. All maps of dataset are 13 × 11 grids. The agent view radius is 3. The task goal is to connects the two anchor regions. The maps differ in things like pillar layout and positions of anchor. Each map contains candidate pillars, including true supports and fake hazardous supports. Agents should discover useful supports through local observation and probing, or communicate probe results and coordinate construction. Each response may probe up to 3 candidate pillars and issue bridge-construction commands within a command budget. Success is defined as achieving the task goal. 
+
+Cross-Lingual Gathering. This task is built from a Chinese MKQA subset [Longpre et al., 2021]. Each instance contains paired English and Chinese retrieval corpora and a two-piece support chain. One agent searches English Wikipedia passages, then identify an English page title or bridge clue. The other searches Chinese passages. It is responsible for producing the final answer from target-language evidence. The retriever returns the top 4 passages, each prompt shows up to 6 visible pieces, and communication can include up to 3 evidence items. Success is defined as finding the final answer. 
+
+Multi-Source Gathering. This task uses HybridQA examples [Chen et al., 2020], with training instances drawn from the train split and evaluation instances from the development split. The task is balanced across passage-to-table, table-to-passage, and passage-to-table-to-passage reasoning chains. One agent can inspect passage evidence while the other can inspect table-row evidence. Each instance contains a table, a set of passage pieces, and cross-source support annotations. The final answer often depends on combining one table row with one or more passage pieces. The retriever returns the top 4
+
+pieces, communication is limited to 3 evidence item. Success is defined as finding the final answer. 
+
+Stateful Tool. This task is adapted from Apple ToolSandbox [Lu et al., 2025] scenarios. The environment simulates a phone holding hidden state (contacts, messages, reminders, device settings, timestamps). The goal is a natural-language user goal (e.g., checking the latest message, turning off cellular data, or rescheduling a reminder to a specific time). The State Inspector can only retrieve information; the Tool Executor can only modify settings/contacts/reminders, send messages, and submit the final answer. Execution tools require the relevant fact to have been known by the Executor 12 Table 3: Main training hyperparameters. The context learning rate applies to BCMAAC variants.                                             
+
+> Task Training hyperparameters
+> Resource Gathering 180 epochs; rollout/batch 8/4;γ= 0 .90 ; actor/critic LR 2.5×10 −6; context LR
+> 3.0×10 −5; max tokens 160 .Bridge Building 180 epochs; rollout/batch 8/4;γ= 0 .90 ; actor/critic LR 2.5×10 −6; context LR
+> 3.0×10 −5; max tokens 160 .Cross-Lingual 30 epochs; rollout/batch 16 /4;γ= 0 .95 ; actor/critic LR 2.0×10 −6; context LR
+> 1.0×10 −5; max tokens 192 .Multi-Source 30 epochs; rollout/batch 12 /2or 16 /4;γ= 0 .95 ; actor/critic LR 1.0×10 −6; context LR 1.0×10 −4; max tokens 192 .Stateful Tool 120 epochs; rollout/batch 10 /2; actor/critic LR 1.5×10 −6; context LR 5.0×10 −5;max tokens 160 .Filesystem Wrangling 120 epochs; rollout/batch 10 /2; actor/critic LR 1.5×10 −6; context LR 3.0×10 −5;max tokens 160 .
+
+before the current turn. Since only the Inspector can retrieve such facts, the team should hand them off across turns in sequence. Task types include setting toggles, message/reminder lookups, sending messages, contact phone/relationship updates, contact removal, and reminder add/modify/remove. Success is defined as the target action being achieved in the world state. 
+
+Filesystem Wrangling. This task is a faithful port of the multi-turn GorillaFileSystem tasks in BFCL V3 [Patil et al., 2025]. The filesystem is a deterministic in-memory state machine. It can be viewed as a mini MCP: a shared in-memory file server accessed by two scope-restricted clients. The Explorer has read-only tools ( ls , find , cat , grep , etc.), while the Editor has write tools ( mkdir ,
+
+touch , echo , mv , cp , rm , etc.). Since the editor cannot list or search the directory tree, target paths can only be obtained from the Explorer’s communication. Irreversible operations ( mv , cp , rm , rmdir )succeed only if the source path was learned by the Editor in a previous turn. Success is defined by a final-state file tree check, or answer matching for the report family. 
+
+A.2 Structured Context and Auxiliary Targets 
+
+For BCMAAC, each environment exposes compact structured side information xi,t constructed only from information visible to agent i at execution time. It never exposes the global answer nor hidden training labels. The belief targets vary across tasks. In Resource Gathering, they mark the resource cells that match the agent’s tool ability. In Bridge Building, they mark the true supports among pillars. In the Web tasks, they mark the evidence pieces. In the Tool tasks, they mark the required progress slots, such as whether the target action is done. The partner-action signal is teammate action-type prediction, implemented with a four-class taxonomy in every task. Bridge Building uses place/scout/communicate/no-op. Resource Gathering uses gather/move/communicate/no-op. Auxiliary labels are used only during training. Notice that at execution time agents keep only their actor and recurrent belief encoder. 
+
+A.3 Training Details 
+
+All base model of agents are initialized from Qwen/Qwen3-4B-Instruct-2507 [Yang et al., 2025, Qwen Team, 2025]. We train in bfloat16 and sample actions with temperature 0.5 and top-p = 0 .6.Within each task, MAAC and BCMAAC use the same environments, reward definitions, rollout budgets, and evaluation protocols; the actor and critic learning rates are matched across methods, and BCMAAC additionally trains the belief encoder with a separate context learning rate. The belief encoder uses a hidden dimension of 128 and the structured value head a hidden dimension of 256 .Table 3 lists the main training hyperparameters. 13 A.4 Reward Designs 
+
+All rewards are computed by deterministic environment rules after parsing the agents’ JSON actions. We use dense shaping only to expose intermediate progress; the main evaluation metrics remain the task-native success or answer-match scores. 
+
+Resource Gathering. Let pt be normalized collection progress, ct indicate whether the resource goal is completed, ut count useful resource communications, zt and et denote move-to-zone and first-zone-entry indicators, and wt be the number of wasted extraction attempts. The shaped reward is 
+
+rRG  
+
+> t
+
+= 8 .0 ∆ pt + 7 .0 ct + 0 .1 ut + 0 .05 zt + 0 .15 et − 0.1 wt.
+
+Bridge Building. Let gt be the normalized remaining connection gap, mt the normalized number of newly merged connected components, yt the normalized newly connected true-support signal, nt
+
+the normalized number of newly unsafe adjacencies to fake supports, and bt the normalized number of newly placed blocks; mt, yt, and nt are normalized by the corresponding per-map totals. The bridge reward is 
+
+rBB  
+
+> t
+
+= 5 .0( gt−1 − gt) + 1 .5 mt + 5 .0 yt + 2 .0 ct
+
++ 2 .5 ∆ dt − 12 .0 nt − 5.0 bt + qlate  
+
+> t
+
+,
+
+where ct indicates terminal connectivity, ∆dt is movement progress toward the opposite side, and 
+
+qlate  
+
+> t
+
+is a small late-turn quality term favoring cleaner, more compact, and closer-to-finish bridges. 
+
+Web Gathering. Both Web tasks share the same reward template. Let at be the answer-match score, st support coverage, ut useful communication, xt cross-source communication, ht informed search, kt support-chain completion, bt shared-board completion, et answer agreement, and ft a fully supported answer indicator that fires when a correct answer is submitted with a complete support board. The reward is 
+
+rWeb  
+
+> t
+
+= 0 .2 ∆ st + 2 .0 at + 0 .2 ut + 0 .03 xt + 0 .3 ht
+
++ 0 .6 kt + 0 .25 bt + 0 .4 et + 0 .6 ft.
+
+Substring answer matches receive partial credit. Explicit penalties for wrong, premature, conflicting, or unsupported answers are set to zero in the reported runs, relying instead on support and agreement rewards to shape answer readiness. 
+
+Stateful Tool. Let ∆pt be the progress increment (fraction of required progress slots satisfied), ct
+
+indicate terminal success, ut, g t useful/grounded communication, vt the number of valid tool calls, 
+
+inv t, err t the numbers of invalid actions / tool errors, pre t premature answering, ρt the “ready-but-not-executed/answered” penalty, fail t terminal failure, and noop t the number of no-ops. The reward is 
+
+rST  
+
+> t
+
+= 0 .8 ∆ pt + 4 .0 ct + 0 .08 ut + 0 .01 gt + 0 .03 vt
+
+− 0.08 inv t − 0.12 err t − 0.15 pre t
+
+− 0.75 ρt − 0.25 fail t − 0.02 noop t.
+
+Filesystem Wrangling. Using the same notation, with derr t the number of irreversible (destructive) operation errors, the reward is 
+
+rFW  
+
+> t
+
+= 1 .3 ∆ pt + 3 .3 ct + 0 .18 ut + 0 .05 gt + 0 .06 vt
+
+− 0.05 inv t − 0.06 err t − 0.12 derr t − 0.10 pre t
+
+− 0.45 ρt − 0.15 fail t − 0.01 noop t.
+
+The largest penalty ρt (0.45 ) fires only on terminal failure when all non-terminal prerequisite slots are satisfied but the irreversible action was never executed. 
+
+A.5 Prompt Details 
+
+All environments require agents to return exactly one JSON object, which makes the parser determin-istic. And it helps convert natural-language decisions into structured actions. We show abbreviated prompt skeletons below. 14 1 Task setup : 
+
+2 - Current turn : { turn_idx }/{ max_turns } 
+
+3 - Goal / progress : { goal_or_connection_state } 
+
+4 - Local state : { position , visible_objects } 
+
+5 - Received teammate messages : { received_messages } 
+
+67 Return exactly one JSON object : 
+
+8 {
+
+9 " comm ": { ... structured facts ... } , 
+
+10 " probe ": [[ x , z ] , ...] , 
+
+11 " cmds ": [... extraction targets or bridge commands ...] , 
+
+12 " path ": [[ x , z ] , ...] 
+
+13 }
+
+1 Task setup : 
+
+2 - Question : { question } 
+
+3 - Your source : { English / Chinese / passage / table } 
+
+4 - Search history : { search_history } 
+
+5 - Visible evidence pieces : { visible_pieces } 
+
+6 - Shared evidence board : { shared_board } 
+
+78 Return exactly one JSON object : 
+
+9 {
+
+10 " comm ": {" evidence_ids ": [" piece_id "] , " notes ": " short grounded clue "} , 
+
+11 " search ": " query string " , 
+
+12 " answer ": "" 
+
+13 }
+
+1 Task setup : 
+
+2 - Role : { State Inspector / Tool Executor | Explorer / Editor } 
+
+3 - Current turn : { turn_idx }/{ max_turns } 
+
+4 - User goal : { user_goal } 
+
+5 - Allowed tools : { allowed_tools } 
+
+6 - Known facts ( self ) : { known_facts } 
+
+7 - Recent tool results : { tool_results } 
+
+8 - Received teammate messages : { received_messages } 
+
+910 Return exactly one JSON object : 
+
+11 {
+
+12 " comm ": {" facts ": { ... } , " request ": [" needed fact "] , 
+
+13 " intent ": " short next - step intent " , " ready ": false } , 
+
+14 " tool ": {" name ": " tool_name " , " args ": { ... }} , 
+
+15 " answer ": "" 
+
+16 }
+
+A.6 Evaluation Protocol and Metrics 
+
+In the main results we report task-native metrics: success for Minecraft and Tool, and match score for Web. We report the mean and standard deviation across 5 independent training runs, where each run’s score is averaged over several late-training evaluation checkpoints. 
+
+Resource Gathering Success. Let R be the set of resource types and Cr , G r the final collected and required counts. An episode succeeds iff all resource targets are met: 
+
+1RG = 1[∀r ∈ R , C r ≥ Gr ] , score = 100 · 1
+
+> NN
+
+X
+
+> j=1
+
+1(j)RG .
+
+Bridge Building Success. Let AS , AT be the two anchor regions and F the final traversable set (anchors, pillars, placed bridge blocks). If there is a finite path (p0, . . . , p L) with 
+
+p0 ∈ A S , pL ∈ A T ,pℓ ∈ F (ℓ = 0 , . . . , L ), ∥pℓ+1 − pℓ∥1 = 1 ( ℓ < L ),
+
+15 then Conn F (AS , AT ) holds (four-neighbor connectivity). The success indicator is 1BB =
+
+1[Conn F (AS , AT )] and the score is 100 · 1
+
+> N
+
+P 
+
+> j
+
+1(j)BB .
+
+Cross-Lingual Gathering Match Score. Let n(·) denote answer normalization (lowercasing and removal of superficial formatting differences) and G the gold answer and its annotated aliases. For a submitted answer ˆy and a gold answer or alias y,
+
+sCL (ˆ y, y ) = 
+
+
+
+1, n(ˆ y) = n(y),α, one normalized answer contains the other ,
+
+0, otherwise ,
+
+where α = 0 .7 is the substring-match credit. Let bYt be the set of non-empty answers submitted at turn t; if none is submitted then mCL  
+
+> t
+
+= 0 , otherwise 
+
+mCL  
+
+> t
+
+= κt max  
+
+> ˆy∈bYt
+
+qCL (ˆ y), qCL (ˆ y) = max  
+
+> y∈G
+
+sCL (ˆ y, y ),
+
+with κt = 1 unless multiple submitted answers conflict, in which case κt is a configured down-weighting factor. The episode score is MCL = PH−1 
+
+> t=0
+
+mCL  
+
+> t
+
+; since submitting an answer terminates the episode, at most one term is nonzero during evaluation. The reported score is 100 · 1
+
+> N
+
+P 
+
+> j
+
+M (j)CL .
+
+Multi-Source Gathering Match Score. This uses the same per-turn accumulation protocol but matches against the task’s final annotated answer y⋆:
+
+sMS (ˆ y, y ⋆) = 
+
+
+
+1, n(ˆ y) = n(y⋆),α, n(ˆ y) contains n(y⋆),
+
+0, otherwise ,
+
+with α = 0 .7 and the same down-weighting rule, MMS = P 
+
+> t
+
+mMS  
+
+> t
+
+, and reported score 100 ·
+
+> 1
+> N
+
+P 
+
+> j
+
+M (j)MS .
+
+Stateful Tool / Filesystem Wrangling Success. Tool tasks use a state-verified binary success. Let 
+
+done t indicate whether the target action is achieved in the world state after turn t. An episode succeeds if any turn achieves the target: 
+
+1Tool = 1[∃ t ≤ H − 1 : done t] , score = 100 · 1
+
+> NN
+
+X
+
+> j=1
+
+1(j)Tool .
+
+A.7 Baseline Details 
+
+All methods are evaluated under the same task instances, environment transitions, reward definitions, parsing rules, and task-native metrics. The differences are the training signal, whether multiple agents are used, and whether the actor/critic receives belief context. Table 4 summarizes the main comparisons. The prompt-only baselines use the same action format as the trained agents; MAAC and BCMAAC use the same rollout budgets, base LLM initialization, actor/critic optimization settings, and environment rewards; the ablations change only the auxiliary supervision attached to the belief encoder. 
+
+A.8 Structured Side Information 
+
+Recall that the side information xi,t is built only from information available to agent i at execution time. The following examples are schematic; the implementation converts these fields into grid channels and scalar vectors.                   
+
+> 1Resource Gathering :
+> 2{" grid ": { visibility , visible_wood / stone / iron , msg_wood / stone / iron ,
+> 3self_pos , teammate_pos , extraction_reach } ,
+> 4" scalars ": { turn_ratio , normalized_position , goal [w ,s , i ] ,
+> 5collected_ratio [w ,s , i ] , inbox_load , completed } }
+
+16 Table 4: Detailed definitions of baselines and ablation variants. 
+
+Method Execution Training signal Notes 
+
+Raw Model Decentralized LLM agents without RL updates. None. Uses the same prompts and parsers as the trained methods; measures the capability of the initial instruction model. AC Single-agent actor-critic. Return regression and policy-gradient updates from the task reward. Tests how far task-specific RL improves a single actor without learned multi-agent coordination. Parallel Prompt-only multi-agent parallel execution. None. Agents act in parallel from their own prompts and received messages; no policy update or centralized critic. Pipeline Prompt-only serial execu-tion. None. Agents act in a fixed order, so later agents can condition on earlier outputs; the col-laboration pattern is manually specified. MAAC Decentralized actors with centralized training. Actor-critic updates with a centralized critic over joint histories. The closest RL baseline; actors execute from local histories while the critic esti-mates team return during training. BCMAAC-P BCMAAC without task-belief supervision. Actor-critic updates plus partner-action / action-preference auxiliary supervision. Isolates the effect of modeling teammate behavior / action preferences. BCMAAC-B BCMAAC without partner-action supervision. Actor-critic updates plus task-belief supervision. Isolates the effect of grounding the con-text in task-state variables; in Web/Tool tasks answer-readiness is grouped with task belief. BCMAAC Belief-conditioned decen-tralized actors with a struc-tured centralized critic. Actor-critic updates plus task-belief and partner-action auxiliary signals. The full method used for the main com-parison. 
+
+Table 5: Structured side information and task-belief targets used by BCMAAC. 
+
+Task Structured grid Scalars Task-belief target 
+
+Resource Gathering 10 spatial channels over the map. 11 normalized scalar features. Non-empty resource cells relevant to the agent’s tool role. Bridge Building 12 spatial channels over the map. 8 normalized scalar features. True support pillars among candidate pillars. Cross-Lingual Gather-ing 
+
+8 piece channels over the evidence list. 
+
+20 normalized scalar features. Evidence pieces in the annotated sup-port chain. Multi-Source Gather-ing 
+
+8 piece channels over table and passage pieces. 
+
+20 normalized scalar features. Evidence pieces in the annotated cross-source support chain. Stateful Tool 8 channels over 6 belief slots. 16 normalized scalars. Required progress slots (whether the executor holds the key fact, whether the setting is ready, whether the target action is done, etc.). Filesystem Wrangling 8 channels over 6 belief slots. 16 normalized scalars. Required progress slots (whether the target is located, whether the executor knows the path, whether the destination is ready, whether the target action is done, etc.). 1 Bridge Building : 
+
+2 { " grid ": { visibility , visible_land , visible_filled , visible_candidate , 
+
+3 visible_anchor_s /t , known_y /n , msg_y / n / candidate , self_pos } , 
+
+4 " scalars ": { turn_ratio , normalized_position , known_safe_count , 
+
+5 known_unsafe_count , message_count , connected , terminated } }
+
+1 Cross - Lingual / Multi - Source ( piece grid ) : 
+
+2 { " piece_grid ": { seen_by_self , on_shared_board , in_last_results , in_inbox , 
+
+3 question_overlap , hit_count , public_hint_overlap , own_source } , 
+
+4 " scalars ": { turn_ratio , remaining_turn_ratio , seen_budget , 
+
+5 shared_board_budget , inbox_backlog / unresolved_backlog , 
+
+6 search_depth / recent_board_growth , query_repeat_ratio /
+
+7 local_unshared_visible_ratio , board_has_both_sources , ...} }
+
+17 1 Stateful Tool / Filesystem Wrangling ( slot grid ) :                            
+
+> 2{" grid ": { self_knows_slot , inbox_mentions_slot , last_tool_relates_to_slot ,
+> 3slot_in_read_set , slot_in_write_set , slot_required ,
+> 4success_flag , turn_fraction } , #8channels over belief slots
+> 5" scalars ": { turn_ratio , role_onehot , per_fact_known_flags ,
+> 6inbox_size , tool_history_len , success , ...} }#16 - dim
+
+Table 5 summarizes the tensor dimensions and task-belief targets. 
+
+A.9 Auxiliary Label Generation 
+
+The labeling rule Γξ (τ ) produces all auxiliary labels after each rollout, reading the completed trajectory together with the environment’s internal state. The task-belief loss is a masked binary cross-entropy, 
+
+Lb = BCEWithLogits 
+
+ˆbi,t [ωi,t ], b∗
+
+> i,t
+
+[ωi,t ]
+
+
+
+,
+
+where b∗ 
+
+> i,t
+
+marks the ground-truth entries listed in Table 5, and the mask ωi,t restricts supervision to unresolved or required entries. For the Web and Tool tasks, an answer-readiness label is grouped with task belief: the target is 1 at the first successful turn and 0 otherwise. The partner-action loss is a cross-entropy over a task-specific four-class action taxonomy, 
+
+Lp = CE(ˆ pi,t , a ∗−i,t ),
+
+where a∗−i,t is the parsed teammate action type; Minecraft tasks add action-preference supervision over the comm , probe , cmds , and path fields. The full auxiliary objective is 
+
+Laux = λbLb + λpLp + λr Lr + λaLa,
+
+where Lr is the answer-readiness loss and La the action-preference loss; in the main text, Lr is grouped into the task-belief term and La into the partner-action term. BCMAAC-B sets λp and λa to zero; BCMAAC-P sets λb and λr to zero. 
+
+## B Proofs 
+
+Proof of Proposition 4.2. Because ct is determined by information in Ft, conditioning on Ft also determines ct. Hence 
+
+V π (Ft) = Eπ [Gt | F t]= Eπ [Gt | ct] = V π (ct).
+
+18

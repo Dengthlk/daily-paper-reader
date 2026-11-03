@@ -1,17 +1,453 @@
 {
-  "generated_at": "2026-11-03T06:55:06.368368+00:00",
+  "generated_at": "2026-11-03T07:16:17.915026+00:00",
   "updated_date": "20261025-20261103",
   "carryover_days": 9,
   "tag_states": {
     "game-llm-rl": {
       "updated_date": "20261025-20261103",
       "carryover_days": 9,
-      "items": []
+      "items": [
+        {
+          "id": "2611.02706v1",
+          "source": "arxiv",
+          "title": "Hindsight Credit Assignment over Trees for Agentic RL",
+          "abstract": "Reinforcement learning for long-horizon LLM agents faces a fundamental dilemma: successful experiences are essential for policy improvement, yet limited policy capabilities make such experiences difficult to discover. Sparse outcome rewards compound this challenge, leaving sampled trajectories with little relative feedback for learning. In this paper, we propose TriGRPO, a tree-based reinforcement learning framework that turns scarce successes into exploration and learning signals through hindsight credit assignment within and across rollout trees. TriGRPO constructs rollout trees through hindsight-guided branching: when an ongoing trajectory reaches a matched decision state, a successful action discovered during rollout initiates a sibling branch that continues autonomously, enabling further exploration and parent-sibling comparisons. Three complementary groups organize policy optimization over these trees: root groups capture within-prompt relative returns, node groups assign credit from parent-sibling outcome differences, and cross groups supplement sparse feedback with historical performance on related tasks. Experimental results demonstrate consistent gains in task performance and rollout efficiency across model scales, highlighting structured hindsight credit assignment as an effective approach to long-horizon agent learning.",
+          "authors": [
+            "Penghong Zhao",
+            "Yihao Chen",
+            "Maoheng Yuan",
+            "Yunjian Zhang",
+            "Abudukelimu Wuerkaixi",
+            "Haoran Xu",
+            "Man Lv",
+            "Yaolong Wang",
+            "Zhijie Sun",
+            "Guohua Liu",
+            "Yuewei Zhang"
+          ],
+          "primary_category": "cs.LG",
+          "categories": [
+            "cs.LG",
+            "cs.AI"
+          ],
+          "published": "2026-11-02 07:56:53+00:00",
+          "link": "https://arxiv.org/pdf/2611.02706v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "hindsight credit assignment across rollout trees for long-horizon agentic RL",
+          "llm_evidence_cn": "面向长程智能体强化学习的树状事后信用分配",
+          "llm_evidence": "面向长程智能体强化学习的树状事后信用分配",
+          "canonical_evidence": "面向长程智能体强化学习的树状事后信用分配",
+          "llm_tldr_en": "Long-horizon LLM agents suffer from sparse outcome rewards and scarce successes. TriGRPO builds rollout trees with hindsight-guided branching and performs credit assignment within and across trees, turning rare successes into exploration signals.",
+          "llm_tldr_cn": "长程语言模型智能体强化学习面临两难：策略改进需要成功经验，但有限策略能力又难以发现成功经验，稀疏结果奖励进一步削弱了轨迹间的相对反馈。作者提出 TriGRPO，通过事后引导的分支构建 rollout 树，并在树内与树间进行信用分配，把稀缺的成功转化为可复用的探索与学习信号。该框架为稀疏奖励下的长程智能体强化学习提供了更有效的信用分配机制。",
+          "llm_tldr": "长程语言模型智能体强化学习面临两难：策略改进需要成功经验，但有限策略能力又难以发现成功经验，稀疏结果奖励进一步削弱了轨迹间的相对反馈。作者提出 TriGRPO，通过事后引导的分支构建 rollout 树，并在树内与树间进行信用分配，把稀缺的成功转化为可复用的探索与学习信号。该框架为稀疏奖励下的长程智能体强化学习提供了更有效的信用分配机制。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+          "matched_requirement_id": "req-18",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02706v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.03005v1",
+          "source": "arxiv",
+          "title": "BLPO: Beyond-Local Policy Optimization for Long-Horizon LLM Agents",
+          "abstract": "Long-horizon tasks require large language model (LLM) agents to coordinate interdependent actions, a capability central to automating complex workflows. Stepwise group-based reinforcement learning provides finer credit than trajectory-level supervision, but reliable comparisons must account for differences in interaction history. Enforcing this consistency within the limited rollouts of each task can leave insufficient support for estimating action preferences. We propose Beyond-Local Policy Optimization (BLPO), which estimates task-progress advantages from experience shared across tasks and training updates. We summarize trajectory prefixes into task-progress states and abstract actions by their function, allowing corresponding decisions from different tasks to contribute to shared estimates. To control bias and noise from heterogeneous tasks, we accumulate context-relative returns in a global memory with balanced aggregation and reliability weighting. These global advantages complement local comparisons over normalized actions and trajectory-level credit without a learned critic or additional rollouts. Experiments on ALFWorld and WebShop with 1.5B and 7B policies show improved task success over the evaluated baselines under matched training budgets. Further analyses show faster learning and shorter trajectories with little computational overhead.",
+          "authors": [
+            "Xuanren Chen",
+            "Chongyang Tao",
+            "Wenpeng Hu",
+            "Yong Wang",
+            "Bo Deng",
+            "Xinlei Zheng",
+            "Shuai Ma"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 12:10:05+00:00",
+          "link": "https://arxiv.org/pdf/2611.03005v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Policy optimization with cross-task credit assignment for long-horizon LLM agents",
+          "llm_evidence_cn": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "llm_evidence": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "canonical_evidence": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "llm_tldr_en": "BLPO estimates task-progress advantages from experience shared across tasks and updates, giving long-horizon LLM agents finer credit than local rollouts allow.",
+          "llm_tldr_cn": "长程任务要求大语言模型智能体协调相互依赖的动作，而分步组式强化学习在每条任务有限的rollout下难以获得充足的动作偏好支持。本文提出超越局部策略优化BLPO，将轨迹前缀归纳为任务进度状态并按功能抽象动作，从跨任务与跨更新的共享经验中估计进度优势。实验表明该方法能更可靠地进行信用分配并提升长程任务表现。",
+          "llm_tldr": "长程任务要求大语言模型智能体协调相互依赖的动作，而分步组式强化学习在每条任务有限的rollout下难以获得充足的动作偏好支持。本文提出超越局部策略优化BLPO，将轨迹前缀归纳为任务进度状态并按功能抽象动作，从跨任务与跨更新的共享经验中估计进度优势。实验表明该方法能更可靠地进行信用分配并提升长程任务表现。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Reinforcement learning methods for training large language model agents in multi-turn decision making, planning, and tool use.",
+          "matched_requirement_id": "req-17",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.03005v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.02455v1",
+          "source": "arxiv",
+          "title": "RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs",
+          "abstract": "Reinforcement learning (RL) has improved the capabilities of large language models (LLMs) across a wide range of tasks. However, token-level RL assigns an action's advantage to the entire generated response, including tokens specifying the parsed action, reasoning chains, and malformed content. Although the environment executes only the parsed action, variation in how the action is expressed in natural language can introduce additional variance into policy-gradient estimates. We propose RLiD (Reinforcement Learning in the Decision plane), a framework that directly optimizes the probabilities of executable action options. RLiD compiles observations, an optional compact memory, and a labeled action menu into the model input, and uses a large decision model (LDM) to select an action in a single forward pass. By eliminating autoregressive token generation and bypassing action parsing, RLiD avoids invalid action outputs and improves RL rollout efficiency. Our analysis shows that, within a fixed text policy, marginalizing over alternative realizations of the same action removes a zero-mean gradient component without changing the expected update. We further distill trained LDM policies into generative LLMs through supervision on their action trajectories. Experiments on ARC, Countdown, and Sokoban demonstrate improved performance or lower computational cost across several settings. On ALFWorld, the complete training and distillation pipeline reaches 99.3% success in 12.7 H100 GPU-hours, compared with 86.6% in 17.3 GPU-hours for token-level RL of the same LLM. With compiled memory, our strongest Qwen2.5-1.5B LDM and distilled generative LLM achieve 100% success on all 134 unseen and 140 seen ALFWorld evaluation games.",
+          "authors": [
+            "Ziyi Chen",
+            "Yan Zhang",
+            "Jianhui Wei",
+            "Jianing Yin",
+            "Daoan Zhang"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 03:17:51+00:00",
+          "link": "https://arxiv.org/pdf/2611.02455v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "decision-plane RL optimizing executable action probabilities for language agents",
+          "llm_evidence_cn": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "llm_evidence": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "canonical_evidence": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "llm_tldr_en": "Proposes RLiD, which optimizes the probabilities of executable action options in a decision plane rather than token-level responses, reducing variance in policy-gradient estimates for language agents and LLMs.",
+          "llm_tldr_cn": "token级强化学习将动作优势分配给整段生成内容，包括动作解析、推理链和畸形文本，而环境只执行解析后的动作，导致策略梯度方差增大。作者提出RLiD，在决策平面直接优化可执行动作选项的概率，将观测、可选紧凑记忆与标注动作菜单编译为模型输入。该框架降低了动作表述差异带来的估计方差，为语言智能体的决策学习提供了更稳定的强化学习目标。",
+          "llm_tldr": "token级强化学习将动作优势分配给整段生成内容，包括动作解析、推理链和畸形文本，而环境只执行解析后的动作，导致策略梯度方差增大。作者提出RLiD，在决策平面直接优化可执行动作选项的概率，将观测、可选紧凑记忆与标注动作菜单编译为模型输入。该框架降低了动作表述差异带来的估计方差，为语言智能体的决策学习提供了更稳定的强化学习目标。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "agentic reinforcement learning",
+          "matched_requirement_id": "req-13",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02455v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2610.39576v2",
+          "source": "arxiv",
+          "title": "Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models",
+          "abstract": "Model-based offline multi-agent reinforcement learning (MARL) provides a promising approach to multi-agent decision-making under partial observability, where the global state is unavailable from offline data. However, limited dataset coverage can lead to substantial out-of-distribution (OOD) model errors, which may mislead policy optimization and degrade downstream performance. Existing model-based offline MARL methods typically rely on access to global states or mitigate model errors through pessimistic or conservative policy optimization, leaving the reliability and refinement of learned world models less explored. We propose a Bayesian offline MARL framework that infers latent global states from decentralized observation-action histories and iteratively refines a posterior world model using only offline data. Building on posterior information loss, we extend this criterion to the multi-agent setting as multi-agent posterior information loss (MPIL), which provides a reliability measure for world model refinement and offline evaluation. Theoretically, we establish an upper bound on policy regret that is monotonic in MPIL and further characterize its dependence on the size and state-joint-action coverage of the offline dataset. Experiments on partially observable multi-agent variants of D4RL MuJoCo tasks demonstrate competitive policy performance across diverse offline data conditions, while MPIL-guided refinement improves world model prediction and downstream policy performance. These results support a principled connection between world model reliability, offline data coverage, and policy performance in partially observable offline MARL.",
+          "authors": [
+            "Xi Xiong",
+            "Lu Liu",
+            "Yiming Li",
+            "Jakob Foerster"
+          ],
+          "primary_category": "cs.MA",
+          "categories": [
+            "cs.MA"
+          ],
+          "published": "2026-10-29 08:16:20+00:00",
+          "link": "https://arxiv.org/pdf/2610.39576v2",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Bayesian offline MARL with latent world models for partial observability",
+          "llm_evidence_cn": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "llm_evidence": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "canonical_evidence": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "llm_tldr_en": "Proposes a Bayesian offline multi-agent RL framework that infers latent global states from decentralized histories and refines latent world models to counter out-of-distribution model errors in partially observable settings.",
+          "llm_tldr_cn": "基于模型的离线多智能体强化学习在部分可观测下很有前景，但数据集覆盖有限会导致分布外模型误差并误导策略优化。作者提出贝叶斯离线多智能体强化学习框架，从去中心化观测-动作历史中推断潜在全局状态，并关注世界模型的可靠性与细化。该方法在不依赖全局状态的前提下缓解了模型误差，为离线多智能体决策的世界模型学习提供了更稳健的方案。",
+          "llm_tldr": "基于模型的离线多智能体强化学习在部分可观测下很有前景，但数据集覆盖有限会导致分布外模型误差并误导策略优化。作者提出贝叶斯离线多智能体强化学习框架，从去中心化观测-动作历史中推断潜在全局状态，并关注世界模型的可靠性与细化。该方法在不依赖全局状态的前提下缓解了模型误差，为离线多智能体决策的世界模型学习提供了更稳健的方案。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+          "matched_requirement_id": "req-19",
+          "selection_source": "carryover_cache",
+          "paper_id": "2610.39576v2",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.02414v1",
+          "source": "arxiv",
+          "title": "SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning",
+          "abstract": "OPSD provides dense supervision for agentic reinforcement learning through privileged information feedback. However, existing privileged information often lacks explicit task-progression planning, while teacher-student log-probability gaps reflect shifts in model preference rather than true task progress. To address these limitations, we propose Subgoal-Guided Graph-Regularized OPSD (SGR-OPSD), a framework that combines subgoal supervision with interaction-derived evidence for turn-level credit assignment. Specifically, SGR-OPSD uses LLM-generated subgoal plans to provide dense action-level guidance, converting them into advantage weights via a constrained, KL-regularized objective. To ground credit in observed outcomes, we construct a Subgoal Progress Graph that estimates empirical returns from sampled transition frequencies. The graph compares empirical action returns against the state average to derive preferences that calibrate the teacher's credit weights. Evaluated on ALFWorld, WebShop, and Search-QA across two model scales (Qwen2.5-3B and 7B), SGR-OPSD consistently outperforms GRPO and strong self-distillation baselines, improving success rates over GRPO by up to 7.4 percentage points and reaching 85.8% on ALFWorld with Qwen2.5-7B. Ablation studies confirm that subgoal guidance and graph-based weight calibration are key to these performance gains.",
+          "authors": [
+            "Shu Liu",
+            "Yang Chong",
+            "WenShi Chen",
+            "Man Lan"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 02:35:49+00:00",
+          "link": "https://arxiv.org/pdf/2611.02414v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Subgoal-guided graph-regularized turn-level credit assignment for agentic RL",
+          "llm_evidence_cn": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "llm_evidence": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "canonical_evidence": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "llm_tldr_en": "SGR-OPSD combines LLM-generated subgoal plans with interaction-derived evidence and a KL-regularized objective to produce dense, grounded turn-level credit assignment for agentic reinforcement learning.",
+          "llm_tldr_cn": "针对现有特权信息反馈缺乏显式任务进程规划、教师学生概率差反映偏好漂移而非真实任务进展的问题，论文提出SGR-OPSD框架。该方法利用大模型生成的子目标计划提供动作级稠密监督，并通过带KL约束的目标将其转化为优势权重，同时结合交互中观测到的证据把信用落到具体回合。实验表明该框架能给出更贴合任务进展的细粒度信用分配。其贡献在于把规划信号与强化学习信用分配有机结合。",
+          "llm_tldr": "针对现有特权信息反馈缺乏显式任务进程规划、教师学生概率差反映偏好漂移而非真实任务进展的问题，论文提出SGR-OPSD框架。该方法利用大模型生成的子目标计划提供动作级稠密监督，并通过带KL约束的目标将其转化为优势权重，同时结合交互中观测到的证据把信用落到具体回合。实验表明该框架能给出更贴合任务进展的细粒度信用分配。其贡献在于把规划信号与强化学习信用分配有机结合。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+          "matched_requirement_id": "req-18",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02414v1",
+          "carry_days": 1
+        }
+      ]
     },
     "rl-agents": {
       "updated_date": "20261025-20261103",
       "carryover_days": 9,
-      "items": []
+      "items": [
+        {
+          "id": "2611.02706v1",
+          "source": "arxiv",
+          "title": "Hindsight Credit Assignment over Trees for Agentic RL",
+          "abstract": "Reinforcement learning for long-horizon LLM agents faces a fundamental dilemma: successful experiences are essential for policy improvement, yet limited policy capabilities make such experiences difficult to discover. Sparse outcome rewards compound this challenge, leaving sampled trajectories with little relative feedback for learning. In this paper, we propose TriGRPO, a tree-based reinforcement learning framework that turns scarce successes into exploration and learning signals through hindsight credit assignment within and across rollout trees. TriGRPO constructs rollout trees through hindsight-guided branching: when an ongoing trajectory reaches a matched decision state, a successful action discovered during rollout initiates a sibling branch that continues autonomously, enabling further exploration and parent-sibling comparisons. Three complementary groups organize policy optimization over these trees: root groups capture within-prompt relative returns, node groups assign credit from parent-sibling outcome differences, and cross groups supplement sparse feedback with historical performance on related tasks. Experimental results demonstrate consistent gains in task performance and rollout efficiency across model scales, highlighting structured hindsight credit assignment as an effective approach to long-horizon agent learning.",
+          "authors": [
+            "Penghong Zhao",
+            "Yihao Chen",
+            "Maoheng Yuan",
+            "Yunjian Zhang",
+            "Abudukelimu Wuerkaixi",
+            "Haoran Xu",
+            "Man Lv",
+            "Yaolong Wang",
+            "Zhijie Sun",
+            "Guohua Liu",
+            "Yuewei Zhang"
+          ],
+          "primary_category": "cs.LG",
+          "categories": [
+            "cs.LG",
+            "cs.AI"
+          ],
+          "published": "2026-11-02 07:56:53+00:00",
+          "link": "https://arxiv.org/pdf/2611.02706v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "hindsight credit assignment across rollout trees for long-horizon agentic RL",
+          "llm_evidence_cn": "面向长程智能体强化学习的树状事后信用分配",
+          "llm_evidence": "面向长程智能体强化学习的树状事后信用分配",
+          "canonical_evidence": "面向长程智能体强化学习的树状事后信用分配",
+          "llm_tldr_en": "Long-horizon LLM agents suffer from sparse outcome rewards and scarce successes. TriGRPO builds rollout trees with hindsight-guided branching and performs credit assignment within and across trees, turning rare successes into exploration signals.",
+          "llm_tldr_cn": "长程语言模型智能体强化学习面临两难：策略改进需要成功经验，但有限策略能力又难以发现成功经验，稀疏结果奖励进一步削弱了轨迹间的相对反馈。作者提出 TriGRPO，通过事后引导的分支构建 rollout 树，并在树内与树间进行信用分配，把稀缺的成功转化为可复用的探索与学习信号。该框架为稀疏奖励下的长程智能体强化学习提供了更有效的信用分配机制。",
+          "llm_tldr": "长程语言模型智能体强化学习面临两难：策略改进需要成功经验，但有限策略能力又难以发现成功经验，稀疏结果奖励进一步削弱了轨迹间的相对反馈。作者提出 TriGRPO，通过事后引导的分支构建 rollout 树，并在树内与树间进行信用分配，把稀缺的成功转化为可复用的探索与学习信号。该框架为稀疏奖励下的长程智能体强化学习提供了更有效的信用分配机制。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+          "matched_requirement_id": "req-18",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02706v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.03005v1",
+          "source": "arxiv",
+          "title": "BLPO: Beyond-Local Policy Optimization for Long-Horizon LLM Agents",
+          "abstract": "Long-horizon tasks require large language model (LLM) agents to coordinate interdependent actions, a capability central to automating complex workflows. Stepwise group-based reinforcement learning provides finer credit than trajectory-level supervision, but reliable comparisons must account for differences in interaction history. Enforcing this consistency within the limited rollouts of each task can leave insufficient support for estimating action preferences. We propose Beyond-Local Policy Optimization (BLPO), which estimates task-progress advantages from experience shared across tasks and training updates. We summarize trajectory prefixes into task-progress states and abstract actions by their function, allowing corresponding decisions from different tasks to contribute to shared estimates. To control bias and noise from heterogeneous tasks, we accumulate context-relative returns in a global memory with balanced aggregation and reliability weighting. These global advantages complement local comparisons over normalized actions and trajectory-level credit without a learned critic or additional rollouts. Experiments on ALFWorld and WebShop with 1.5B and 7B policies show improved task success over the evaluated baselines under matched training budgets. Further analyses show faster learning and shorter trajectories with little computational overhead.",
+          "authors": [
+            "Xuanren Chen",
+            "Chongyang Tao",
+            "Wenpeng Hu",
+            "Yong Wang",
+            "Bo Deng",
+            "Xinlei Zheng",
+            "Shuai Ma"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 12:10:05+00:00",
+          "link": "https://arxiv.org/pdf/2611.03005v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Policy optimization with cross-task credit assignment for long-horizon LLM agents",
+          "llm_evidence_cn": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "llm_evidence": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "canonical_evidence": "面向长程LLM智能体的跨任务信用分配策略优化",
+          "llm_tldr_en": "BLPO estimates task-progress advantages from experience shared across tasks and updates, giving long-horizon LLM agents finer credit than local rollouts allow.",
+          "llm_tldr_cn": "长程任务要求大语言模型智能体协调相互依赖的动作，而分步组式强化学习在每条任务有限的rollout下难以获得充足的动作偏好支持。本文提出超越局部策略优化BLPO，将轨迹前缀归纳为任务进度状态并按功能抽象动作，从跨任务与跨更新的共享经验中估计进度优势。实验表明该方法能更可靠地进行信用分配并提升长程任务表现。",
+          "llm_tldr": "长程任务要求大语言模型智能体协调相互依赖的动作，而分步组式强化学习在每条任务有限的rollout下难以获得充足的动作偏好支持。本文提出超越局部策略优化BLPO，将轨迹前缀归纳为任务进度状态并按功能抽象动作，从跨任务与跨更新的共享经验中估计进度优势。实验表明该方法能更可靠地进行信用分配并提升长程任务表现。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Reinforcement learning methods for training large language model agents in multi-turn decision making, planning, and tool use.",
+          "matched_requirement_id": "req-17",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.03005v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.02455v1",
+          "source": "arxiv",
+          "title": "RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs",
+          "abstract": "Reinforcement learning (RL) has improved the capabilities of large language models (LLMs) across a wide range of tasks. However, token-level RL assigns an action's advantage to the entire generated response, including tokens specifying the parsed action, reasoning chains, and malformed content. Although the environment executes only the parsed action, variation in how the action is expressed in natural language can introduce additional variance into policy-gradient estimates. We propose RLiD (Reinforcement Learning in the Decision plane), a framework that directly optimizes the probabilities of executable action options. RLiD compiles observations, an optional compact memory, and a labeled action menu into the model input, and uses a large decision model (LDM) to select an action in a single forward pass. By eliminating autoregressive token generation and bypassing action parsing, RLiD avoids invalid action outputs and improves RL rollout efficiency. Our analysis shows that, within a fixed text policy, marginalizing over alternative realizations of the same action removes a zero-mean gradient component without changing the expected update. We further distill trained LDM policies into generative LLMs through supervision on their action trajectories. Experiments on ARC, Countdown, and Sokoban demonstrate improved performance or lower computational cost across several settings. On ALFWorld, the complete training and distillation pipeline reaches 99.3% success in 12.7 H100 GPU-hours, compared with 86.6% in 17.3 GPU-hours for token-level RL of the same LLM. With compiled memory, our strongest Qwen2.5-1.5B LDM and distilled generative LLM achieve 100% success on all 134 unseen and 140 seen ALFWorld evaluation games.",
+          "authors": [
+            "Ziyi Chen",
+            "Yan Zhang",
+            "Jianhui Wei",
+            "Jianing Yin",
+            "Daoan Zhang"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 03:17:51+00:00",
+          "link": "https://arxiv.org/pdf/2611.02455v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "decision-plane RL optimizing executable action probabilities for language agents",
+          "llm_evidence_cn": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "llm_evidence": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "canonical_evidence": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+          "llm_tldr_en": "Proposes RLiD, which optimizes the probabilities of executable action options in a decision plane rather than token-level responses, reducing variance in policy-gradient estimates for language agents and LLMs.",
+          "llm_tldr_cn": "token级强化学习将动作优势分配给整段生成内容，包括动作解析、推理链和畸形文本，而环境只执行解析后的动作，导致策略梯度方差增大。作者提出RLiD，在决策平面直接优化可执行动作选项的概率，将观测、可选紧凑记忆与标注动作菜单编译为模型输入。该框架降低了动作表述差异带来的估计方差，为语言智能体的决策学习提供了更稳定的强化学习目标。",
+          "llm_tldr": "token级强化学习将动作优势分配给整段生成内容，包括动作解析、推理链和畸形文本，而环境只执行解析后的动作，导致策略梯度方差增大。作者提出RLiD，在决策平面直接优化可执行动作选项的概率，将观测、可选紧凑记忆与标注动作菜单编译为模型输入。该框架降低了动作表述差异带来的估计方差，为语言智能体的决策学习提供了更稳定的强化学习目标。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "agentic reinforcement learning",
+          "matched_requirement_id": "req-13",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02455v1",
+          "carry_days": 1
+        },
+        {
+          "id": "2610.39576v2",
+          "source": "arxiv",
+          "title": "Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models",
+          "abstract": "Model-based offline multi-agent reinforcement learning (MARL) provides a promising approach to multi-agent decision-making under partial observability, where the global state is unavailable from offline data. However, limited dataset coverage can lead to substantial out-of-distribution (OOD) model errors, which may mislead policy optimization and degrade downstream performance. Existing model-based offline MARL methods typically rely on access to global states or mitigate model errors through pessimistic or conservative policy optimization, leaving the reliability and refinement of learned world models less explored. We propose a Bayesian offline MARL framework that infers latent global states from decentralized observation-action histories and iteratively refines a posterior world model using only offline data. Building on posterior information loss, we extend this criterion to the multi-agent setting as multi-agent posterior information loss (MPIL), which provides a reliability measure for world model refinement and offline evaluation. Theoretically, we establish an upper bound on policy regret that is monotonic in MPIL and further characterize its dependence on the size and state-joint-action coverage of the offline dataset. Experiments on partially observable multi-agent variants of D4RL MuJoCo tasks demonstrate competitive policy performance across diverse offline data conditions, while MPIL-guided refinement improves world model prediction and downstream policy performance. These results support a principled connection between world model reliability, offline data coverage, and policy performance in partially observable offline MARL.",
+          "authors": [
+            "Xi Xiong",
+            "Lu Liu",
+            "Yiming Li",
+            "Jakob Foerster"
+          ],
+          "primary_category": "cs.MA",
+          "categories": [
+            "cs.MA"
+          ],
+          "published": "2026-10-29 08:16:20+00:00",
+          "link": "https://arxiv.org/pdf/2610.39576v2",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Bayesian offline MARL with latent world models for partial observability",
+          "llm_evidence_cn": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "llm_evidence": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "canonical_evidence": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+          "llm_tldr_en": "Proposes a Bayesian offline multi-agent RL framework that infers latent global states from decentralized histories and refines latent world models to counter out-of-distribution model errors in partially observable settings.",
+          "llm_tldr_cn": "基于模型的离线多智能体强化学习在部分可观测下很有前景，但数据集覆盖有限会导致分布外模型误差并误导策略优化。作者提出贝叶斯离线多智能体强化学习框架，从去中心化观测-动作历史中推断潜在全局状态，并关注世界模型的可靠性与细化。该方法在不依赖全局状态的前提下缓解了模型误差，为离线多智能体决策的世界模型学习提供了更稳健的方案。",
+          "llm_tldr": "基于模型的离线多智能体强化学习在部分可观测下很有前景，但数据集覆盖有限会导致分布外模型误差并误导策略优化。作者提出贝叶斯离线多智能体强化学习框架，从去中心化观测-动作历史中推断潜在全局状态，并关注世界模型的可靠性与细化。该方法在不依赖全局状态的前提下缓解了模型误差，为离线多智能体决策的世界模型学习提供了更稳健的方案。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+          "matched_requirement_id": "req-19",
+          "selection_source": "carryover_cache",
+          "paper_id": "2610.39576v2",
+          "carry_days": 1
+        },
+        {
+          "id": "2611.02414v1",
+          "source": "arxiv",
+          "title": "SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning",
+          "abstract": "OPSD provides dense supervision for agentic reinforcement learning through privileged information feedback. However, existing privileged information often lacks explicit task-progression planning, while teacher-student log-probability gaps reflect shifts in model preference rather than true task progress. To address these limitations, we propose Subgoal-Guided Graph-Regularized OPSD (SGR-OPSD), a framework that combines subgoal supervision with interaction-derived evidence for turn-level credit assignment. Specifically, SGR-OPSD uses LLM-generated subgoal plans to provide dense action-level guidance, converting them into advantage weights via a constrained, KL-regularized objective. To ground credit in observed outcomes, we construct a Subgoal Progress Graph that estimates empirical returns from sampled transition frequencies. The graph compares empirical action returns against the state average to derive preferences that calibrate the teacher's credit weights. Evaluated on ALFWorld, WebShop, and Search-QA across two model scales (Qwen2.5-3B and 7B), SGR-OPSD consistently outperforms GRPO and strong self-distillation baselines, improving success rates over GRPO by up to 7.4 percentage points and reaching 85.8% on ALFWorld with Qwen2.5-7B. Ablation studies confirm that subgoal guidance and graph-based weight calibration are key to these performance gains.",
+          "authors": [
+            "Shu Liu",
+            "Yang Chong",
+            "WenShi Chen",
+            "Man Lan"
+          ],
+          "primary_category": "cs.AI",
+          "categories": [
+            "cs.AI"
+          ],
+          "published": "2026-11-02 02:35:49+00:00",
+          "link": "https://arxiv.org/pdf/2611.02414v1",
+          "tags": [
+            "keyword:game-llm-rl",
+            "keyword:rl-agents",
+            "query:game-llm-rl",
+            "query:rl-agents"
+          ],
+          "llm_score": 8.0,
+          "llm_evidence_en": "Subgoal-guided graph-regularized turn-level credit assignment for agentic RL",
+          "llm_evidence_cn": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "llm_evidence": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "canonical_evidence": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+          "llm_tldr_en": "SGR-OPSD combines LLM-generated subgoal plans with interaction-derived evidence and a KL-regularized objective to produce dense, grounded turn-level credit assignment for agentic reinforcement learning.",
+          "llm_tldr_cn": "针对现有特权信息反馈缺乏显式任务进程规划、教师学生概率差反映偏好漂移而非真实任务进展的问题，论文提出SGR-OPSD框架。该方法利用大模型生成的子目标计划提供动作级稠密监督，并通过带KL约束的目标将其转化为优势权重，同时结合交互中观测到的证据把信用落到具体回合。实验表明该框架能给出更贴合任务进展的细粒度信用分配。其贡献在于把规划信号与强化学习信用分配有机结合。",
+          "llm_tldr": "针对现有特权信息反馈缺乏显式任务进程规划、教师学生概率差反映偏好漂移而非真实任务进展的问题，论文提出SGR-OPSD框架。该方法利用大模型生成的子目标计划提供动作级稠密监督，并通过带KL约束的目标将其转化为优势权重，同时结合交互中观测到的证据把信用落到具体回合。实验表明该框架能给出更贴合任务进展的细粒度信用分配。其贡献在于把规划信号与强化学习信用分配有机结合。",
+          "llm_tags": [
+            "query:rl-agents"
+          ],
+          "matched_query_tag": "query:rl-agents",
+          "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+          "matched_requirement_id": "req-18",
+          "selection_source": "carryover_cache",
+          "paper_id": "2611.02414v1",
+          "carry_days": 1
+        }
+      ]
     }
   }
 }

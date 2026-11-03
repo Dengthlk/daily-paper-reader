@@ -1,0 +1,1435 @@
+Title: Preference-Guided Cooperation in Multi-Objective Multi-Agent Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2610.35736v1
+
+Published Time: Tue, 27 Oct 2026 03:07:37 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Preference-Guided Cooperation in Multi-Objective Multi-Agent Reinforcement Learning 
+
+# Qiyue Xia 
+
+School of Informatics University of Edinburgh Edinburgh, United Kingdom qiyue.xia@ed.ac.uk 
+
+# J. Michael Herrmann 
+
+School of Informatics University of Edinburgh Edinburgh, United Kingdom michael.herrmann@ed.ac.uk 
+
+## Abstract 
+
+Multi-objective multi-agent reinforcement learning (MOMARL) addresses agent coordination and objective trade-offs simultane-ously while optimising overall system performance. Existing work tends to treat multi-agent cooperation and multi-objective optimi-sation as largely independent components of a learning problem, which amounts to an exorbitant complexity except in trivial cases. We study here whether the structure provided by multiple objec-tives can itself be exploited to facilitate cooperation, rather than being treated as an additional optimisation challenge. We formulate MOMARL at both the team and individual levels and introduce objective-wise counterfactual credit assignment to evaluate each agent’s contribution across the team objectives. We propose Meta-Gradient Informed Multi-Objective Multi-Agent Reinforcement Learning (MIRL), with static (MIRL-S) and dynamic (MIRL-D) vari-ants. By incorporating meta-gradient information, MIRL enables agents to learn how to prioritise objectives individually while col-lectively optimising the system-level objective, allowing the multi-objective structure to directly guide cooperation. Experiments on a multi-objective multiple particle environment show that our meth-ods improve Pareto-front quality over baselines, with the dynamic variant achieving the strongest performance. 
+
+## Keywords 
+
+Multi-agent reinforcement learning, Multi-objective reinforcement learning 
+
+## 1 Introduction 
+
+Many real-world decision-making problems naturally involve both multiple decision makers and multiple objectives. For example, au-tonomous vehicles [30], drones [15], smart homes [37], and collab-orative industrial systems [26] require several autonomous entities to interact with a shared environment while simultaneously con-sidering different and potentially conflicting performance criteria. These requirements motivate two important extensions of conven-tional reinforcement learning. Multi-Agent Reinforcement Learning (MARL) addresses decision-making with multiple simultaneously interacting agents, where the learning problem is complicated by non-stationarity caused by other agents simultaneously interacting with the environment and adapting their policies, partial observ-ability due to agents having access to only local information, and the need to develop effective coordination among agents. Multi-Objective Reinforcement Learning (MORL), in contrast, extends reinforcement learning beyond the optimisation of a single scalar objective to problems involving multiple, potentially conflicting objectives. Rather than searching for one optimal policy, MORL commonly aims to approximate a Pareto front consisting of poli-cies that represent different trade-offs among objectives, allowing solutions to be selected according to different preferences. Multi-Objective Multi-Agent Reinforcement Learning (MO-MARL) brings these two dimensions together, providing a more comprehensive modelling framework for complex decision-making environments in which both interactions among multiple decision makers and trade-offs among multiple objectives must be consid-ered. Although MARL and MORL have each developed into sub-stantial research areas, their intersection remains comparatively under-explored. Recent work has gradually extended the scope of MOMARL through dedicated deep learning methods [14], standard-ised benchmarks [7, 10], and more flexible formulations of agent utilities and preferences [20]. However, these existing approaches have largely treated the multi-objective component as an additional optimisation dimension built on top of the multi-agent problem, rather than as a source of structure that can itself inform and shape the broader process of multi-agent learning. In this work, we take a different perspective on the MOMARL formulation and demonstrate that the multi-objective structure itself can be exploited to facilitate multi-agent cooperation. We aim to provide agents with a higher-level adaptive capability, allowing them to adjust how they contribute to the team according to the current cooperative situation. To realise this capability, we pro-pose a bi-level preference formulation with a team preference and learnable individual preferences. Since these individual preferences influence how the policy itself is updated, learning them naturally forms a learning-to-learn problem. We therefore derive a novel meta-gradient mechanism that adapts the individual preferences according to how the resulting policy updates affect subsequent team-level performance. Building on this framework, we introduce Meta-Gradient Informed Multi-Objective Multi-Agent Reinforcement Learning (MIRL), a novel algorithm that enables agents to adapt their learn-ing across multiple objectives while remaining aligned with the system-level objective. Our main contributions are as follows: (1) We formulate cooperative MOMARL from both team and in-dividual levels, where a team preference defines the desired system-level objective trade-off and learnable individual preferences pro-vide adaptive guidance for individual behaviour. (2) We introduce objective-wise counterfactual credit assignment, which evaluates each agent’s contribution separately across the team objectives and provides objective-specific learning signals. (3) We derive a novel meta-gradient preference adaptation for-mulation, treating individual preferences as meta-variables that shape policy learning and optimising them according to their effect arXiv:2610.35736v1 [cs.MA] 26 Oct 2026 on subsequent team-level performance. We develop a static vari-ant, MIRL-S, and a dynamic variant, MIRL-D, which further adapts preferences according to the current cooperative context. (4) We conduct comprehensive experiments in Multi-Agent Parti-cle Environment. The results demonstrate that our methods consis-tently improve Pareto-front quality over a range of baselines, with the dynamic variant achieving the strongest overall performance. 
+
+## 2 Background 2.1 Cooperative Multi-Agent Reinforcement Learning 
+
+Multi-Agent Reinforcement Learning (MARL) extends the tradi-tional reinforcement learning framework to problems in which multiple agents simultaneously interact with a shared environment. In this work, we focus on cooperative and partially observable set-tings, where agents receive local observations and share a common team reward. Such a setting can be formalised as a Decentralised Partially Observable Markov Decision Process (Dec-POMDP). 
+
+Definition 2.1. Decentralised Partially Observable Markov Deci-sion Process. A Dec-POMDP is defined by the tuple (N , S, {O 𝑖 }𝑁 𝑖 =1,
+
+{A 𝑖 }𝑁 𝑖 =1, 𝑃, 𝑅, Z, 𝛾 ), where N = {1, . . . , 𝑁 } is the set of agents, 
+
+S is the global state space, O𝑖 and A𝑖 are the observation and action spaces of agent 𝑖 , respectively, O = O1 × · · · × O 𝑁 and 
+
+A = A1 × · · · × A 𝑁 denote the joint observation and joint action spaces, 𝑃 (𝑠 ′ |𝑠, a) is the state transition probability under joint action 
+
+a, 𝑅 : S × A → R is the shared team reward function, Z( o|𝑠 ′, a)
+
+is the observation function specifying the probability of receiving joint observation o ∈ O after joint action a results in state 𝑠 ′, and 𝛾 
+
+is the discount factor. At each timestep 𝑡 , agent 𝑖 receives a local observation 𝑜 𝑖 𝑡 ∈ O 𝑖 
+
+and selects an action 𝑎 𝑖 𝑡 ∼ 𝜋 𝑖 (· | 𝑜 𝑖 𝑡 ). The individual actions form the joint action a𝑡 = (𝑎 1 
+
+> 𝑡
+
+, . . . , 𝑎 𝑁 𝑡 ), which determines the subsequent state and the shared team reward, while the agents receive their corresponding local observations through the observation function 
+
+Z. We denote the collection of individual policies as the joint policy 
+
+𝝅 = (𝜋 1, . . . , 𝜋 𝑁 ).Under the cooperative setting considered here, all agents share the same team reward. The performance of a joint policy 𝝅 can be represented by its expected discounted team return, 
+
+𝑉 𝝅 (𝑠 ) = E𝝅 
+
+" ∞∑︁ 
+
+> 𝑡 =0
+
+𝛾 𝑡 𝑅 (𝑠 𝑡 , a𝑡 ) | 𝑠 0 = 𝑠 
+
+#
+
+.
+
+The learning problem is therefore to obtain individual policies whose joint behaviour achieves high shared team performance. Unlike single-agent reinforcement learning, each agent influ-ences both the environment and the learning process experienced by the other agents. This introduces challenges such as non-stationarity caused by simultaneously adapting policies, partial observability due to locally available information, and the need for agents to learn coordinated behaviours. 
+
+## 2.2 Multi-Objective Multi-Agent Reinforcement Learning 
+
+Multi-Objective Multi-Agent Reinforcement Learning (MOMARL) extends MARL to problems involving multiple objectives. In this work, we consider the cooperative team-reward setting, where all agents share the same vector-valued reward and collectively con-tribute to the performance of the multi-agent system. Following the standard cooperative formulation, this setting can be represented as a multi-objective decentralised partially observable Markov de-cision process (MO-Dec-POMDP). 
+
+Definition 2.2. Multi-Objective Decentralised Partially Observ-able Markov Decision Process. A cooperative MO-Dec-POMDP with 
+
+𝑁 agents is defined by the tuple (N , S, {O 𝑖 }𝑁 𝑖 =1, {A 𝑖 }𝑁 𝑖 =1, 𝑃, 𝑅, Z, 𝛾 ),where N = {1, . . . , 𝑁 } is the set of agents, S is the global state space, O𝑖 and A𝑖 are the observation and action spaces of agent 𝑖 ,respectively, O = O1 × · · · × O 𝑁 and A = A1 × · · · × A 𝑁 denote the joint observation and joint action spaces, 𝑃 (𝑠 ′ |𝑠, a) is the state transition probability under joint action a, 𝑅 : S × A → R𝑑 is the shared vector-valued team reward function with 𝑑 objectives, 
+
+Z( o|𝑠 ′, a) is the observation function specifying the probability of receiving joint observation o ∈ O after joint action a results in state 𝑠 ′, and 𝛾 is the discount factor. At each timestep 𝑡 , the agents select a joint action a𝑡 and receive a reward vector r𝑡 = 𝑅 (𝑠 𝑡 , a𝑡 ) =  𝑅 1 (𝑠 𝑡 , a𝑡 ), . . . , 𝑅 𝑑 (𝑠 𝑡 , a𝑡 ). The corresponding discounted team return vector is G𝑡 = Í∞ 
+
+> 𝑘 =0
+
+𝛾 𝑘 r𝑡 +𝑘 ,
+
+and the expected vector-valued performance of a joint policy 𝝅 is 
+
+V𝝅 (𝑠 ) = E𝝅 [G𝑡 | 𝑠 𝑡 = 𝑠 ] .
+
+Similar to the single-agent MORL setting, MOMARL uses a pref-erence vector 𝝎 ∈ Ω to specify the desired trade-off among the 𝑑 
+
+team objectives. However, in the multi-agent setting, this prefer-ence evaluates the collective performance produced by the joint policy 𝝅 = (𝜋 1, . . . , 𝜋 𝑁 ). Under linear scalarisation, the preference-weighted value of a joint policy is defined as 
+
+𝑉 𝝅 𝝎 (𝑠 ) = 𝑓 𝝎 (V𝝅 (𝑠 )) = 𝝎 ⊤V𝝅 (𝑠 ),
+
+where Í𝑑 𝑗 =1 𝜔 𝑗 = 1 and 𝜔 𝑗 ≥ 0. For a given preference 𝝎 , the corresponding MOMARL problem therefore seeks a joint policy that maximises the scalarised team value, 
+
+𝝅 ∗ 
+
+> 𝝎
+
+= arg max  
+
+> 𝝅
+
+𝑉 𝝅 𝝎 (𝑠 ).
+
+Different preference vectors may consequently lead to different optimal joint policies and different trade-offs among the team ob-jectives. 
+
+## 2.3 Pareto Optimality in MOMARL 
+
+In multi-objective optimisation, the concept of optimality differs from the single-objective case. Typically, no single solution simulta-neously maximises all objectives due to inherent trade-offs. Without any additional information about the user’s preference, there may therefore be multiple possibly optimal solutions. Thus, in MORL, Pareto optimality is introduced as a solution concept for possibly op-timal policies. This concept extends naturally to the multi-objective multi-agent setting. 
+
+Definition 2.3. Pareto optimality in MOMARL. A joint policy 
+
+𝝅 is said to dominate another joint policy 𝝅 ′ if and only if ∀𝑗 ∈{1, . . . , 𝑑 }, 𝑉 𝝅  
+
+> 𝑗
+
+(𝑠 ) ≥ 𝑉 𝝅 ′ 
+
+> 𝑗
+
+(𝑠 ) and ∃𝑘 ∈ { 1, . . . , 𝑑 }, 𝑉 𝝅  
+
+> 𝑘
+
+(𝑠 ) > 𝑉 𝝅 ′ 
+
+> 𝑘
+
+(𝑠 ),where 𝑉 𝝅  
+
+> 𝑗
+
+(𝑠 ) denotes the expected discounted team return for objective 𝑗 under joint policy 𝝅 . A joint policy 𝝅 ∗ is Pareto op-timal if and only if it is not dominated by another joint policy. 2The set of all Pareto optimal joint policies forms the Pareto set ,
+
+Π𝑃 = {𝝅 | 𝝅 is Pareto optimal }. The corresponding set of expected vector returns is termed the Pareto front , P = {V𝝅 (𝑠 ) | 𝝅 ∈ Π𝑃 }.Since obtaining the true Pareto set is generally intractable in complex MOMARL problems, the practical objective is to construct a finite set of joint policies that closely approximates the Pareto front, allowing a suitable joint policy to be selected according to the desired trade-off among objectives. 
+
+## 3 Related Work 
+
+In recent years, deep Reinforcement Learning has shown great promise in solving complex decision-making problems, enabling sig-nificant advancements across a wide range of applications [19, 31]. In real-world scenarios, however, problems often feature multiple, potentially conflicting objectives and involve multiple agents inter-acting in a shared environment, which raises challenging problems in the RL domain. A growing number of studies have investigated these challenges from different perspectives. We introduce relevant works in the following. MORL extends RL methods to handle multiple, potentially con-flicting objectives, and existing approaches can be broadly grouped into single-policy methods and multi-policy methods for approxi-mating the Pareto front. Single-policy approaches typically convert the multi-objective problem into a single-objective task using a predefined preference or weighting scheme, including linear scalar-ization [4, 38], and more advanced scalarization functions such as Chebyshev methods [39], hypervolume-based approaches [46] and the addition of concave terms to rewards [22]. Multi-policy MORL strategies approximate the Pareto front by learning a diverse collection of policies. One direction is developing single models conditioned on preferences [1, 18]. Further techniques for gener-ating policy sets involve Generalised Policy Improvement (GPI) for sample-efficient learning [3] or the development of transfer-able policy components using representations like successor fea-tures [2]. Besides these approaches, several studies have explored the structural relationships among Pareto-optimal solutions from other perspectives, such as navigation along the Pareto set [44], exploitation of regularities in policy parameter space [42], and pol-icy manifolds [25, 41] to improve the efficiency of Pareto-front reconstruction. MARL considers learning problems involving multiple inter-acting agents. In this paper, we focus on the domain of coopera-tive MARL, where several agents must cooperate to accomplish a shared task. Independent learning is one of the simplest MARL paradigms, in which each agent receives local observations and applies a reinforcement learning algorithm independently [35]. Al-though such approaches can be effective in simple settings [6, 11], they suffer from non-stationarity because other agents are simul-taneously interacting with the environment and adapting their policies [13]. The centralised training with decentralised execu-tion (CTDE) framework has therefore widely adopted to exploit additional global information during training while retaining decen-tralised policies at execution time, as in MADDPG [21], MAAC [16], and MAPPO [45]. Credit assignment is another major challenge in cooperative MARL. When agents share a team reward, it can be difficult to determine the contribution of each individual agent to the overall outcome, potentially leading to the lazy agent problem, where poorly contributing agents may still receive high rewards due to the successful behaviour of their teammates. To address this issue, value-decomposition methods such as VDN [33] and QMIX [28] decompose the joint value function into agent-level utilities, while COMA [9] uses a counterfactual baseline to eval-uate each agent’s contribution to the team outcome. Cooperative MARL has also explored mechanisms for facilitating coordinated behaviours, including learned communication [8, 32] and emergent role specialisation [40]. MOMARL studies multi-agent decision-making problems with multiple, potentially conflicting objectives, where interactions among agents and trade-offs among objectives must be consid-ered jointly. Early studies mainly addressed application-specific problems, often reducing multiple objectives to a scalar learning objective, as in cooperative traffic signal control [17], or considering independent agent learning, as in smart-home energy control [37]. Later work moved beyond application-specific formulations to-wards more general learning mechanisms and conceptual analyses for MOMARL. Potential-based reward shaping and difference re-wards were investigated to address credit assignment in cooperative multi-objective settings [23]. A systematic utility-based analysis further characterised multi-objective multi-agent decision-making problems according to their reward structures, utility functions, and corresponding solution concepts [27]. More recently, dedicated deep MOMARL methods have been developed. MO-MIX [14] extends value-decomposition methods to the multi-objective setting, using preference-conditioned value functions to learn cooperative policies for different objective trade-offs. The development of standardised benchmarks has also supported broader evaluation of MOMARL methods, with MOMAland [7] providing a diverse benchmark suite and MOSMAC [10] introducing sequential multi-objective tasks with longer temporal horizons. Recent work has further considered continuous state and action spaces through MOMA-AC [5], and heterogeneous utility functions across agents [20]. The above works have explored the MOMARL problem from different perspectives, but have mainly considered multiple objec-tives from the perspective of system-level optimisation. Compara-tively less attention has been paid to how multiple objectives can shape the learning and cooperation of individual agents. We move beyond a solely system-level view by incorporating an individual-level learning-to-learn perspective into MOMARL, providing agents with the adaptive capability to adjust how they contribute to the cooperative task. From this perspective, rather than viewing the multi-objective component only as an additional optimisation diffi-culty, we claim that the structure provided by multiple objectives can itself be exploited to facilitate multi-agent cooperation. 
+
+## 4 Methods 4.1 Team-Level and Individual-Level Modelling 
+
+We first model the cooperative MOMARL problem from two interconnected levels: the team level and the individual-agent level. At the team level, the multi-agent system is required to achieve a desired trade-off among the system objectives. We rep-resent this externally specified global requirement using the team preference 𝝎 team . Under linear scalarisation, for a joint policy 3System level objectives  
+
+> Multiple objectives
+> Task performance Energy efficiency
+
+Team preference  𝝎 𝒕𝒆𝒂𝒎 
+
+Multi-Agent System 
+
+> Shared Environment
+
+∙∙∙ 
+
+∙∙∙                  
+
+> Agent 1 Agent 2 Agent N
+> Agent 1 preference 𝜔 1
+> obj 1 obj 2 obj 3 …
+> obj 1 obj 2 obj 3 …obj 1 obj 2 obj 3 …obj 1 obj 2 obj 3 …
+
+Individual preference  𝝎 𝒊    
+
+> Agent 2 preference 𝜔 2Agent N preference 𝜔 N
+> Safety
+
+Figure 1: Team-level and individual-level preference mod-elling in MOMARL. An externally specified team preference defines the desired system-level trade-off, while internally developed individual preferences give agents flexibility in how they contribute to the cooperative task. 
+
+𝝅 = (𝜋 1, . . . , 𝜋 𝑁 ), the overall system performance is evaluated by 𝑉 𝝅 𝝎 team (𝑠 ) = 𝝎 ⊤
+
+> team
+
+V𝝅 (𝑠 ).
+
+Although the system is evaluated at the team level, its behaviour is produced by multiple individual agents. Different agents may contribute to the system objectives in different ways depending on their local situations and interactions with other agents, and these contributions may change as the cooperative process evolves. The team preference specifies the desired overall trade-off, but does not directly determine how each individual agent should contribute towards achieving it. This motivates us to additionally consider the MOMARL problem from an individual-agent level. For each agent 
+
+𝑖 , we introduce an individual preference 𝝎 𝑖 , which represents the agent’s internal emphasis over the same set of system objectives. Unlike 𝝎 team , the individual preference is not an additional user-specified requirement and does not change how the overall system is evaluated. Instead, it provides an internal degree of flexibility in how an individual agent responds to the different objectives when contributing to the team. The resulting two-level preference formulation is illustrated in Figure 1. An externally specified team preference is given to the multi-agent system, while the individual preferences are learnable at the agent level, allowing the relationships among individual preferences to emerge from the learning process rather than being predefined. To make use of this flexibility, each agent must first be able to assess its own situation within the team, in particular, to determine how much its behaviour actually contributes to the team performance. We therefore introduce objective-wise counterfactual credit assignment in the following subsection. 
+
+## 4.2 Objective-Wise Counterfactual Credit Assignment 
+
+In cooperative MARL, a shared team reward alone does not directly reveal how much each agent’s action contributes to the resulting team performance. Counterfactual Multi-Agent Policy Gradients (COMA) [9] addresses this problem by comparing the value of the actual joint action with a counterfactual baseline in which one agent’s action is varied while the actions of the other agents are kept fixed. Within the MOMARL structure formulated above, an agent needs to assess not only its overall contribution to the team, but also how it contributes to each of the team objectives. We therefore extend counterfactual credit assignment to preserve this objective-wise structure, representing the contribution of each agent as a vector rather than immediately reducing it to a single scalar quantity. To obtain such objective-wise credit while retaining decen-tralised policies, we adopt a centralised training with decentralised execution (CTDE) structure. For an 𝑁 - agent team, during train-ing, a centralised critic has access to the joint observation o =
+
+(𝑜 1, . . . , 𝑜 𝑁 ) and joint action a = (𝑎 1, . . . , 𝑎 𝑁 ), allowing the learn-ing process to evaluate the joint behaviour of the agents. During execution, the critic is removed and each agent selects its action independently using only its locally available information. In our implementation, the decentralised actors share a common set of parameters 𝜽 and are distinguished by an agent identifier 𝑒 𝑖 . We denote the resulting policy for agent 𝑖 as 𝜋 𝜽 (𝑎 𝑖,𝑡 | ℎ𝑖,𝑡 , 𝑒 𝑖 ), where 
+
+ℎ𝑖,𝑡 represents the local information available to the agent through its recurrent policy representation. Instead of scalarising the multi-objective return before credit assignment, the centralised critic directly estimates a vector-valued action value, 
+
+Q𝝍 (o, a) =
+
+h
+
+𝑄 (1) 
+
+> 𝝍
+
+(o, a), . . . , 𝑄 (𝑑 ) 
+
+> 𝝍
+
+(o, a)
+
+i
+
+∈ R𝑑 .
+
+where each component corresponds to one team objective. To isolate the contribution of agent 𝑖 , we consider how the team would have performed if agent 𝑖 had selected a different action while the actions of all other agents remained unchanged. Let a−𝑖 denote the actions of all agents except agent 𝑖 . By fixing a−𝑖 and averaging over alternative actions that agent 𝑖 could select according to its current policy, we obtain an agent-specific reference for its own action choice. We define objective-wise counterfactual baseline as 
+
+bcf  
+
+> 𝑖
+
+= E𝑎 ′   
+
+> 𝑖 ∼𝜋 𝜃 𝑖 (· | 𝑜 𝑖 )
+
+Q𝝍 
+
+ o, (𝑎 ′ 
+
+> 𝑖
+
+, a−𝑖 ) ∈ R𝑑 .
+
+The baseline therefore represents the expected team performance across the objectives under the same behaviour of the other agents, but with agent 𝑖 acting according to its current policy. In discrete action spaces, the counterfactual expectation can be computed by summing over the possible actions of agent 𝑖 . For continuous action spaces, however, the action space cannot be enumerated directly. We therefore approximate the counterfactual baseline using Monte Carlo sampling from the current policy. Given 
+
+𝐾 alternative actions 𝑎 (𝑘 ) 
+
+> 𝑖
+
+∼ 𝜋 𝜃 𝑖 (· | 𝑜 𝑖 ), 𝑘 = 1, . . . , 𝐾 , the counter-factual baseline is approximated by 
+
+bbcf  
+
+> 𝑖
+
+= 1
+
+𝐾 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+Q𝝍 
+
+ o, (𝑎 (𝑘 ) 
+
+> 𝑖
+
+, a−𝑖 ) ∈ R𝑑 .
+
+For each sample, only the action of agent 𝑖 is replaced, while the actions of the other agents remain fixed. The contribution of the action actually taken by agent 𝑖 can then be measured relative to this baseline. We define the objective-wise 4Execution         
+
+> (decentralised )
+> Training
+> (centralised )
+> Centralised Critic 𝑸(𝒔, 𝒂)
+> 𝐐 𝝍 ,
+> 𝐀 1cf , 𝐀 2cf , ..., 𝐀 ncf
+> Should I change my own preference to promote teamwork?
+> Agent 1 Agent i Agent n
+
+## ···   
+
+> (𝑜 𝑖 , 𝑎 𝑖 )
+
+# ⨁
+
+## ···                  
+
+> Shared
+> Environment Meta-Gradient Update
+> How am I performing in
+> the team?
+> Actor 𝜋 1Actor 𝜋 𝑖 Actor 𝜋 𝑛
+> Should I change my current
+> preference to promote teamwork?
+> Meta-parameter Controller 𝑔 𝜙 (ℎ 𝑖 (𝑡))
+> 𝜋 𝜽 𝑎 𝑛 ∣ ℎ 𝑛 , 𝑒 𝑛
+> Actor 𝜋 𝑛
+> 𝜋 𝜽 𝑎 𝑛 ∣ ℎ 𝑛 , 𝜔 𝑛
+> Actor 𝜋 𝑛
+> MIRL-S (Static)
+> MIRL-D (Dynamic)
+
+Figure 2: System overview for MIRL-S and MIRL-D. 
+
+counterfactual advantage as 
+
+Acf 
+
+𝑖 = Q𝝍 (o, a) − bcf 
+
+𝑖 ∈ R𝑑 ,
+
+where bbcf 
+
+𝑖 is used in place of bcf 
+
+𝑖 for continuous action spaces. Each component of Acf 
+
+𝑖 measures whether the action actually taken by agent 𝑖 improves or reduces the team performance for the corresponding objective relative to its own counterfactual baseline. This provides each agent with an objective-wise estimate of its own contribution, which is subsequently combined with the individual preference to guide its policy update, as illustrated in Figure 2. 
+
+## 4.3 Static Meta-Gradient Informed Preference Adaptation 
+
+The objective-wise counterfactual credit developed above provides each agent with separate estimates of its contribution across the team objectives. The next question is how these objective-wise contributions should be combined when updating the individual policy. Rather than fixing this combination manually, we aim to let each agent learn how its individual preference should guide its learning so that the resulting behaviour better contributes to the overall team performance. This naturally leads to a learning-to-learn problem. In addition to learning the policy itself, the agent must learn how its learning sig-nal should be constructed from the objective-wise credit available to it. Inspired by meta-gradient reinforcement learning [43], we develop a meta-gradient preference adaptation mechanism that al-lows each agent to adapt its individual preference according to how that preference affects subsequent team performance. Specifically, we treat the individual preference as a differentiable meta-variable that controls how the agent’s objective-wise credit is combined during its policy update. For each agent 𝑖 , we introduce an unconstrained meta-parameter 
+
+𝜼 𝑖 ∈ R𝑑 and define its individual preference as 
+
+𝝎 𝑖 = softmax (𝜼 𝑖 ).
+
+This unit-temperature softmax mapping maintains 𝝎 𝑖 on the pref-erence simplex while preserving differentiability with respect to 𝜼 𝑖 .The centralised vector critic Q𝝍 is trained independently using objective-wise TD( 𝜆 ) targets, without scalarising the objectives us-ing 𝝎 𝑖 . Within the computational graph used for the meta-gradient update, the critic update is therefore treated as independent of the preference meta-parameter 𝜼 𝑖 , i.e., 𝜕 𝝍 ′
+
+𝜕 𝜼 𝑖 = 0. Accordingly, for agent 𝑖 
+
+at timestep 𝑡 , the objective-wise counterfactual advantage Acf 
+
+𝑖,𝑡 ∈ R𝑑 Joint state / Joint action              
+
+> Objective-wise credit
+> 𝑸(𝑠, 𝑎) and 𝑨 𝑖 𝑐𝑓
+> Critic Loss
+> ℒ𝑐𝑟𝑖𝑡𝑖𝑐
+> 𝝍′
+> Actor parameter 𝜽 ;
+> Meta-parameter 𝜼 𝑖 ;
+> 𝝎 𝑖 = softmax(𝜼 𝑖 )
+> Scalarized individual advantage
+> 𝑨 𝑖 𝑖𝑛𝑛𝑒𝑟 = 𝝎 𝑖 𝑇 (𝜼 𝑖 )𝑨 𝑖 𝑐𝑓
+> Actor Loss
+> ℒactor
+> 𝜽 ’
+> Critic parameter 𝝍
+> Update meta-gradient trace
+> 𝒁 𝒊 ′ = 𝜇𝒁 𝒊 +𝜕𝒇 𝜕𝜼 𝑖
+> .
+> Team level Meta-loss
+> Jmeta (𝝉′, 𝜽 ’, 𝝎 team )
+> Sample 𝝉
+> 𝜽′ = 𝜽 + 𝒇(𝝉, 𝜽, 𝜼 𝑖 )
+> Take subsequent meta-trajectory
+> 𝝉′~𝝅 𝜽′
+> Critic Update
+> Actor 𝜋 𝑖 Update
+> Meta-Parameter Update
+> 𝜼 ’
+> Meta-gradient
+> 𝜕 Jmeta
+> 𝜕𝜼 𝑖
+> ⇦𝜕 Jmeta
+> 𝜕𝜃′ 𝐙 𝑖 ′
+
+Figure 3: Illustration of training update in MIRL-S. 
+
+computed from the critic is detached and treated as a fixed training signal in the following meta-gradient calculation. 
+
+4.3.1 Preference-Guided Actor Update. As illustrated in Figure 3, during each policy update, a trajectory 𝜏 = {o𝑡 , a𝑡 , r𝑡 }𝑇 −1
+
+𝑡 =0 is col-lected from the current joint policy. The objective-wise counter-factual advantages Acf 
+
+𝑖,𝑡 used below are then computed from this trajectory using the centralised critic. For each agent, its current individual preference determines how its objective-wise counterfactual credit is combined into the scalar learning signal used by the actor. Specifically, 
+
+𝐴 inner 
+
+𝑖,𝑡 = 𝝎 ⊤
+
+𝑖 Acf 
+
+𝑖,𝑡 = softmax (𝜼 𝑖 )⊤Acf 
+
+𝑖,𝑡 .
+
+For agent 𝑖 , the corresponding one-step actor loss is 
+
+ℓ𝑖,𝑡 (𝜽 , 𝜼 𝑖 ) = − log 𝜋 𝜽 (𝑎 𝑖,𝑡 | ℎ𝑖,𝑡 , 𝑒 𝑖 )𝐴 inner 
+
+𝑖,𝑡 .
+
+Over a trajectory of length 𝑇 , the individual actor loss is 
+
+𝐽 𝑖 (𝜏, 𝜽 , 𝜼 𝑖 ) = 1
+
+𝑇 
+
+𝑇 −1∑︁ 
+
+𝑡 =0
+
+ℓ𝑖,𝑡 (𝜽 , 𝜼 𝑖 ),
+
+which gives 
+
+𝐽 𝑖 (𝜏, 𝜽 , 𝜼 𝑖 ) = − 1
+
+𝑇 
+
+𝑇 −1∑︁ 
+
+𝑡 =0
+
+log 𝜋 𝜽 (𝑎 𝑖,𝑡 | ℎ𝑖,𝑡 , 𝑒 𝑖 ) 𝝎 ⊤
+
+𝑖 Acf 
+
+𝑖,𝑡 
+
+ .
+
+During centralised training, the learning signals from all agents are used jointly to update the shared actor parameters 𝜽 . The indi-vidual actor losses are therefore averaged to form the inner actor objective, 
+
+Lactor = 𝐽 inner (𝜏, 𝜽 , 𝜼 ) = 1
+
+𝑁 
+
+𝑁 ∑︁ 
+
+𝑖 =1
+
+𝐽 𝑖 (𝜏, 𝜽 , 𝜼 𝑖 ),
+
+where 𝜼 = 𝜼 1, . . . , 𝜼 𝑁 . Equivalently, 
+
+𝐽 inner (𝜏, 𝜽 , 𝜼 ) = − 1
+
+𝑁𝑇 
+
+𝑁 ∑︁ 
+
+𝑖 =1
+
+𝑇 −1∑︁ 
+
+𝑡 =0
+
+log 𝜋 𝜽 (𝑎 𝑖,𝑡 | ℎ𝑖,𝑡 , 𝑒 𝑖 ) 𝝎 ⊤
+
+𝑖 Acf 
+
+𝑖,𝑡 
+
+ (1) where 𝝎 𝑖 = softmax (𝜼 𝑖 ). The factor 1 /𝑁 simply averages the gra-dient contributions from the agents and does not require the indi-vidual preferences to average to 𝝎 team .As shown in Figure 3, the actor parameters are updated from this preference-guided inner objective as 
+
+𝑓 𝜽 (𝜏, 𝜽 , 𝜼 ) = −𝛼 𝜃 
+
+𝜕𝐽 inner (𝜏, 𝜽 , 𝜼 )
+
+𝜕 𝜽 (2) 5the updated actor parameters are 
+
+𝜽 ′ = 𝜽 + 𝑓 𝜽 (𝜏, 𝜽 , 𝜼 ), (3) or equivalently, 
+
+𝜽 ′ = 𝜽 − 𝛼 𝜃 
+
+𝜕𝐽 inner (𝜏, 𝜽 , 𝜼 )
+
+𝜕 𝜽 .
+
+Thus, each agent’s individual preference determines how its own objective-wise counterfactual credit contributes to the update of the actor. 
+
+4.3.2 Meta-Gradient Preference Update. The preference-guided ac-tor update above determines how the current individual preferences influence the policy learning. The remaining question is how these preferences should themselves be adapted. Our goal is to adjust each meta-parameter 𝜼 𝑖 according to whether the actor update in-duced by its corresponding individual preference leads to improved subsequent team performance. Following the principle of online cross-validation [34], we evalu-ate the effect of the actor update on a subsequent sample of experi-ence. After updating the shared actor from 𝜽 to 𝜽 ′ using the trajec-tory 𝜏 , we collect a subsequent trajectory 𝜏 ′ = o′ 
+
+> 𝑡
+
+, a′ 
+
+> 𝑡
+
+, r′   
+
+> 𝑡
+> 𝑇 ′−1
+> 𝑡 =0
+
+, 𝜏 ′ ∼
+
+𝜋 𝜽 ′ . The subsequent trajectory is used to construct a meta-objective that evaluates the updated policy according to the fixed team pref-erence 𝝎 team .For the subsequent trajectory, we again compute the objective-wise counterfactual advantage for each agent using the centralised vector critic, denoted by Acf ′ 
+
+> 𝑖,𝑡
+
+∈ R𝑑 . Unlike the inner actor update, however, these objective-wise contributions are now evaluated according to the fixed team preference rather than the individual preference. We therefore define the team-evaluated meta-advantage for agent 𝑖 as 
+
+𝐴 meta  
+
+> 𝑖,𝑡
+
+= 𝝎 ⊤
+
+> team
+
+Acf ′ 
+
+> 𝑖,𝑡
+
+.
+
+This provides a scalar measure of whether agent 𝑖 ’s action under the updated policy contributes positively to the team objective specified by 𝝎 team .Using this team-evaluated meta-advantage, we define the meta-objective for the updated actor using the same policy-gradient structure as the actor objective: 
+
+𝐽 meta (𝜏 ′, 𝜽 ′, 𝝎 team ) = − 1
+
+𝑁𝑇 ′
+
+> 𝑁
+
+∑︁   
+
+> 𝑖 =1
+> 𝑇 ′−1
+
+∑︁ 
+
+> 𝑡 =0
+
+log 𝜋 𝜽 ′ (𝑎 ′ 
+
+> 𝑖,𝑡
+
+| ℎ′ 
+
+> 𝑖,𝑡
+
+, 𝑒 𝑖 )𝐴 meta  
+
+> 𝑖,𝑡
+
+.
+
+The two objectives therefore play different roles in the learning process. 𝐽 inner is the primary reinforcement-learning objective used to update the actor parameters 𝜽 under the current individual pref-erences, whereas 𝐽 meta is the meta-learning objective used to adapt the preference meta-parameters 𝜼 𝑖 according to the subsequent team performance under 𝝎 team .The purpose of the meta-gradient 𝜕𝐽 meta  
+
+> 𝜕 𝜼 𝑖
+
+is therefore to determine how changing agent 𝑖 ’s preference meta-parameter 𝜼 𝑖 would affect this subsequent team-level meta-objective 𝐽 meta . By the chain rule, 
+
+𝜕𝐽 meta 
+
+𝜕 𝜼 𝑖 
+
+= 𝜕𝐽 meta 
+
+𝜕 𝜽 ′
+
+𝑑 𝜽 ′
+
+𝑑 𝜼 𝑖 
+
+.
+
+The remaining term 𝑑 𝜽 ′ 
+
+> 𝑑 𝜼 𝑖
+
+describes the sensitivity of the updated actor parameters to agent 𝑖 ’s preference meta-parameter. Recall that the actor update is defined in Equation 3. Taking the total derivative with respect to 𝜼 𝑖 gives 
+
+𝑑 𝜽 ′
+
+𝑑 𝜼 𝑖 
+
+=
+
+
+
+I + 𝜕𝑓 𝜽 
+
+𝜕 𝜽 
+
+ 𝑑 𝜽 
+
+𝑑 𝜼 𝑖 
+
++ 𝜕𝑓 𝜽 
+
+𝜕 𝜼 𝑖 
+
+.
+
+The term 𝜕𝑓 𝜽  
+
+> 𝜕 𝜽
+
+is a high-dimensional Jacobian of the actor update and is expensive to compute and propagate explicitly through suc-cessive learning updates. Following meta-gradient reinforcement learning [43], we therefore approximate the accumulated sensitivity using a meta-gradient trace 𝑍 𝑖 ≈ 𝑑 𝜽  
+
+> 𝑑 𝜼 𝑖
+
+, which is updated as 
+
+𝑍 ′ 
+
+> 𝑖
+
+= 𝜇𝑍 𝑖 + 𝜕𝑓 𝜽 
+
+𝜕 𝜼 𝑖 
+
+. (4) Here, 𝜇 ∈ [ 0, 1] controls how much sensitivity from previous actor updates is retained in the trace. In our experiments, we use 𝜇 = 0, corresponding to the greedy meta-gradient setting that considers only the effect of the current meta-parameter on the immediately resulting actor update. The remaining derivative 𝜕𝑓 𝜽  
+
+> 𝜕 𝜼 𝑖
+
+can be computed directly from the differentiable dependence of the actor update on the individual preference. Since the objective-wise counterfactual advantage Acf 
+
+> 𝑖,𝑡
+
+is detached and treated as a fixed training signal, according to actor update Equation 2, the sensitivity of the actor update to agent 𝑖 ’s preference meta-parameter is 
+
+𝜕𝑓 𝜽 
+
+𝜕 𝜼 𝑖 
+
+=−𝛼 𝜃 
+
+𝜕 𝜕 𝜼 𝑖 
+
+𝜕𝐽 inner 
+
+𝜕 𝜽 = 𝛼 𝜃 
+
+𝑁𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+∇𝜽 log 𝜋 𝜽 (𝑎 𝑖,𝑡 | ℎ𝑖,𝑡 , 𝑒 𝑖 )
+
+ 𝜕 𝝎 𝑖 
+
+𝜕 𝜼 𝑖 
+
+⊤
+
+Acf 
+
+> 𝑖,𝑡
+
+⊤
+
+.
+
+(5) The preference Jacobian 𝜕 𝝎 𝑖  
+
+> 𝜕 𝜼 𝑖
+
+appearing in this expression can be computed analytically, since the individual preference depends on the meta-parameter through 𝝎 𝑖 (𝜼 𝑖 ) = softmax (𝜼 𝑖 ). The corre-sponding softmax Jacobian is 
+
+𝜕 𝝎 𝑖 
+
+𝜕 𝜼 𝑖 
+
+= diag (𝝎 𝑖 ) − 𝝎 𝑖 𝝎 ⊤ 
+
+> 𝑖
+
+.
+
+With the greedy meta-gradient setting 𝜇 = 0, the trace (4) be-comes 𝑍 ′ 
+
+> 𝑖
+
+= 𝜕𝑓 𝜽  
+
+> 𝜕 𝜼 𝑖
+
+.The meta-gradient for agent 𝑖 can therefore be approximated as 
+
+𝜕𝐽 meta 
+
+𝜕 𝜼 𝑖 
+
+≈ 𝜕𝐽 meta 
+
+𝜕 𝜽 ′ 𝑍 ′ 
+
+> 𝑖
+
+= 𝜕𝐽 meta 
+
+𝜕 𝜽 ′
+
+𝜕𝑓 𝜽 
+
+𝜕 𝜼 𝑖 
+
+. (6) This gradient captures how changing agent 𝑖 ’s individual prefer-ence affects the subsequent team-level meta-objective through its influence on the actor update. The resulting meta-gradients are used to update the preference meta-parameters. In our implementation, the meta-parameters 𝜼 =
+
+{𝜼 1, . . . , 𝜼 𝑁 } are optimised using Adam with meta learning rate 
+
+𝛽 𝜔 . After the meta-parameter update, the corresponding individual preferences are obtained through the softmax mapping as 𝝎 ′ 
+
+> 𝑖
+
+=
+
+softmax (𝜼 ′ 
+
+> 𝑖
+
+).
+
+Although the individual preferences can be adapted through the meta-gradient learning process, each agent is still represented by a single meta-parameter vector 𝜼 𝑖 throughout the interaction. Con-sequently, the resulting preference 𝝎 𝑖 is state-independent: it can capture a different overall objective emphasis for each agent, but 6cannot change in response to the agent’s current observation, be-haviour, or cooperative situation. We refer to this static formulation as MIRL-S, with details provided in Algorithm 1 in Appendix A. This static formulation therefore provides agent-specific prefer-ence adaptation at the training level, but does not yet allow indi-vidual preferences to adapt to the current cooperative situation. In cooperative tasks, however, the role or contribution required from an agent may change as the interaction evolves. This motivates ex-tending the preference adaptation mechanism from a single learned preference for each agent to preferences that can dynamically vary according to the current cooperative context. 
+
+## 4.4 Dynamic Meta-Gradient Informed Preference Adaptation 
+
+To enable individual preferences to vary with the current coop-erative situation, we replace the single state-independent meta-parameter 𝜼 𝑖 used for each agent in the static formulation with a differentiable preference controller 𝑔 𝝓 . Rather than learning one fixed preference representation for agent 𝑖 , the controller generates a preference meta-variable from the agent’s current local repre-sentation at each timestep. This dynamic preference pathway is illustrated in Figure 2. Specifically, 
+
+𝜼 𝑖,𝑡 = 𝑔 𝝓 (h𝑖,𝑡 ),
+
+and the corresponding dynamic individual preference is 
+
+𝝎 𝑖,𝑡 = softmax (𝜼 𝑖,𝑡 ) = softmax  𝑔 𝝓 (h𝑖,𝑡 ) .
+
+Here, 𝝓 denotes the learnable parameters of the preference con-troller, and h𝑖,𝑡 denotes the local recurrent representation available to agent 𝑖 at timestep 𝑡 . Conditioning the controller on h𝑖,𝑡 allows the resulting preference to vary across agents and timesteps accord-ing to the current cooperative situation. The dynamically generated preference is also explicitly provided to the actor. Specifically, the policy is conditioned jointly on the lo-cal recurrent representation and the current individual preference, 
+
+𝑎 𝑖,𝑡 ∼ 𝜋 𝜽 
+
+ · | h𝑖,𝑡 , 𝝎 𝑖,𝑡 
+
+. This allows changes in the generated pref-erence to directly influence the agent’s behaviour at each timestep. The same dynamic preference is used to scalarise the objective-wise counterfactual credit during policy learning: 
+
+𝐴 inner ,dyn  
+
+> 𝑖,𝑡
+
+= 𝝎 ⊤ 
+
+> 𝑖,𝑡
+
+Acf  
+
+> 𝑖,𝑡
+
+.
+
+The subsequent actor update and meta-gradient preference up-date follow the same formulation as in the static case, with the dynamically generated 𝝎 𝑖,𝑡 replacing the static 𝝎 𝑖 . The centralised vector critic and objective-wise counterfactual credit assignment remain unchanged. This dynamic formulation defines the second variant of our method, MIRL-D, with details provided in Algorithm 2 in Appendix A. 
+
+## 5 Experiments 5.1 Experiment Setup 
+
+Benchmark Problems. We conduct experiments using the Multi-Agent Particle Environment (MPE) [21], which is a widely used RL benchmark. We extend the original MPE to a multi-objective setting by retaining the original task reward as the first objective and introducing a second objective that captures the energy consumed during interaction. We evaluate the proposed methods and baselines on four cooperative tasks: Spread , Formation , Line , and Reference .The first three tasks involve three agents with different spatial coordination requirements, while Reference involves two agents and additionally requires communication for successful cooperation. Full environment definitions are provided in Appendix B.1. 
+
+Evaluation Metrics. We evaluate the quality of the resulting Pareto fronts using three standard metrics: Hypervolume (HV), Expected Utility (EU), and Sparsity (SP), following the formalism in [12, 47, 48]. HV measures the overall quality and coverage of the Pareto front, EU evaluates performance across different objective preferences, and SP measures the distribution of solutions along the front. Higher HV and EU and lower SP indicate better performance. Since SP is scale-dependent and less directly related to decision quality, we report it mainly as a complementary metric to assess coverage diversity. More details can be found in Appendix B.2. 
+
+Baselines. As dedicated MOMARL algorithms remain relatively limited, we consider five baselines of increasing complexity: DTDE-PPO , CTDE-PPO-V , CTDE-PPO-Q , MO-COMA , and MO-MIX . DTDE-PPO represents the fully decentralised setting, where each agent independently learns its policy using PPO [29] network. Given the surprisingly strong performance of PPO previously observed in co-operative MARL [45], we further extend MAPPO to the MOMARL setting under CTDE and consider two variants, CTDE-PPO-V and 
+
+CTDE-PPO-Q , using centralised 𝑉 - and 𝑄 -critics, respectively. MO-COMA extends COMA [9] to the multi-objective setting and pro-vides counterfactual credit assignment for individual agents across multiple objectives. It also serves as an ablation baseline for evalu-ating the additional preference-adaptation mechanisms introduced in our methods. We additionally compare against MO-MIX [14], a dedicated MOMARL algorithm based on multi-objective value decomposition. All methods except MO-MIX operate in continuous action spaces. Since MO-MIX only supports discrete actions, it is evaluated using a discretised version of the action space. Further implementation details are provided in Appendix B.3. 
+
+## 5.2 Results 
+
+We now present the empirical results across four benchmark prob-lems. All methods are trained under the same total interaction bud-get of 5 ×10 6 joint environment steps per environment. Full training settings and hyperparameters are provided in Appendix B.3. Figure 4 compares the Pareto fronts obtained by the different methods, while Table 1 reports the quantitative evaluation results as mean ± standard deviation. Each marker corresponds to a non-dominated solution in the estimated Pareto front. The connecting lines are included only as a visual guide between neighbouring solutions. Across the benchmark problems, the proposed MIRL vari-ants consistently achieve strong Pareto-front quality, with MIRL-D showing the best overall performance. Further analysis of prefer-ence adaptation is provided in Appendix C. Among the PPO-based baselines, DTDE-PPO consistently shows the weakest performance, illustrating the difficulty of learning co-operative behaviours through fully decentralised training in these tasks. Introducing centralised information during training substan-tially improves both Pareto-front quality and coverage. In particular, 7Table 1: Evaluation of the Pareto front quality.                                                                                                                                                                                                                                                                   
+
+> Environment Metric Method DTDE-PPO CTDE-PPO-V CTDE-PPO-Q MO-COMA MO-MIX MIRL-S MIRL-D Spread HV 1222.55 ±15.43 1434.46 ±52.34 1512.17 ±19.41 1570.08 ±8.61 1213.48 ±131.15 1581.40 ±30.05 1594.55 ±20.34
+> EU 36.57 ±0.24 38.16 ±0.54 39.32 ±0.12 39.85 ±0.08 36.44 ±2.26 40.02 ±0.32 40.14 ±0.25
+> SP 60.58 ±76.77 14.03 ±3.08 2.86 ±2.32 1.20 ±0.82 0.07 ±0.07 1.39 ±1.06 12.08 ±19.77 Formation HV 1359.53 ±10.20 1815.27 ±40.36 1975.36 ±40.19 2178.79 ±23.31 1525.67 ±333.53 2187.33 ±7.91 2196.13 ±15.76
+> EU 37.79 ±0.25 42.59 ±0.34 44.02 ±0.31 45.76 ±0.20 39.21 ±4.77 45.85 ±0.19 46.03 ±0.25
+> SP 918.66 ±526.72 1.71 ±0.80 3.53 ±1.49 2.14 ±1.37 0.07 ±0.07 0.77 ±0.22 1.52 ±0.45 Line HV 1245.48 ±70.17 1697.30 ±13.68 1696.68 ±8.88 1958.71 ±26.19 1239.09 ±433.07 1957.49 ±22.05 1965.89 ±24.11
+> EU 36.54 ±0.53 41.19 ±0.07 41.25 ±0.28 43.64 ±0.33 35.32 ±7.22 43.71 ±0.26 43.74 ±0.26
+> SP 96.38 ±134.45 33.32 ±27.87 14.65 ±4.24 0.86 ±0.57 0.12 ±0.09 0.81 ±0.62 0.79 ±0.38 Reference HV 1843.75 ±24.38 2082.20 ±28.47 2413.35 ±36.78 2567.07 ±21.76 2016.33 ±69.76 2587.41 ±28.06 2587.44 ±27.99
+> EU 44.64 ±0.17 46.93 ±0.24 48.09 ±0.51 50.67 ±0.18 46.02 ±0.87 50.81 ±0.14 50.85 ±0.21
+> SP –1254.31 ±12.10 107.04 ±42.06 0.90 ±0.53 3.08 ±3.04 0.62 ±0.11 0.62 ±0.09
+> (a) Spread. (b) Formation.
+> (c) Line. (d) Reference.
+
+Figure 4: Pareto front comparison of the MIRL variants with the baselines across four benchmark problems. 
+
+CTDE-PPO-Q generally performs better than CTDE-PPO-V, sug-gesting that conditioning the critic on the joint action provides a more informative learning signal for coordinating individual ac-tions. It is worth noting that these PPO-based methods constitute strong rather than trivial baselines. PPO-based methods have previ-ously demonstrated surprisingly strong performance in MARL [45], and the variants here retain this strong policy-optimisation back-bone while extending it to the multi-objective setting. MO-MIX exhibits a different behaviour from the other methods. As shown in Figure 4, it often produces relatively dense groups of solutions, which is also reflected by its low SP values, but these solutions tend to occupy a more limited region of the objective space and result in substantially lower HV and EU. One possible reason is that MO-MIX is a single preference-conditioned network, which may be more sensitive to hyperparameter choices and can be more difficult to train. Under the same overall interaction budget, a single model must represent policies across the full preference space, and this shared representation may, to some extent, compromise performance. In addition, MO-MIX operates on discrete actions and therefore requires discretisation of the originally continuous MPE action space, which may further limit its achievable performance. MO-COMA achieves substantially stronger performance than the PPO-based baselines across all tasks, showing that objective-wise counterfactual credit assignment alone already provides an effective learning signal for cooperative MOMARL. Its performance is particularly strong on Formation and Line , where it is already close to both MIRL variants. On Spread and Reference , however, the MIRL methods provide clearer improvements over MO-COMA. We analyse these differences further in the ablation study. 
+
+## 5.3 Ablation and Further Analysis 
+
+To isolate the contribution of the proposed meta-gradient informed preference adaptation mechanism, we compare the ablation base-line MO-COMA with static MIRL-S and dynamic MIRL-D methods. The benefit of preference adaptation varies with the coordina-tion requirements of the task. On Spread , MIRL-S improves over MO-COMA, and MIRL-D provides a further improvement. This task requires agents to continuously adjust their relative positions and contributions during interaction, making the ability to adapt individual preferences to the current cooperative context particu-larly useful. On Reference , both MIRL-S and MIRL-D improve over MO-COMA, while the difference between the two MIRL variants is comparatively small. In this task, the cooperative requirement, par-ticularly the communication component, is relatively stable and less dependent on the changing cooperative situation. The additional flexibility of dynamic preference adaptation therefore provides a smaller advantage. By contrast, on Formation and Line , MO-COMA already achieves performance very close to the two MIRL variants. These tasks have relatively simple and stable coordination require-ments, and objective-wise counterfactual credit assignment alone appears sufficient to produce strong cooperative behaviour, leaving less room for additional gains from preference adaptation. 86 Conclusion 
+
+In this work, we show that the multi-objective structure can be exploited to facilitate multi-agent cooperation, rather than be-ing treated solely as an additional optimisation challenge in MO-MARL. Building on this novel perspective, we formulate team-level and individual-level preferences to introduce adaptive agent-level guidance while preserving the system-level objective trade-off. To enable preference-guided cooperation across agents, we derive objective-wise counterfactual credit assignment together with a meta-gradient informed preference adaptation mechanism, provid-ing a principled way to learn how individual preferences should shape policy updates. These developments lead to MIRL, with static (MIRL-S) and dynamic (MIRL-D) variants, which achieve strong Pareto-front performance across the benchmark tasks, with MIRL-D showing the best overall results. Our ablation results further demonstrate that meta-gradient informed preference adaptation provides additional benefits beyond counterfactual credit assign-ment, particularly when cooperation requires greater adaptability. 
+
+## Acknowledgments 
+
+This work was supported by the United Kingdom Research and In-novation (grant EP/S023208/1), UKRI Centre for Doctoral Training in Robotics and Autonomous Systems at the University of Edin-burgh, School of Informatics. 
+
+## References 
+
+[1] Axel Abels, Diederik Roijers, Tom Lenaerts, Ann Nowé, and Denis Steckelmacher. 2019. Dynamic Weights in Multi-Objective Deep Reinforcement Learning. In 
+
+Proceedings of the 36th International Conference on Machine Learning (Proceed-ings of Machine Learning Research, Vol. 97) , Kamalika Chaudhuri and Ruslan Salakhutdinov (Eds.). PMLR, 11–20. [2] Lucas Nunes Alegre, Ana Bazzan, and Bruno C. Da Silva. 2022. Optimistic Linear Support and Successor Features as a Basis for Optimal Policy Transfer. In 
+
+Proceedings of the 39th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 162) , Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato (Eds.). PMLR, 394–413. [3] Lucas N. Alegre, Ana L. C. Bazzan, Diederik M. Roijers, Ann Nowé, and Bruno C. da Silva. 2023. Sample-Efficient Multi-Objective Learning via Generalized Policy Improvement Prioritization. In Proceedings of the 2023 International Conference on Autonomous Agents and Multiagent Systems (London, United Kingdom) (AAMAS ’23) . International Foundation for Autonomous Agents and Multiagent Systems, Richland, SC, 2003–2012. [4] Leon Barrett and Srini Narayanan. 2008. Learning all optimal policies with multiple criteria. In Proceedings of the 25th International Conference on Machine Learning (Helsinki, Finland) (ICML ’08) . Association for Computing Machinery, New York, NY, USA, 41–47. [5] Adam Callaghan, Karl Mason, and Patrick Mannion. 2026. MOMA-AC: A preference-driven actor-critic framework for continuous multi-objective multi-agent reinforcement learning. Neurocomputing 664 (2026), 132032. [6] Caroline Claus and Craig Boutilier. 1998. The Dynamics of Reinforcement Learning in Cooperative Multiagent Systems. AAAI 1998, 746-752 (1998), 2. [7] Florian Felten, Umut Ucak, Hicham Azmani, Gao Peng, Willem Röpke, Hendrik Baier, Patrick Mannion, Diederik M. Roijers, Jordan K. Terry, El-Ghazali Talbi, Grégoire Danoy, Ann Nowé, and Roxana Rădulescu. 2026. MOMAland: A Set of Benchmarks for Multi-Objective Multi-Agent Reinforcement Learning. Journal of Data-centric Machine Learning Research 3, 15 (2026), 1–49. https://openreview. net/forum?id=vzHLRK0sSp [8] Jakob Foerster, Ioannis Alexandros Assael, Nando de Freitas, and Shimon White-son. 2016. Learning to Communicate with Deep Multi-Agent Reinforcement Learning. In Advances in Neural Information Processing Systems (NIPS) , D. Lee, M. Sugiyama, U. Luxburg, I. Guyon, and R. Garnett (Eds.), Vol. 29. Curran Asso-ciates, Inc. [9] Jakob Foerster, Gregory Farquhar, Triantafyllos Afouras, Nantas Nardelli, and Shimon Whiteson. 2018. Counterfactual multi-agent policy gradients. In Pro-ceedings of the AAAI Conference on Artificial Intelligence , Vol. 32:1. [10] Minghong Geng, Shubham Pateria, Budhitama Subagdja, and Ah-Hwee Tan. 2025. MOSMAC: A multi-agent reinforcement learning benchmark on sequential multi-objective tasks. In Proceedings of the 24th International Conference on Autonomous Agents and Multiagent Systems . 867–876. [11] Jayesh K. Gupta, Maxim Egorov, and Mykel Kochenderfer. 2017. Cooperative Multi-agent Control Using Deep Reinforcement Learning. In Autonomous Agents and Multiagent Systems , Gita Sukthankar and Juan A. Rodriguez-Aguilar (Eds.). Springer International Publishing, Cham, 66–83. [12] Conor F Hayes, Roxana Rădulescu, Eugenio Bargiacchi, Johan Källström, Matthew Macfarlane, Mathieu Reymond, Timothy Verstraeten, Luisa M Zintgraf, Richard Dazeley, Fredrik Heintz, et al. 2022. A practical guide to multi-objective reinforcement learning and planning. Autonomous Agents and Multi-Agent Sys-tems 36, 1 (2022), 26. [13] Pablo Hernandez-Leal, Michael Kaisers, Tim Baarslag, and Enrique Munoz de Cote. 2019. A Survey of Learning in Multiagent Environments: Dealing with Non-Stationarity. arXiv:1707.09183 [14] Tianmeng Hu, Biao Luo, Chunhua Yang, and Tingwen Huang. 2023. MO-MIX: Multi-objective multi-agent cooperative decision-making with deep reinforce-ment learning. IEEE Transactions on Pattern Analysis and Machine Intelligence 45, 10 (2023), 12098–12112. [15] Shao-Ming Hung and Sidney N Givigi. 2016. A Q-learning approach to flocking with UAVs in a stochastic environment. IEEE Transactions on Cybernetics 47, 1 (2016), 186–197. [16] Shariq Iqbal and Fei Sha. 2019. Actor-Attention-Critic for Multi-Agent Reinforce-ment Learning. In Proceedings of the 36th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 97) , Kamalika Chaudhuri and Ruslan Salakhutdinov (Eds.). PMLR, 2961–2970. [17] Mohamed A Khamis and Walid Gomaa. 2014. Adaptive multi-objective rein-forcement learning with hybrid exploration for traffic signal control based on cooperative multi-agent framework. Engineering Applications of Artificial Intelli-gence 29 (2014), 134–151. [18] Panagiotis Kyriakis, Jyotirmoy Deshmukh, and Paul Bogdan. 2022. Pareto Policy Adaptation. In International Conference on Learning Representations . https: //openreview.net/forum?id=wfZGut6e09 [19] Sergey Levine, Chelsea Finn, Trevor Darrell, and Pieter Abbeel. 2016. End-to-end training of deep visuomotor policies. Journal of Machine Learning Research 17, 39 (2016), 1–40. [20] Zhuhui Li, Chunbo Luo, Liming Huang, Luyu Qi, and Geyong Min. 2026. Achiev-ing Equilibrium under Utility Heterogeneity: An Agent-Attention Framework for Multi-Agent Multi-Objective Reinforcement Learning. Proceedings of the AAAI Conference on Artificial Intelligence 40, 35 (2026), 29538–29545. [21] Ryan Lowe, Yi Wu, Aviv Tamar, Jean Harb, Pieter Abbeel, and Igor Mordatch. 2017. Multi-Agent Actor-Critic for Mixed Cooperative-Competitive Environments. 
+
+Advances in Neural Information Processing Systems (NIPS) (2017). [22] Haoye Lu, Daniel Herman, and Yaoliang Yu. 2023. Multi-Objective Reinforce-ment Learning: Convexity, Stationarity and Pareto Optimality. In The Eleventh International Conference on Learning Representations . https://openreview.net/ forum?id=TjEzIsyEsQ6 [23] Patrick Mannion, Sam Devlin, Jim Duggan, and Enda Howley. 2018. Reward shaping for knowledge-based multi-objective multi-agent reinforcement learning. 
+
+The Knowledge Engineering Review 33 (2018), e23. [24] Igor Mordatch and Pieter Abbeel. 2017. Emergence of Grounded Compositional Language in Multi-Agent Populations. arXiv preprint arXiv:1703.04908 (2017). [25] Simone Parisi, Matteo Pirotta, and Marcello Restelli. 2016. Multi-objective Re-inforcement Learning through Continuous Pareto Manifold Approximation. 
+
+Journal of Artificial Intelligence Research 57, 1 (Sept. 2016), 187–227. [26] Bei Peng, Tabish Rashid, Christian Schroeder de Witt, Pierre-Alexandre Kami-enny, Philip Torr, Wendelin Böhmer, and Shimon Whiteson. 2021. Facmac: Fac-tored multi-agent centralised policy gradients. Advances in Neural Information Processing Systems (NeurIPS 2021) 34 (2021), 12208–12221. [27] Roxana Rădulescu, Patrick Mannion, Diederik M Roijers, and Ann Nowé. 2020. Multi-objective multi-agent decision making: a utility-based analysis and survey. 
+
+Autonomous Agents and Multi-Agent Systems 34, 1 (2020), 10. [28] Tabish Rashid, Mikayel Samvelyan, Christian Schroeder de Witt, Gregory Far-quhar, Jakob Foerster, and Shimon Whiteson. 2020. Monotonic Value Function Factorisation for Deep Multi-Agent Reinforcement Learning. Journal of Machine Learning Research 21, 178 (2020), 1–51. [29] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 
+
+(2017). [30] Shai Shalev-Shwartz, Shaked Shammah, and Amnon Shashua. 2016. Safe, Multi-Agent, Reinforcement Learning for Autonomous Driving. ArXiv abs/1610.03295 (2016). [31] David Silver, Aja Huang, Chris J Maddison, Arthur Guez, Laurent Sifre, George Van Den Driessche, Julian Schrittwieser, Ioannis Antonoglou, Veda Panneer-shelvam, Marc Lanctot, et al. 2016. Mastering the game of Go with deep neural networks and tree search. Nature 529, 7587 (2016), 484–489. 
+
+9[32] Sainbayar Sukhbaatar, arthur szlam, and Rob Fergus. 2016. Learning Multiagent Communication with Backpropagation. In Advances in Neural Information Pro-cessing Systems (NIPS) , D. Lee, M. Sugiyama, U. Luxburg, I. Guyon, and R. Garnett (Eds.), Vol. 29. Curran Associates, Inc. [33] Peter Sunehag, Guy Lever, Audrunas Gruslys, Wojciech Marian Czarnecki, Vini-cius Zambaldi, Max Jaderberg, Marc Lanctot, Nicolas Sonnerat, Joel Z. Leibo, Karl Tuyls, and Thore Graepel. 2018. Value-Decomposition Networks For Co-operative Multi-Agent Learning Based On Team Reward. In Proceedings of the 17th International Conference on Autonomous Agents and MultiAgent Systems 
+
+(Stockholm, Sweden) (AAMAS ’18) . International Foundation for Autonomous Agents and Multiagent Systems, Richland, SC, 2085–2087. [34] Richard S Sutton. 1992. Adapting bias by gradient descent: An incremental version of delta-bar-delta. In AAAI , Vol. 92. San Jose, CA, 171–176. [35] Ming Tan. 1993. Multi-Agent Reinforcement Learning: Independent vs. Coop-erative Agents. In Proceedings of the Tenth International Conference on Machine Learning (Amherst, MA, USA) (ICML’93) . 330–337. [36] J Terry, Benjamin Black, Nathaniel Grammel, Mario Jayakumar, Ananth Hari, Ryan Sullivan, Luis S Santos, Clemens Dieffendahl, Caroline Horsch, Rodrigo Perez-Vicente, et al. 2021. Pettingzoo: Gym for multi-agent reinforcement learn-ing. Advances in Neural Information Processing Systems (NeurIPS) 34 (2021), 15032–15043. [37] Andrew Tittaferrante and Abdulsalam Yassine. 2022. Multiadvisor Reinforcement Learning for Multiagent Multiobjective Smart Home Energy Control. IEEE Transactions on Artificial Intelligence 3, 4 (2022), 581–594. doi:10.1109/TAI.2021. 3125918 [38] Peter Vamplew, Richard Dazeley, Adam Berry, Rustam Issabekov, and Evan Dekker. 2011. Empirical evaluation methods for multiobjective reinforcement learning algorithms. Machine learning 84, 1 (2011), 51–80. [39] Kristof Van Moffaert, Madalina M. Drugan, and Ann Nowé. 2013. Scalarized multi-objective reinforcement learning: Novel design techniques. In 2013 IEEE Symposium on Adaptive Dynamic Programming and Reinforcement Learning (ADPRL) . 191–199. [40] Tonghan Wang, Heng Dong, Victor Lesser, and Chongjie Zhang. 2020. ROMA: Multi-Agent Reinforcement Learning with Emergent Roles. In Proceedings of the 37th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 119) , Hal Daumé III and Aarti Singh (Eds.). PMLR, 9876– 9886. [41] Qiyue Xia, Tianwei Wang, and J Michael Herrmann. 2025. Interpretability by Design for Efficient Multi-Objective Reinforcement Learning. arXiv preprint arXiv:2506.04022 (2025). [42] Jie Xu, Yunsheng Tian, Pingchuan Ma, Daniela Rus, Shinjiro Sueda, and Wojciech Matusik. 2020. Prediction-Guided Multi-Objective Reinforcement Learning for Continuous Robot Control. In Proceedings of the 37th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 119) , Hal Daumé III and Aarti Singh (Eds.). PMLR, 10607–10616. [43] Zhongwen Xu, Hado P van Hasselt, and David Silver. 2018. Meta-gradient reinforcement learning. Advances in Neural Information Processing Systems 31 (2018). [44] Mao Ye and Qiang Liu. 2022. Pareto navigation gradient descent: a first-order algorithm for optimization in pareto set. In Proceedings of the Thirty-Eighth Con-ference on Uncertainty in Artificial Intelligence (Proceedings of Machine Learning Research, Vol. 180) , James Cussens and Kun Zhang (Eds.). PMLR, 2246–2255. [45] Chao Yu, Akash Velu, Eugene Vinitsky, Jiaxuan Gao, Yu Wang, Alexandre Bayen, and YI WU. 2022. The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games. In Advances in Neural Information Processing Systems (NeurIPS) ,S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh (Eds.), Vol. 35. Curran Associates, Inc., 24611–24624. [46] Richard Zhang and Daniel Golovin. 2020. Random Hypervolume Scalarizations for Provable Multi-Objective Black Box Optimization. In Proceedings of the 37th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 119) , Hal Daumé III and Aarti Singh (Eds.). PMLR, 11096–11105. [47] Luisa M Zintgraf, Timon V Kanters, Diederik M Roijers, Frans Oliehoek, and Philipp Beau. 2015. Quality assessment of MORL algorithms: A utility-based approach. In Benelearn 2015: Proceedings of the 24th Annual Machine Learning Conference of Belgium and the Netherlands .[48] Eckart Zitzler and Lothar Thiele. 1999. Multiobjective evolutionary algorithms: A comparative case study and the strength Pareto approach. 257-271 pages. doi:10.1109/4235.797969 
+
+## A Algorithm 
+
+Algorithms 1 and 2 describe MIRL-S and MIRL-D, respectively. The total training budget is divided equally among 𝑀 fixed team prefer-ences, and one policy is trained independently for each preference. MIRL-S learns static agent preferences, whereas MIRL-D generates dynamic preferences using a shared controller. After training, only the non-dominated policies are retained in Π.
+
+Algorithm 1 MIRL-S 
+
+Require: 
+
+1: Fixed user-specified team preferences {𝝎 team ,𝑚 }𝑀 𝑚 =1 evenly spanning the preference space; 
+
+2: actor 𝜋 𝜽 and centralised vector critic 𝑄 𝝍 ;
+
+3: actor, critic, and meta learning rates 𝛼 𝜃 , 𝛼 𝜓 , and 𝛽 𝜔 ;
+
+4: discount factor 𝛾 and TD trace parameter 𝜆 ;
+
+5: counterfactual sample count 𝐾 and meta-trace decay 𝜇 ;
+
+6: total training budget 𝐵 total 
+
+7: Initialisation: 
+
+8: Divide the total budget evenly: 𝐵 𝑚 ← 𝐵 total /𝑀 for all 𝑚 
+
+9: Initialise the output policy set Π ← ∅ 
+
+10: for 𝑚 = 1, . . . , 𝑀 do 
+
+11: Set 𝝎 team ← 𝝎 team ,𝑚 
+
+12: Initialise 𝜽 and 𝝍 
+
+13: Initialise 𝜼 𝑖 that 𝝎 𝑖 = softmax (𝜼 𝑖 ) ≈ 𝝎 team for all agents 𝑖 
+
+14: Initialise 𝑍 𝑖 ← 0 for all 𝑖 
+
+15: while the training steps are fewer than 𝐵 𝑚 do 
+
+16: Collect an inner trajectory 𝜏 ∼ 𝜋 𝜽 
+
+Critic update 
+
+17: Update 𝝍 using objective-wise TD( 𝜆 ) targets from 𝜏 
+
+18: Compute {Acf  
+
+> 𝑖,𝑡
+
+} using 𝐾 counterfactual samples 
+
+Actor update 
+
+19: Set 𝝎 𝑖 ← softmax (𝜼 𝑖 ) for all 𝑖 
+
+20: Form 𝐽 inner (𝜏, 𝜽 , 𝜼 )
+
+21: 𝜽 ′ ← 𝜽 + 𝑓 𝜽 (𝜏, 𝜽 , 𝜼 )
+
+Meta-parameter update 
+
+22: Collect a subsequent trajectory 𝜏 ′ ∼ 𝜋 𝜽 ′
+
+23: Compute {Acf ′ 
+
+> 𝑖,𝑡
+
+} from 𝜏 ′
+
+24: Form 𝐽 meta (𝜏 ′, 𝜽 ′, 𝝎 team )
+
+25: Update {𝑍 𝑖 }𝑁 𝑖 =1 and 𝜼 using the meta-gradient 
+
+26: Set 𝜽 ← 𝜽 ′
+
+27: end while 
+
+28: Store 𝜋 𝑚 ← 𝜋 𝜽 and set Π ← Π ∪ { 𝜋 𝑚 }
+
+29: end for 
+
+30: Π ← non-dominated subset of Π
+
+31: return Π
+
+## B Experiment Setup Details B.1 Benchmarks 
+
+We evaluate all methods in cooperative tasks derived from the Multi Particle Environments (MPE) [21, 24], using the maintained MPE2/PettingZoo implementation [36]. MPE models agents and landmarks as particles moving in a two-dimensional continuous space. We consider four tasks: Spread, Formation, Line, and Ref-erence. The first three tasks contain three agents, while Reference contains two agents and an explicit communication channel. Each episode lasts for 𝐻 = 25 environment steps. We extend each task into a two-objective multi-agent environ-ment. The reward vector of agent 𝑖 at timestep 𝑡 is 
+
+r𝑖,𝑡 = 𝑟 task  
+
+> 𝑖,𝑡
+
+, 𝑟 energy 
+
+> 𝑖,𝑡
+
+ = 𝑟 task  
+
+> 𝑖,𝑡
+
+, −𝐸 𝑖,𝑡 
+
+ ,
+
+10 Algorithm 2 MIRL-D 
+
+Require:  
+
+> 1:
+
+Fixed user-specified team preferences {𝝎 team ,𝑚 }𝑀 𝑚 =1 evenly spanning the preference space;  
+
+> 2:
+
+actor 𝜋 𝜽 , dynamic preference controller 𝑔 𝝓 , and centralised vector critic 𝑄 𝝍 ; 
+
+> 3:
+
+actor, critic, and meta learning rates 𝛼 𝜃 , 𝛼 𝜓 , and 𝛽 𝜔 ; 
+
+> 4:
+
+discount factor 𝛾 and TD trace parameter 𝜆 ; 
+
+> 5:
+
+counterfactual sample count 𝐾 and meta-trace decay 𝜇 ; 
+
+> 6:
+
+total training budget 𝐵 total  
+
+> 7:
+
+Initialisation:  
+
+> 8:
+
+Divide the total budget evenly: 𝐵 𝑚 ← 𝐵 total /𝑀 for all 𝑚  
+
+> 9:
+
+Initialise the output policy set Π ← ∅  
+
+> 10:
+
+for 𝑚 = 1, . . . , 𝑀 do  
+
+> 11:
+
+Set 𝝎 team ← 𝝎 team ,𝑚  
+
+> 12:
+
+Initialise 𝜽 , 𝝍 and 𝝓  
+
+> 13:
+
+Initialise 𝑍 𝜙 ← 0 
+
+> 14:
+
+while the training steps are fewer than 𝐵 𝑚 do  
+
+> 15:
+
+Collect an inner trajectory 𝜏 using 𝜋 𝜽 and 𝑔 𝝓 
+
+Critic update  
+
+> 16:
+
+Update 𝝍 using objective-wise TD( 𝜆 ) targets from 𝜏  
+
+> 17:
+
+Compute {Acf  
+
+> 𝑖,𝑡
+
+} using 𝐾 counterfactual samples 
+
+Actor update  
+
+> 18:
+
+𝜼 𝑖,𝑡 ← 𝑔 𝝓 (h𝑖,𝑡 ) and 𝝎 𝑖,𝑡 ← softmax (𝜼 𝑖,𝑡 ) 
+
+> 19:
+
+Form 𝐽 inner (𝜏, 𝜽 , 𝝓 ) 
+
+> 20:
+
+𝜽 ′ ← 𝜽 + 𝑓 𝜽 (𝜏, 𝜽 , 𝝓 )
+
+Meta-parameter update  
+
+> 21:
+
+Collect a subsequent trajectory 𝜏 ′ using 𝜋 𝜽 ′ and 𝑔 𝝓  
+
+> 22:
+
+Compute {Acf ′ 
+
+> 𝑖,𝑡
+
+} from 𝜏 ′ 
+
+> 23:
+
+Form 𝐽 meta (𝜏 ′, 𝜽 ′, 𝝎 team ) 
+
+> 24:
+
+Update 𝑍 𝜙 and 𝝓 using the meta-gradient  
+
+> 25:
+
+Set 𝜽 ← 𝜽 ′ 
+
+> 26:
+
+end while  
+
+> 27:
+
+𝜋 𝑚 ← 𝜋 𝜽 and set Π ← Π ∪ { 𝜋 𝑚 } 
+
+> 28:
+
+end for  
+
+> 29:
+
+Π ← non-dominated subset of Π 
+
+> 30:
+
+return Π
+
+where 𝑟 task  
+
+> 𝑖,𝑡
+
+is the task reward provided by the underlying MPE scenario and 𝐸 𝑖,𝑡 is the energy consumed by the agent. Both objec-tives are therefore maximised: the first encourages task completion, whereas the second encourages energy-efficient behaviour. At each timestep, we define the team reward vector as the av-erage of the per-agent reward vectors, r𝑡 = 1
+
+> 𝑁
+
+Í𝑁 𝑖 =1 r𝑖,𝑡 , where 𝑁 
+
+is the number of agents. Averaging prevents the shared MPE task reward from being counted repeatedly and provides a consistent reward scale across environments containing different numbers of agents. The discounted team return over an episode is 
+
+G = 
+
+> 𝐻 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+𝛾 𝑡 r𝑡 ,
+
+where 𝛾 = 0.99 across all methods. The expected discounted team returns are used to construct the empirical Pareto fronts and calcu-late the evaluation metrics. For all continuous-control methods, each agent selects a two-dimensional movement command 
+
+f𝑖,𝑡 = 𝑓 𝑥 𝑖,𝑡 , 𝑓 𝑦 𝑖,𝑡 
+
+⊤ ∈ [− 1, 1]2.
+
+This command is mapped to the native MPE control interface ac-cording to 
+
+u𝑖,𝑡 = 0, [− 𝑓 𝑥 𝑖,𝑡 ]+, [𝑓 𝑥 𝑖,𝑡 ]+, [− 𝑓 𝑦 𝑖,𝑡 ]+, [𝑓 𝑦 𝑖,𝑡 ]+
+
+⊤ ,
+
+where [𝑥 ]+ = max (𝑥, 0). The learned movement action is thus two-dimensional; the five-dimensional vector above is only the internal representation expected by MPE. We define movement energy as the squared control effort 
+
+𝐸 move  
+
+> 𝑖,𝑡
+
+= 𝛼 f𝑖,𝑡 22 ,
+
+where 𝛼 = 1 in all experiments. 
+
+Spread. The Spread task contains 𝑁 = 3 agents and an equal number of landmarks. The agents must collectively cover all land-marks while avoiding collisions. Let p𝑖,𝑡 denote the position of agent 
+
+𝑖 , and let q𝑗 denote the position of landmark 𝑗 . The global landmark coverage reward is 
+
+𝐺 𝑡 = −
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+min    
+
+> 𝑖 ∈ { 1,...,𝑁 }
+
+p𝑖,𝑡 − q𝑗 2 .
+
+The local collision penalty of agent 𝑖 is 
+
+𝐿 𝑖,𝑡 = −
+
+> 𝑁
+
+∑︁ 
+
+> 𝑘 =1
+> 𝑘 ≠𝑖
+
+I  p𝑖,𝑡 − p𝑘,𝑡 2 < 𝑠 𝑖 + 𝑠 𝑘 
+
+ ,
+
+where 𝑠 𝑖 and 𝑠 𝑘 are the collision radius of the two agents. Following the environment default, we use a local-reward ratio of 𝜌 = 0.5, giving 
+
+𝑟 task  
+
+> 𝑖,𝑡
+
+= (1 − 𝜌 )𝐺 𝑡 + 𝜌𝐿 𝑖,𝑡 .
+
+Since Spread contains no communication channel, the total energy is 
+
+𝐸 𝑖,𝑡 = 𝐸 move  
+
+> 𝑖,𝑡
+
+.
+
+Formation. The Formation task contains 𝑁 = 3 agents and one central landmark. The agents must arrange themselves at equally spaced locations on a circle of radius 𝑟 form = 0.5 centred on the landmark. Let {q1,𝑡 , . . . , q𝑁 ,𝑡 } denote the ideal formation positions. Since the agents are interchangeable, they are assigned to target positions using minimum-cost bipartite matching: 
+
+𝜋 ∗ 
+
+> 𝑡
+
+= arg min  
+
+> 𝜋 ∈Π𝑁
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+p𝑖,𝑡 − q𝜋 (𝑖 ),𝑡 2 ,
+
+where Π𝑁 is the set of permutations of 𝑁 elements. The shared task reward is the negative mean matched distance: 
+
+𝑟 task  
+
+> 𝑖,𝑡
+
+= − 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 ′=1
+
+clip 
+
+
+
+p𝑖 ′,𝑡 − q𝜋 ∗    
+
+> 𝑡 (𝑖 ′),𝑡 2
+
+, 0, 2
+
+
+
+.
+
+Since Formation contains no communication channel, the total energy is 
+
+𝐸 𝑖,𝑡 = 𝐸 move  
+
+> 𝑖,𝑡
+
+.
+
+11 Line. The Line task contains 𝑁 = 3 agents and two landmarks. The landmarks are separated by 1 .25 spatial units in a randomly sampled direction, and the agents must occupy 𝑁 evenly spaced positions along the line segment joining them. Let {q1, . . . , q𝑁 }
+
+denote these ideal positions. The agents are again matched to target positions using 
+
+𝜋 ∗ 
+
+> 𝑡
+
+= arg min  
+
+> 𝜋 ∈Π𝑁
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+p𝑖,𝑡 − q𝜋 (𝑖 ) 2 .
+
+The shared task reward is 
+
+𝑟 task  
+
+> 𝑖,𝑡
+
+= − 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 ′=1
+
+clip 
+
+
+
+p𝑖 ′,𝑡 − q𝜋 ∗    
+
+> 𝑡 (𝑖 ′)2
+
+, 0, 2
+
+
+
+.
+
+Since Line contains no communication channel, the total energy is 
+
+𝐸 𝑖,𝑡 = 𝐸 move  
+
+> 𝑖,𝑡
+
+.
+
+Reference. The Reference task contains two agents and three visually distinct landmarks. Each agent is assigned a target land-mark, which is known only by the other agents. Both agents are simultaneous speakers and listeners. Successful coordination there-fore requires the agents to communicate their private goal informa-tion while simultaneously moving towards their respective targets. Let q∗ 
+
+> 𝑖
+
+denote the target landmark assigned to agent 𝑖 . We use the fully cooperative setting by fixing the environment’s local-reward ratio to zero. Both agents consequently receive the shared task reward 
+
+𝑟 task  
+
+> 𝑖,𝑡
+
+= − 12
+
+> 2
+
+∑︁ 
+
+> 𝑗 =1
+
+p𝑗,𝑡 − q∗  
+
+> 𝑗 2
+
+.
+
+In addition to the two-dimensional movement command f𝑖,𝑡 ,each agent selects a binary communication gate g𝑖,𝑡 ∈ { 0, 1}10 and a continuous message payload m𝑖,𝑡 ∈ [ 0, 1]10 :
+
+a𝑖,𝑡 = f𝑖,𝑡 , g𝑖,𝑡 , m𝑖,𝑡 
+
+ .
+
+The transmitted message is 
+
+c𝑖,𝑡 = g𝑖,𝑡 ⊙ m𝑖,𝑡 ,
+
+so a message component is transmitted only when its corresponding gate is active. Communication energy is determined by the transmitted packet length. Let 𝑏 = 8 be the number of bits charged per active commu-nication component. The packet length is 
+
+𝐵 𝑖,𝑡 = 𝑏 
+
+> 10
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑔 𝑗 𝑖,𝑡 ,
+
+Let 𝑒 bit = 0.025 be the energy cost per bit. The communication energy is 
+
+𝐸 comm  
+
+> 𝑖,𝑡
+
+= 𝑒 bit 𝐵 𝑖,𝑡 = 0.2
+
+> 10
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑔 𝑗 𝑖,𝑡 .
+
+The communication cost depends on the number of active com-ponents. Therefore, silence incurs no communication cost. The total energy objective in Reference is therefore 
+
+𝑟 energy  
+
+> 𝑖,𝑡
+
+= −
+
+
+
+𝐸 move  
+
+> 𝑖,𝑡
+
++ 𝐸 comm 
+
+> 𝑖,𝑡
+
+
+
+.
+
+## B.2 Evaluation Metrics 
+
+We evaluate the quality of the approximate Pareto front using three standard metrics, following the formalism in [12, 47, 48]. 
+
+Hypervolume (HV). Let 𝑃 be an approximate Pareto front and 
+
+𝐺 0 a reference point dominated by all 𝑝 ∈ 𝑃 . The hypervolume is 
+
+H ( 𝑃 ) = ∫ 
+
+> R𝑑
+
+1𝐻 (𝑃 ) (𝑧 ) 𝑑𝑧, where 𝐻 (𝑃 ) = { 𝑧 ∈ R𝑛 | ∃ 𝑗, 1 ≤ 𝑗 ≤|𝑃 | : 𝐺 0 ⪯ 𝑧 ⪯ 𝑃 ( 𝑗 )} . Here, 𝑃 ( 𝑗 ) is the 𝑗 th solution in 𝑃 , the symbol 
+
+⪯ denotes objective dominance, and 1𝐻 (𝑃 ) is an indicator function that equals 1 if 𝑧 ∈ 𝐻 (𝑃 ) and 0 otherwise. A higher hypervolume implies a front closer to and more extensive with respect to the true Pareto front. 
+
+Expected Utility (EU). Let 𝑃 be an approximate Pareto front and Π be the corresponding policy set. The expected utility metric is 
+
+U ( 𝑃 ) = E𝜔 
+
+max 𝜋 ∈Π 𝜔 ⊤𝐺 𝜋 𝜔 
+
+ . A higher EU denotes better average performance over preferences. 
+
+Sparsity (SP). Let 𝑃 be an approximate Pareto front in a 
+
+𝑑 -dimensional objective space. The sparsity metric is 𝑆 (𝑃 ) = 
+
+> 1
+> |𝑃 | − 1
+
+Í𝑑 𝑖 =1
+
+Í|𝑃 | − 1
+
+> 𝑘 =1
+
+  ˜𝐺 𝑖 (𝑘 ) − ˜𝐺 𝑖 (𝑘 + 1)2, where ˜ 𝐺 𝑖 is the sorted list of the 𝑖 th objective values in 𝑃 , and ˜ 𝐺 𝑖 (𝑘 ) is the 𝑘 th entry in this sorted list. Lower sparsity indicates a more uniform distribution of solutions along each objective. For a singleton solution set, SP is zero by definition but does not provide a meaningful measure of distribution. We therefore report such cases as “–”. 
+
+## B.3 Training Details 
+
+Training budget and preference handling. All methods are trained using a fixed budget of 5 × 10 6 joint environment steps for each environment and random seed. We use 3 random seeds for each environment, an episode horizon of 𝐻 = 25, and a discount factor of 𝛾 = 0.99. Except for MO-MIX , all methods use linear scalar-isation and are trained separately for 𝐾 = 21 uniformly spaced team preferences with an interval of 0 .05, with the total training budget divided evenly across these preferences. For the PPO-based baselines, the vector-valued reward is scalarised using the fixed team preference. In our methods, the scalarisation weights 𝝎 team 
+
+represent the user-specified team preference and define the de-sired system-level objective trade-off, while the learned individual preferences are used within the agent learning process. MO-MIX ,in contrast, uses a single preference-conditioned network trained with the complete 5 × 10 6-step budget, with the requested team preference provided directly as an input and training preferences sampled using the same interval of 0 .05. 
+
+PPO-based baselines. We consider three PPO-based baselines with progressively richer information available during training. DTDE-PPO uses fully decentralised training and execution, with each agent learning independently from its local observation and scalarised reward. CTDE-PPO-V introduces a centralised state-value critic during training, while CTDE-PPO-Q instead uses a cen-tralised joint-action critic. All three methods retain decentralised actors during execution and use the same training budget and pref-erence settings described above. Their main hyperparameters are summarised in Table 2. 
+
+MO-COMA, MIRL-S, and MIRL-D. MO-COMA extends COMA [9] to vector-valued rewards and serves as the base im-plementation for both proposed MIRL variants. For continuous action spaces, the counterfactual expectation is approximated using 12 Table 2: Hyperparameters used by the PPO-based baselines. Hyperparameter DTDE-PPO CTDE-PPO-V CTDE-PPO-Q                                                 
+
+> Actor learning rate 3×10 −43×10 −43×10 −4
+> Critic learning rate 3×10 −43×10 −43×10 −4
+> PPO clipping coefficient 0.20.20.2Entropy coefficient 0.01 0.01 0.01 Optimisation epochs 444Minibatch size 256 256 256 Rollout horizon 512 512 512 Actor hidden layers 128 ,128 128 ,128 128 ,128 Critic hidden layers 256 ,256 256 ,256 256 ,256
+> 𝜆 0.80.80.8
+
+Table 3: Hyperparameters used by MO-COMA, MIRL-S, and MIRL-D. Hyperparameter MO-COMA MIRL-S MIRL-D                                            
+
+> Actor learning rate 5×10 −45×10 −45×10 −4
+> Critic learning rate 5×10 −45×10 −45×10 −4
+> Episode batch size 888
+> 𝜆 0.80.80.8Actor recurrent hidden size 64 64 64 Critic hidden size 128 128 128 Counterfactual action samples 888Meta learning rate –10 −410 −4
+> Meta-trace decay 𝜇 –00Dynamic preference hidden size ––64
+
+Table 4: Hyperparameters used by MO-MIX. Hyperparameter Value          
+
+> Learning rate 5×10 −6
+> Episode batch size 64 Replay capacity 12000 episodes Agent recurrent hidden size 64 Mixing hidden size 32 Training preference interval 0.05 Evaluation preference interval 0.0125
+
+8 actions sampled from the current policy. MIRL-S and MIRL-D are built directly on the same MO-COMA implementation and intro-duce the static and dynamic meta-gradient preference-adaptation mechanisms described in the main text, respectively. The shared implementation settings and additional meta-learning hyperparam-eters are summarised in Table 3. 
+
+MO-MIX. We implement MO-MIX following [14] and use the parameters described in the original paper. As MO-MIX operates on discrete action spaces, we discretise the continuous movement actions into five choices: stay, left, right, down, and up. For Refer-ence , these movement actions are combined with 11 communication choices, resulting in 55 discrete actions per agent. The model is trained as a single preference-conditioned policy using the prefer-ence sampling scheme described above. To improve training sta-bility, we normalise the positive mixing-network weights while preserving the monotonicity constraint. The main hyperparameters are summarised in Table 4. 
+
+## B.4 Computational Resources 
+
+All experiments were conducted on a local workstation equipped with an NVIDIA GeForce RTX 5090 GPU (32 GB VRAM), an Intel Core Ultra 7 270K CPU, and 64 GB of system memory, running Ubuntu 24.04 LTS. Each experimental run used a single GPU. 
+
+## C Additional Results 
+
+In this section, we provide additional results to further analyse how meta-gradient-informed preference adaptation operates dur-ing training and execution. For the two-objective setting, we write 𝝎 team = (𝜔 team ,task , 𝜔 team ,energy )for the team preference and 
+
+𝝎 𝑖 = (𝜔 𝑖, task , 𝜔 𝑖, energy ) for the individual preference of agent 𝑖 . Since the two components sum to one, we report only the first task com-ponent in this section. We first examine how individual preferences are learned during training, then compare the static and dynamic variants, and finally inspect the context-dependent preferences generated by MIRL-D during execution. 
+
+(a) 𝜔 team ,task = 0.35 (b) 𝜔 team ,task = 0.75 
+
+Figure 5: Individual task preferences learned by MIRL-S dur-ing training on Line .
+
+Figure 5 shows two representative runs of MIRL-S on Line un-der different team preferences. The individual preferences are ini-tialised close to the corresponding team preference, but gradually change in different directions as training proceeds. In particular, the preferences of different agents become separated, showing that the meta-gradient updates learn agent-specific objective emphases rather than preserving the common initial preference. 
+
+(a) MIRL-S (b) MIRL-D 
+
+Figure 6: Individual task preferences learned by MIRL-S and MIRL-D on Spread , with 𝜔 team ,task = 0.35 .
+
+Having shown that MIRL-S learns agent-specific preferences, we next compare the preference adaptation of MIRL-S and MIRL-D under the same training setting. Figure 6 shows a representative run on Spread with 𝝎 team = (0.35 , 0.65 ). For MIRL-S, each curve represents the individual task preference learned for one agent. For 13 MIRL-D, the preference is generated dynamically at each timestep, so we report the mean task preference produced for each agent over the corresponding training batch. Both variants progressively adapt their individual preferences away from the common initialisation. In MIRL-S, the learned agent preferences gradually separate during training. In MIRL-D, the gen-erated preferences show a larger overall shift and greater short-term variation, consistent with the additional flexibility of the context-dependent preference controller. These results confirm that the meta-gradient updates actively adapt both the static preference parameters in MIRL-S and the dynamic preference controller in MIRL-D.  
+
+> (a) Evaluation episode 1 (b) Evaluation episode 2
+
+Figure 7: Individual task preferences generated by MIRL-D during two example evaluation episodes on Spread under the fixed team preference 𝜔 team ,task = 0.35 .
+
+While the previous analysis focuses on preference adaptation during training, MIRL-D is designed to generate context-dependent preferences during execution. We therefore further examine how its individual preferences vary within an evaluation episode. Unlike MIRL-S, which maintains one learned preference for each agent, MIRL-D generates an individual preference 𝝎 𝑖,𝑡 at each timestep from the agent’s recurrent hidden state. Figure 7 shows two example evaluation episodes from the same trained policy on Spread , with the team preference fixed to 𝝎 team = (0.35 , 0.65 ).Since the two preference components sum to one, we again report only the task component 𝜔 𝑖,𝑡, task . The generated preferences vary across both agents and timesteps, while the team preference re-mains fixed throughout each episode. Moreover, the two episodes produce different preference trajectories, showing that MIRL-D generates context-dependent individual preferences rather than assigning each agent a fixed preference. Since no parameter updates are performed during evaluation, these changes reflect the dynamic context-dependent preference generation of the trained controller during execution. 
+
+## D Limitations 
+
+The learned individual preferences provide a potentially inter-pretable description of how different agents emphasise the underly-ing objectives, and our current results show that these preferences adapt differently across agents and cooperative contexts. However, the present benchmark tasks are not designed to cleanly separate distinct behavioural tendencies or cooperative roles, which limits our ability to quantitatively relate changes in the learned prefer-ences to specific changes in agent behaviour. A more systematic analysis would therefore require environments in which such be-havioural tendencies can be independently identified and measured. This represents an interesting direction for future work, particu-larly for studying whether the learned preferences can provide a meaningful and interpretable characterisation of agent roles and contributions. Our current evaluation is also limited to two-objective coopera-tive tasks with relatively small agent populations. Extending the analysis to larger multi-agent systems and higher-dimensional ob-jective spaces would provide a broader assessment of the scalability and generality of the proposed approach. 14
