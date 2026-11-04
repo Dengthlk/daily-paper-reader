@@ -1,0 +1,573 @@
+Title: BLPO: Beyond-Local Policy Optimization for Long-Horizon LLM Agents
+
+URL Source: https://arxiv.org/pdf/2611.03005v1
+
+Published Time: Tue, 03 Nov 2026 05:43:57 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+Preprint 
+
+# BLPO: Beyond-Local Policy Optimization for Long-Horizon LLM Agents 
+
+Xuanren Chen 1 Chongyang Tao 1,∗ Wenpeng Hu Yong Wang 2
+
+Bo Deng 2 Xinlei Zheng 1 Shuai Ma 1
+
+> 1
+
+Beihang University 2Alibaba Group 
+
+{cxrbuaa,chongyang,sy2406103,xinleizh,mashuai}@buaa.edu.cn wenpeng.hu@pku.edu.cn wangyong.lz@alibabainc.com 
+
+> ∗
+
+Corresponding author. 
+
+## ABSTRACT 
+
+Long-horizon tasks require large language model (LLM) agents to coordinate interdependent actions, a capability central to automating complex workflows. Stepwise group-based reinforcement learning provides finer credit than trajectory-level supervision, but reliable comparisons must account for differences in in-teraction history. Enforcing this consistency within the limited rollouts of each task can leave insufficient support for estimating action preferences. We propose Beyond-Local Policy Optimization (BLPO), which estimates task-progress ad-vantages from experience shared across tasks and training updates. We summa-rize trajectory prefixes into task-progress states and abstract actions by their func-tion, allowing corresponding decisions from different tasks to contribute to shared estimates. To control bias and noise from heterogeneous tasks, we accumulate context-relative returns in a global memory with balanced aggregation and reli-ability weighting. These global advantages complement local comparisons over normalized actions and trajectory-level credit without a learned critic or additional rollouts. Experiments on ALFWorld and WebShop with 1.5B and 7B policies show improved task success over the evaluated baselines under matched training budgets. Further analyses show faster learning and shorter trajectories with little computational overhead. Code is available at github.com/Tdadada/BLPO .
+
+## 1 INTRODUCTION 
+
+Large language model (LLM) agents extend automated assistance from answering individual queries to executing tasks in external environments (Yao et al., 2023; Zhou et al., 2024a). In applications such as travel planning and computational research, they offer the prospect of delegating entire workflows that otherwise require substantial human coordination (Shen et al., 2026; Li et al., 2026b). Realizing this potential requires solving long-horizon tasks, where earlier actions establish prereq-uisites for later steps and environmental feedback informs subsequent decisions (Zhu et al., 2026). Agents must therefore coordinate their actions over extended interactions, making the ability to learn policies that sustain progress toward task completion central to their practical utility. Recent efforts to improve agents’ performance on long-horizon tasks have increasingly explored learning from interaction, particularly through reinforcement learning (RL) (Zhou et al., 2024b; Wang et al., 2025; Jin et al., 2025; He et al., 2026b). Among these approaches, Group Relative Policy Optimization (GRPO) compares trajectory returns to optimize the policy without a separate critic (Shao et al., 2024). However, assigning one advantage to all actions can reinforce errors in successful trajectories and suppress useful steps in failed ones. When all rollouts receive the same failure reward, their relative advantages vanish entirely (Yang et al., 2026). To distinguish individual contributions, GiGPO compares actions taken from matching observed states across rollouts (Feng et al., 2025). Such comparisons can nevertheless mix different interaction histories, motivating HGPO to construct groups with varying degrees of historical consistency and adaptively combine their advantages (He et al., 2026a). 1arXiv:2611.03005v1 [cs.AI] 2 Nov 2026 Preprint Despite these refinements, requiring greater historical consistency can leave the limited rollouts of a task insufficient for reliable comparisons (He et al., 2026a). ECPO improves the reliability of local action estimates (Li et al., 2026a), while BiPACE expands comparison groups by aggregating similar states (Wang et al., 2026); both still estimate credit within sampled rollout groups. Experience from related tasks offers additional support. Histories involving different entities may represent equivalent task progress, while different concrete actions may serve the same function. Grouping decisions on this basis allows comparisons to accumulate across tasks and training updates. Such sharing, how-ever, must separate action effects from differences in task difficulty and prevent frequently visited contexts from dominating the estimates. Reliable global credit therefore requires correcting these biases while controlling how strongly uncertain comparisons influence policy updates. Building on this perspective, we propose Beyond-Local Policy Optimization (BLPO), which esti-mates task-progress advantages by pooling experience across tasks and training updates. To con-struct these comparisons, predefined environment-specific rules summarize task progress from prior interactions and map concrete actions to their goal-relative functions. Applied automatically across task instances, these rules define comparison groups, while their action preferences are estimated from rollout returns. To control the heterogeneity introduced by sharing, we center returns within concrete contexts and balance their contributions to a decaying statistical memory. Preferences de-rived from this memory are weighted by their support and uncertainty, limiting the influence of unreliable estimates. The resulting task-progress advantages complement local comparisons over normalized actions, while trajectory advantages preserve supervision of overall task completion. All three signals enter a unified policy objective without a learned critic or additional rollouts. Ex-periments on ALFWorld and WebShop show improved task success with 1.5B and 7B policies, including a 2.48 percentage point gain over HGPO on WebShop with the 1.5B backbone. Further analyses support cross-task experience sharing and show faster learning with little computational overhead. Our contributions are threefold: • We propose BLPO, a critic-free policy optimization method that reuses task-progress-aligned experience across tasks and training updates for step-level credit assignment, with-out additional rollouts. • We develop a context-balanced global advantage estimator that reduces bias from context difficulty and repeated visits. Support and uncertainty scale the resulting credit to limit the influence of unreliable comparisons. • Experiments on ALFWorld and WebShop show improved task success with both 1.5B and 7B policies. Controlled comparisons under the same abstraction support the benefits of cross-task sharing, while learning and cost analyses show faster ALFWorld learning with little additional computation. 
+
+## 2 RELATED WORK 
+
+Reinforcement Learning for LLM Agents. Research on agentic RL increasingly treats sustained interaction as the basis for policy learning. ArCHer combines utterance-level value estimation with token-level optimization (Zhou et al., 2024b), while RAGEN and Search-R1 develop training around multi-turn trajectories (Wang et al., 2025; Jin et al., 2025). As training extends to longer interac-tions, AgentGym-RL introduces a curriculum that progressively increases interaction length (Xi et al., 2026). Complementing these algorithmic developments, Agent Lightning v1.0 addresses the systems integration of RL with existing agents while preserving the execution harness’s control of the interaction loop (He et al., 2026b). 
+
+Credit Assignment in Agentic RL. Within these training frameworks, a central question is how task outcomes should supervise individual decisions. RLOO and GRPO offer relative estimates without a learned critic, but their direct trajectory-level application does not distinguish interme-diate actions (Ahmadian et al., 2024; Shao et al., 2024). GiGPO makes these comparisons more granular by grouping decisions with matching observations (Feng et al., 2025). HGPO further condi-tions groups on interaction history, addressing inconsistencies hidden by observation matching (He et al., 2026a). Such finer comparisons also raise questions of statistical support and reliability. 2Preprint 
+
+Figure 1: Overview of BLPO. (1) Trajectory histories and concrete actions from different tasks are mapped to shared task-progress states and action functions. (2) Within each concrete context, returns are centered and averaged per abstract state–action pair to update a global memory across training iterations. (3) Action contrasts estimated from this memory are scaled by effective support and uncertainty. The resulting task-progress advantages are combined with trajectory-relative ad-vantages and local advantages over normalized actions to optimize the policy. BiPACE increases support by grouping states in actor representation space (Wang et al., 2026), whereas ECPO calibrates comparisons over equivalent actions using support and variability (Li et al., 2026a). Alongside these group estimators, GraphGPO derives credit from goal distances in trajectory graphs (Cheng et al., 2026), while HCAPO refines action values through hindsight reasoning (Tan et al., 2026). 
+
+Experience Reuse for Agent Learning. The experience available for learning can also extend beyond current rollouts. One approach supplies earlier experience as policy context through re-trieved step traces in RAPO and evolving skill documents in SkillRise (Zhang et al., 2026; Yao et al., 2026). Rather than exposing history through the policy input, TIGPO retains it in persistent transition graphs, combining past and current transitions for credit estimation (Gan, 2026). This form of temporal reuse remains confined to individual task instances. BLPO instead matches task progress and action function to pool comparisons across tasks and policy updates. To manage the resulting heterogeneity, we adjust returns within concrete contexts, balance their contributions, and attenuate uncertain comparisons. 
+
+## 3 PRELIMINARIES 
+
+For a task goal gi, a trajectory τi consists of Ti sequential decisions. At step t, the policy generates a textual response araw  
+
+> i,t
+
+∼ πθ (· | xi,t ), where xi,t contains the goal, current observation si,t , and interaction history retained within the policy’s context window. The response is parsed into an en-vironment action ai,t , whose execution yields feedback ei,t , including the next observation, reward 
+
+ri,t , termination status, and format and admissibility information. The complete interaction prefix available before the current action is 
+
+Hi,t =  gi, s i, 1, a i, 1, e i, 1, . . . , a i,t −1, e i,t −1, s i,t 
+
+. (1) Unlike the policy input xi,t , this prefix records all preceding interactions, including those outside the context window. We use j = ( i, t ) to index an individual decision and write decision-specific quantities with either subscript. 3Preprint 
+
+## 4 BLPO 
+
+As summarized in Figure 1, we combine trajectory relative advantages (Sec. 4.1) and local ad-vantages over normalized actions (Sec. 4.2) with task-progress advantages from global experience (Sec. 4.3). The global estimator pools context-adjusted returns across tasks and updates, accounting for support and uncertainty. Together, these signals define the policy objective in Section 4.4. 4.1 TRAJECTORY RELATIVE ADVANTAGE 
+
+For each task instance, we sample N trajectories from πθold under the same initial state. Let bi iden-tify the rollout group containing τi. Following GRPO (Shao et al., 2024), we normalize trajectory returns within each group: 
+
+Ri =
+
+> Ti
+
+X
+
+> t=1
+
+ri,t , Atraj  
+
+> i
+
+= Ri − μbi
+
+σbi + ϵ , (2) where μbi and σbi are the group mean and standard deviation, and ϵ > 0 ensures numerical stability. Rewards follow the shared convention in Appendix A.2, including the format penalty. The resulting advantage is shared by all decisions in the trajectory. For the subsequent step comparisons, we discount future rewards to reduce the influence of feedback separated from the current decision by many intervening actions: 
+
+Gj =
+
+> Ti
+
+X
+
+> t′=t
+
+γt′−tri,t ′ , j = ( i, t ), γ ∈ (0 , 1] . (3) 4.2 STEP ADVANTAGE OVER NORMALIZED ACTIONS 
+
+To distinguish individual decisions, we compare actions under the same task and observation. How-ever, advantages computed from individual returns can assign opposite signs to equivalent actions when subsequent decisions differ. We therefore pool their returns before estimating local credit. For decision j = ( i, t ), we define 
+
+cj = ( bi, s j ), vj = NormAct( araw  
+
+> j
+
+, e j ). (4) The context cj matches the rollout group and current observation without conditioning on earlier history. The action mapping removes textual variations while preserving the operation and con-crete arguments. Feedback is used only to distinguish malformed outputs, inadmissible actions, and executable actions; the normalization rules are specified in Appendix A.3. Let I(c, v ) contain all occurrences of normalized action v in context c within the current batch. We average their returns and compute the local advantage as 
+
+Qloc (c, v ) = 1
+
+|I (c, v )|
+
+X
+
+> j′∈I (c,v )
+
+Gj′ , Aloc  
+
+> j
+
+= Qloc (cj , v j ) − μcj
+
+σcj + ϵ , (5) where μc and σc are the mean and standard deviation of all individual returns in context c, rather than of the action means. Thus, equivalent actions within a context receive the same advantage. Groups without distinct action means or return variation contribute zero local advantage. 4.3 TASK -P ROGRESS ADVANTAGE OVER GLOBAL STATE –A CTION GROUPS 
+
+Matching current observations can mix histories with different task progress and bias the local base-line. Conditioning on history reduces this mismatch, but limited rollouts per task cannot reliably support detailed history groups. We therefore abstract histories and actions to pool comparable experience across tasks and training updates. From the interaction prefix in Eq. 1, we maintain an execution state Bi,t that records discovered entities, completed operations, and current relations: 
+
+Bi,t +1 = Update( Bi,t , a i,t , e i,t ). (6) 4Preprint Updates incorporate new observations and accepted action effects. This state is used for credit estimation without changing the policy input. Using predefined rules for each environment, we map entities to goal roles, preserving task family, predicate completion, and relations governing unfinished conditions whose prerequisites are satis-fied. Since concrete commands would still yield sparsely observed alternatives, we also abstract their function: 
+
+zj = ϕprog (gi, B j ), uj = ψprog (aj ; gi, B j ). (7) Unlike vj , uj can group commands involving different entities, such as acquiring different target objects. Identical (z, u ) pairs share statistics, while different u under the same z form the compar-ison group. Both maps are applied automatically; credit values are estimated from rollout returns. Appendix A.4 specifies these mappings. To account for differences in context difficulty and prevent repeated visits from dominating, we compute the mean residual within each (c, z, u ):
+
+mc,z,u = Mean {δj : cj = c, z j = z, u j = u}, δj = Gj − μcj . (8) Here δj measures the return relative to its concrete context’s baseline. Each context contributes one such mean per (z, u ) to the global memory in each batch. Let Ek(z, u ) be the multiset of these observations collected at update k from contexts with multiple shareable action functions. We accumulate them in a global memory while discounting statistics from older policies: 
+
+W (k) 
+
+> z,u
+
+= λema W (k−1)  
+
+> z,u
+
++ |E k(z, u )|,S(k) 
+
+> z,u
+
+= λema S(k−1)  
+
+> z,u
+
++ X 
+
+> m∈E k(z,u )
+
+m, M (k) 
+
+> z,u
+
+= λema M (k−1)  
+
+> z,u
+
++ X 
+
+> m∈E k(z,u )
+
+m2.
+
+(9) Here 0 < λ ema < 1, and W, S, M denote the decayed weight, weighted sum of residuals, and weighted sum of squared residuals. After incorporating the current batch, we query q(k)(z, u ) = 
+
+S(k)
+
+> z,u
+
+/W (k) 
+
+> z,u
+
+. Distinct context contributions are tracked separately to estimate effective support. Sup-port depends on the balance of accumulated weight across distinct contexts, not on the number of recorded decisions. Thus, repeated observations from a few contexts do not by themselves justify a strong global advantage. Let Uz contain the recorded action functions for state z. Omitting the update index, we compare each function with the group mean: 
+
+eq(z, u ) = q(z, u ) − 1
+
+|U z |
+
+X
+
+> u′∈U z
+
+q(z, u ′). (10) Omitted task details and subsequent decisions still introduce variation, while support can differ substantially between action alternatives. We therefore scale each contrast by its support and uncer-tainty. With ncmp (z, u ) denoting the harmonic effective support of the action and its alternatives, we define αsup (z, u ) = ncmp (z, u )/(ncmp (z, u ) + λsup ) and obtain 
+
+Aprog  
+
+> j
+
+= αsup (zj , u j ) eq(zj , u j )
+
+qbσ2 
+
+> zj
+
++ cSE 2diff (zj , u j ) + η2
+
+. (11) Here bσ2 
+
+> z
+
+measures dispersion across action means, cSE diff estimates contrast uncertainty, and η > 0
+
+provides a numerical floor. The signal is zero unless the action is recorded and its group has at least two action functions, nonzero dispersion, and effective context support of at least two. Appendix A.5 details the support and variance estimators. For WebShop, the resulting advantages are further centered over active decisions sharing z within the current batch. 4.4 BEYOND -L OCAL POLICY OPTIMIZATION 
+
+We combine trajectory credit with the available local and task-progress advantages: 
+
+Aj = Atraj  
+
+> i
+
++ λstep Astep  
+
+> j
+
+, Astep  
+
+> j
+
+= αj Aloc  
+
+> j
+
++ (1 − αj )Aprog  
+
+> j
+
+. (12) 5Preprint Here αj balances local and task-progress advantages according to the availability of the two estima-tors, while λstep controls the contribution of step credit relative to trajectory credit. The weighting rule and parameter settings are specified in Appendix A.6. We assign Aj to every token of action araw  
+
+> j
+
+and maximize the clipped objective: 
+
+JBLPO (θ) = Ej,ℓ [min( ρj,ℓ Aj , clip( ρj,ℓ , 1 − ϵclip , 1 + ϵclip )Aj ) − βDKL ,j,ℓ ] . (13) For action token yj,ℓ , ρj,ℓ = πθ (yj,ℓ |xj ,y j,<ℓ )   
+
+> πθold (yj,ℓ |xj,y j,<ℓ )
+
+is the policy probability ratio. The parameter ϵclip 
+
+controls clipping, while DKL ,j,ℓ regularizes the policy against a fixed reference with weight β. The update reuses sampled trajectories without a learned critic, process reward model, or additional environment interactions. 
+
+## 5 EXPERIMENTS 
+
+5.1 EXPERIMENTAL SETUP 
+
+Benchmarks. Following prior work, we evaluate on ALFWorld (Shridhar et al., 2021) and Web-Shop (Yao et al., 2022) for long-horizon household and online shopping tasks. ALFWorld measures compositional manipulation success; WebShop evaluates purchases against user-specified product constraints. 
+
+Baselines. Baselines include GPT-4o, Gemini-2.5-Pro, direct Qwen2.5 prompting, ReAct (Yao et al., 2023), and Reflexion (Shinn et al., 2023). We also compare PPO (Schulman et al., 2017), RLOO (Ahmadian et al., 2024), GRPO (Shao et al., 2024), GiGPO (Feng et al., 2025), and Table 1: Performance on ALFWorld and WebShop. In-Success and Out-Success measure in-distribution and out-of-distribution success. WebShop Task Score and Task Success measure partial and complete request satisfaction. RL results are mean ± standard deviation over three seeds. Bold marks the best result per backbone; dashes indicate unavailable results. 
+
+Model Type Method ALFWorld WebShop 
+
+In-Success Out-Success Task Score Task Success Closed Prompting GPT-4o 48.0 46.0 31.8 23.7 Prompting Gemini-2.5-Pro 60.3 50.5 42.5 35.9 
+
+> Qwen2.5-1.5B-Instruct
+
+Prompting Qwen2.5 4.1 – 23.1 5.2 Prompting ReAct 12.8 – 40.1 11.3 Prompting Reflexion 21.8 – 55.8 21.9 RL Training PPO 54.4 ±3.1 – 73.8 ±3.0 51.5 ±2.9 
+
+RL Training RLOO 69.7 ±2.5 68.7 ±10.7 73.9 ±5.6 52.1 ±6.7 
+
+RL Training GRPO 72.8 ±3.6 70.1 ±2.5 75.8 ±3.5 56.8 ±3.8 
+
+RL Training GiGPO 90.16 ±0.22 84.76 ±2.83 84.95 ±2.57 66.53 ±1.92 
+
+RL Training HGPO 92.77 ±1.08 90.16 ±0.78 85.56 ±2.86 71.54 ±4.00 
+
+RL Training BLPO 94.01 ±0.23 91.54 ±0.60 87.43 ±0.56 74.02 ±1.37 
+
+> Qwen2.5-7B-Instruct
+
+Prompting Qwen2.5 14.8 – 26.4 7.8 Prompting ReAct 31.2 – 46.2 19.5 Prompting Reflexion 42.7 – 58.1 28.8 RL Training PPO 77.08 ±1.12 76.23 ±1.46 81.4 ±3.1 68.7 ±5.1 
+
+RL Training RLOO 77.86 ±0.03 73.95 ±0.05 80.3 ±3.2 65.7 ±4.0 
+
+RL Training GRPO 78.64 ±0.73 76.82 ±1.47 79.3 ±2.8 66.1 ±3.7 
+
+RL Training GiGPO 93.29 ±0.40 92.18 ±0.39 88.93 ±1.49 77.60 ±1.68 
+
+RL Training HGPO 95.44 ±0.62 92.05 ±0.22 88.96 ±1.04 78.51 ±1.40 
+
+RL Training BLPO 97.14 ±1.33 92.97 ±0.68 88.90 ±1.26 79.43 ±1.57 
+
+6Preprint HGPO (He et al., 2026a). Table 1 uses the baseline results reported by He et al. (2026a), with GiGPO and HGPO at history length K = 2 to match our policy inputs. 
+
+Implementation details. Training uses Qwen2.5-1.5B-Instruct and Qwen2.5-7B-Instruct (Qwen et al., 2025), 160 updates, 16 tasks per update, and eight trajectories per task. We measure learning curves and computational costs in our own runs. Appendix A provides evaluation and prompt details, with training and interaction parameters consolidated in Appendix A.6. 5.2 MAIN RESULTS 
+
+BLPO achieves the best overall performance. Table 1 reports the highest mean success for BLPO on both benchmarks at both scales. With Qwen2.5-1.5B, ALFWorld Out-Success rises from HGPO’s 90.16% to 91.54%, and WebShop Task Success from 71.54% to 74.02%. Under matched rollout and update budgets, the 1.5B policy also surpasses 7B GRPO on all four metrics. 
+
+Global experience complements local credit assignment. GiGPO distinguishes decisions within trajectories; HGPO further conditions comparisons on history. BLPO pools decisions with shared task progress and action function across tasks and updates. Its gains over HGPO suggest that broader support, with context adjustment and reliability weighting, complements history conditioning within individual tasks. 
+
+Scaling and generalization. With the 7B backbone, BLPO reaches 97.14% In-Success and 92.97% Out-Success on ALFWorld, exceeding both GiGPO and HGPO. On WebShop, it attains a Task Score of 88.90, comparable to HGPO’s 88.96, while increasing Task Success from 78.51% to 79.43%. Thus, BLPO improves complete task fulfillment even when partial request satisfaction remains similar. 5.3 ABLATION STUDY 
+
+Table 2: Component ablations with Qwen2.5-1.5B. Gray values show absolute drops from full BLPO.                                                           
+
+> ALFWorld WebShop Variant In-Suc. Out-Suc. Score Success
+> BLPO 94.01 91.54 87.43 74.02
+> Local credit
+> w/o Act. pool. 91.34 ▼2.67 83.14 ▼8.40 82.79 ▼4.64 66.21 ▼7.81
+> Task-progress groups
+> w/o Aprog 92.25 ▼1.76 83.53 ▼8.01 82.75 ▼4.68 68.49 ▼5.53
+> w/o Act. abstr. 88.80 ▼5.21 82.94 ▼8.60 86.83 ▼0.60 71.22 ▼2.80
+> Global estimation
+> w/o Residual 88.41 ▼5.60 81.97 ▼9.57 85.14 ▼2.29 73.24 ▼0.78
+> w/o EMA 90.89 ▼3.12 84.11 ▼7.43 86.09 ▼1.34 69.92 ▼4.10
+> w/o Conf. 89.97 ▼4.04 81.05 ▼10.49 85.00 ▼2.43 71.09 ▼2.93
+
+Local credit. Table 2 shows that removing action-level pooling reduces ALFWorld Out-Success by 8.40 points and WebShop Task Success by 7.81 points. Using individual re-turns allows different continuations to assign inconsistent local credit to the same action. 
+
+Task-progress groups. The loss of task-progress credit lowers WebShop Task Score from 87.43 to 82.75 and Task Success from 74.02% to 68.49%. When local comparisons are uninformative, trajectory credit alone cannot distinguish useful steps from later failures. Removing action abstraction also lowers success in both environments despite retaining progress states and global memory. Concrete labels split equivalent decisions across objects and tasks, limiting comparison support. 
+
+Global estimation. Removing residualization or confidence adjustment lowers ALFWorld Out-Success below the variant without task-progress credit, supporting control of context bias and noise in shared estimates. On WebShop, removing confidence adjustment lowers Task Success by 2.93 points; removing EMA lowers it by 4.10 points. The latter uses only the current batch, supporting temporal accumulation for sparse action groups. 7Preprint 5.4 FURTHER ANALYSIS 40 80 120 160    
+
+> Policy updates
+> 025 50 75 100
+> Success (%)
+> 40 80 120 160
+> Policy updates
+> 10 20 30 40 50
+> Trajectory length  GiGPO HGPO BLPO
+
+Figure 2: ALFWorld learning dynamics. 
+
+Learning dynamics. BLPO learns faster and uses fewer actions in Figure 2. At up-date 80, success reaches 80.7% with 20.4 actions per task, versus HGPO’s 65.0% and 24.9 actions. BLPO retains the highest fi-nal success and shortest trajectories. Success rises as the interaction count falls, indicating that shorter trajectories do not come at the expense of task completion. Later gains in success are smaller for all methods, but tra-jectories continue to shorten. Length averages cover all 140 tasks, including failures and timeouts, so the reduction reflects lower overall interaction cost across the complete set of evaluation tasks. Table 3: Training cost on ALFWorld (4 A100s, 160 updates). Adv. and Update are mean times per up-date; Share is their ratio. Evaluation time is excluded.                 
+
+> Method Adv. (s) Update (s) Share Total (h) GiGPO 0.89 335.2 0.26% 14.90 HGPO 0.96 362.6 0.26% 16.11
+> BLPO 2.12 349.7 0.61% 15.54
+
+Computational cost. Global credit adds little cost in Table 3. Computing advantages takes 2.12 seconds per update, or 0.61% of update time. The increase over GiGPO and HGPO is approximately 1.2 seconds per update. This cost includes local grouping, memory maintenance, and reliability esti-mation. Memory retains aggregated statis-tics rather than replaying past trajectories, so queries reuse historical evidence without reevaluating earlier rollouts. Maintaining this broader comparison pool requires neither a separate value network nor additional environment interactions. The full run takes 15.54 hours, within the baseline range. Overall time also depends on the trajectories produced by the policy, not just the estimator’s arithmetic. Appendix A.7 gives timing details. 0 25 50 75 100                       
+
+> Decisions with nonzero credit (%)
+> 1–20 21–80 81–140 141–160 1–20 21–80 81–140 141–160
+> Policy updates
+> +63.0 +41.1 +33.4 +52.1 +25.2 +21.5 +22.1 +22.1
+> ALFWorld WebShop
+> 12345
+> Held-out fold
+> 0–0.25 0.25–0.5 0.5–0.75 0.75–1
+> Confidence multiplier  45 65 41 47 46 52 55 54 55 60 61 60 65 65 64 60 75 67 77 87
+> Sign agreement (%)
+> 40 60 80 90
+> (a) Credit coverage (b) Credit consistency
+> Local credit available Additional task-progress credit
+
+Figure 3: Coverage and consistency of global credit. (a) Fractions of decisions with nonzero local credit (gray) and additional coverage from task-progress credit (blue). (b) Sign agreement across confidence bins and held-out task folds in ALFWorld. 
+
+Coverage of task-progress credit. Figure 3a shows that task-progress credit remains available where local advantages are zero. During updates 141–160, it covers 52.1% of ALFWorld deci-sions and 22.1% of WebShop decisions. Local advantages can vanish when available rollouts do not distinguish alternatives within a concrete context. These decisions retain trajectory credit, but the common outcome does not distinguish their intermediate contributions. Task-progress groups supply comparisons across tasks, so preferences can remain available when the current task offers little local contrast. This additional coverage persists late in training rather than merely rescaling nonzero local signals. Appendix B.1 defines the diagnostics. 8Preprint 
+
+Reliability of global credit. Figure 3b compares preferences estimated from four task subsets with residual contrasts in the held-out subset. Held-out tasks do not contribute to the estimates, so agreement tests preferences across task instances rather than their fit to the observations used for estimation. This probes whether progress-aligned groups preserve action preferences despite differences in the concrete tasks. The highest confidence bin achieves greater sign agreement than the lowest in all five folds. Agreement is not monotonic in every fold, but the overall pattern supports reliability weighting of global preferences. Appendix B.2 gives the protocol. Table 4: Qwen2.5-1.5B results under global sharing, same-task-only sharing, and removal of the task-progress credit branch. 
+
+ALFWorld WebShop Setting In-Suc. Out-Suc. Score Success 
+
+Full BLPO 94.01 91.54 87.43 74.02 
+
+Same-task-only 87.63 81.97 87.19 66.99 w/o Aprog 92.25 83.53 82.75 68.49 Same-task Global  
+
+> 110 100
+> Effective support (log scale)  ALFWorld
+> Same-task Global
+> WebShop
+
+Figure 4: Effective context support from same-task and global experience. Boxes summarize per-update means in full BLPO. 
+
+Benefit of cross-task experience. Same-task-only restricts memory to each task instance, retain-ing the abstraction, cross-update accumulation, and all other estimation and fusion rules. Table 4 shows lower success than both full BLPO and removing task-progress credit. On WebShop, its Task Score stays near full BLPO, but Task Success falls by 7.03 points, separating partial satis-faction from completion. With the abstraction fixed, these findings support cross-task experience beyond the shared domain prior. Removing the branch also performs better than restricting it to one task, so retaining task-progress credit alone does not explain the gains. Its benefit depends on the comparison evidence supplied to the estimator; limited support can yield noisy estimates that interfere with local credit. 
+
+Effective context support. Figure 4 shows greater effective context support with cross-task shar-ing, especially in WebShop. Effective support accounts for the concentration of contribution weights across contexts, rather than simply counting recorded decisions. Repeated visits to one context add weight, not distinct contexts. Memory can therefore persist across updates yet provide narrow sup-port, as the same-task WebShop estimates illustrate. The reliability correction uses support on both sides of each action comparison. A broader pool can strengthen weakly supported action compar-isons, helping explain the value of global credit under the same abstraction. a ALFWorld         
+
+> Take target
+> Target not held → held Other tasks: CD; toilet paper Local Progress Mixed step
+> -0.134 +1.631 +0.454
+> b WebShop
+> Satisfy option
+> Size unselected → selected Other tasks: shirt size; shoe color Local Progress Mixed step
+> -0.256 +0.654 +0.047
+
+Figure 5: Examples of cross-task credit in ALFWorld and WebShop. 
+
+Case study. Figure 5 shows two actions receiving negative local credit despite advancing necessary subgoals: acquiring the target object in ALFWorld and selecting the requested size in WebShop. In the first case, taking a remote control shares its function with acquiring other target objects, including CDs and toilet paper, in placement tasks. In the second, selecting a blanket size is compared with satisfying required options for other products, including shirt sizes and shoe colors. Although the WebShop tra-jectory ultimately fails, selecting the requested size still resolves a necessary constraint, separating this useful step from the final outcome. Evidence from these groups turns the mixed step advantage positive in both cases, aligning credit with the actions’ con-tribution to task progress. The global preferences remain positive after excluding the current task’s contributions, confirming support from other tasks. 9Preprint 
+
+## 6 DISCUSSION AND LIMITATIONS 
+
+Our results support global credit estimation that controls context difficulty and uncertainty, rather than increasing comparison support alone. The current instantiation uses environment-specific rules to align task progress and action functions, while sharing the statistical estimator across environ-ments. Applying BLPO to new domains calls for suitable comparison groups; learning transferable abstractions is a promising direction for broadening its applicability. 
+
+## 7 CONCLUSION 
+
+We introduced BLPO to estimate task-progress advantages from global experience while controlling context bias and uncertainty. Combined with trajectory and local credit, these advantages improve task success on ALFWorld and WebShop at both model scales. Faster learning and shorter ALF-World trajectories further support global experience as a useful source of decision-level supervision. 
+
+## REFERENCES 
+
+Arash Ahmadian, Chris Cremer, Matthias Gallé, Marzieh Fadaee, Julia Kreutzer, Olivier Pietquin, Ahmet Üstün, and Sara Hooker. Back to basics: Revisiting REINFORCE-style optimization for learning from human feedback in LLMs. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 12248–12267. As-sociation for Computational Linguistics, 2024. doi: 10.18653/v1/2024.acl-long.662. URL 
+
+https://aclanthology.org/2024.acl-long.662/ .Xin Cheng, Shuo He, Lang Feng, HaiYang Xu, Ming Yan, Lei Feng, and Bo An. Beyond trajectory-level attribution: Graph-based credit assignment for agentic reinforcement learning. In Interna-tional Conference on Machine Learning , 2026. URL https://arxiv.org/abs/2605.2 6684 .Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. Group-in-group policy optimization for LLM agent training. In Advances in Neural Information Processing Systems , volume 38, 2025. doi: 10.52202/085713-1544. URL https://proceedings.neurips.cc/paper_fil es/paper/2025/hash/420c9f777c0b4f78d515e53cf74d58b2-Abstract-Conference.html .Jinwei Gan. TIGPO: Temporal instance-graph policy optimization for long-horizon LLM agents, 2026. URL https://arxiv.org/abs/2609.03383 .Shuo He, Lang Feng, Qi Wei, Xin Cheng, Lei Feng, and Bo An. Hierarchy-of-groups policy opti-mization for long-horizon agentic tasks. In The Fourteenth International Conference on Learning Representations , 2026a. URL https://openreview.net/forum?id=T8Dev99qnz .Zhiyuan He, Siwei Zhang, Zhiwen Zhou, Yuqing Yang, Yu Kang, Yuge Zhang, Luna K. Qiu, Tin Yan Tsui, Jiahang Xu, and Chong Luo. Agent Lightning v1.0: Towards harnessed agentic RL, 2026b. URL https://arxiv.org/abs/2608.17528 .Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan O. Arik, Dong Wang, Hamed Za-mani, and Jiawei Han. Search-R1: Training LLMs to reason and leverage search engines with reinforcement learning. In Conference on Language Modeling , 2025. URL https: //openreview.net/forum?id=Rwhi91ideu .Yuanfan Li, Qi Zhou, Wenjing Duan, and Lu Chen. When denser credit is not enough: Evidence-calibrated policy optimization for long-horizon LLM agent training, 2026a. URL https://ar xiv.org/abs/2606.05885 .Zongxia Li, Zhongzhi Li, Yucheng Shi, Ruhan Wang, Junyao Yang, Zhichao Liu, Xiyang Wu, Anhao Li, Yue Yu, Ninghao Liu, Lichao Sun, Haotao Mi, and Leowei Liang. Long-Horizon-Terminal-Bench: Testing the limits of agents on long-horizon terminal tasks with dense reward-based grading, 2026b. URL https://arxiv.org/abs/2607.08964 .10 Preprint Qwen, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Keqin Bao, Kexin Yang, Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tianyi Tang, Tingyu Xia, Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu Cui, Zhenru Zhang, and Zihan Qiu. Qwen2.5 technical report, 2025. URL https://arxiv.org/abs/2412.15115v2 .John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms, 2017. URL https://arxiv.org/abs/1707.06347 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. DeepSeekMath: Pushing the limits of math-ematical reasoning in open language models, 2024. URL https://arxiv.org/abs/2402 .03300 .Yuanzhe Shen, Zisu Huang, Zhengyuan Wang, Muzhao Tian, Zhengkang Guo, Chenyang Zhang, Shuaiyu Zhou, Zengjie Hu, Dailin Li, Jingwen Xu, Kaimin Wang, Wenhao Liu, Tianlong Li, Fengpeng Yue, Feng Hong, Cao Liu, and Ke Zeng. TRIP-Bench: A benchmark for long-horizon interactive agents in real-world scenarios, 2026. URL https://arxiv.org/abs/2602.0 1675 .Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. Re-flexion: Language agents with verbal reinforcement learning. In Advances in Neural Informa-tion Processing Systems , volume 36, 2023. doi: 10.52202/075280- 0377. URL https: //proceedings.neurips.cc/paper_files/paper/2023/hash/1b44b87 8bb782e6954cd888628510e90-Abstract-Conference.html .Mohit Shridhar, Xingdi Yuan, Marc-Alexandre Côté, Yonatan Bisk, Adam Trischler, and Matthew Hausknecht. ALFWorld: Aligning text and embodied environments for interactive learning. In 
+
+Proceedings of the International Conference on Learning Representations (ICLR) , 2021. URL 
+
+https://arxiv.org/abs/2010.03768 .Hui-Ze Tan, Xiao-Wen Yang, Hao Chen, Jie-Jing Shao, Yi Wen, Yuteng Shen, Weihong Luo, Xiku Du, Lan-Zhe Guo, and Yu-Feng Li. Hindsight credit assignment for long-horizon LLM agents, 2026. URL https://arxiv.org/abs/2603.08754 .Hanyang Wang, Weijieying Ren, Yuxiang Zhang, Ding Cao, Zhizhao Zeng, Ke Zeng, and Tianxiang Zhao. BiPACE: Bisimulation-guided policy optimization with action counterfactual estimation for LLM agents, 2026. URL https://arxiv.org/abs/2606.25556 .Zihan Wang, Kangrui Wang, Qineng Wang, Pingyue Zhang, Linjie Li, Zhengyuan Yang, Xing Jin, Kefan Yu, Minh Nhat Nguyen, Licheng Liu, Eli Gottlieb, Yiping Lu, Kyunghyun Cho, Jiajun Wu, Li Fei-Fei, Lijuan Wang, Yejin Choi, and Manling Li. RAGEN: Understanding self-evolution in LLM agents via multi-turn reinforcement learning, 2025. URL https://arxiv.org/abs/ 2504.20073 .Zhiheng Xi, Jixuan Huang, Chenyang Liao, Baodai Huang, Jiaqi Liu, Honglin Guo, Yajie Yang, Rui Zheng, Junjie Ye, Jiazheng Zhang, Wenxiang Chen, Wei He, Yiwen Ding, Guanyu Li, Zehui Chen, Zhengyin Du, Xuesong Yao, Yufei Xu, Jiecao Chen, Tao Gui, Zuxuan Wu, Qi Zhang, Xuanjing Huang, and Yu-Gang Jiang. AgentGym-RL: An open-source framework to train LLM agents for long-horizon decision making via multi-turn RL. In The Fourteenth International Conference on Learning Representations , 2026. URL https://iclr.cc/virtual/2026 /oral/10008786 .Kaibing Yang, Guangfeng Cai, Shengtian Yang, Shuo He, Yu Li, Mengyi Liu, Pengwei Chen, Jun Xu, and Lei Feng. Progress-conditioned group policy optimization for long-horizon agentic tasks, 2026. URL https://arxiv.org/abs/2607.22724 .Shunyu Yao, Howard Chen, John Yang, and Karthik Narasimhan. WebShop: Towards scalable real-world web interaction with grounded language agents. In Advances in Neural Information Processing Systems , volume 35, 2022. doi: 10.52202/068431-1508. URL https://papers 
+
+11 Preprint 
+
+.nips.cc/paper_files/paper/2022/hash/82ad13ec01f9fe44c01cb91814f d7b8c-Abstract-Conference.html .Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. ReAct: Synergizing reasoning and acting in language models. In International Conference on Learning Representations (ICLR) , 2023. URL https://openreview.net/forum?id= WE_vluYUL-X .Zhiyuan Yao, Yuxin Chen, Zhengxi Lu, Zishan Xu, Yueqing Sun, Yifu Guo, Yuquan Lu, Zhengzhou Cai, Kangning Zhang, Zhuowen Han, Zi-Han Wang, Ziang Ye, Qi Gu, Xunliang Cai, Weiwen Liu, and Yongliang Shen. SkillRise: Agentic reinforcement learning for cross-task skill evolution, 2026. URL https://arxiv.org/abs/2607.26784 .Siwei Zhang, Yun Xiong, Xi Chen, Zi’an Jia, Renhong Huang, Jiarong Xu, and Jiawei Zhang. RAPO: Expanding exploration for LLM agents via retrieval-augmented policy optimization. In 
+
+Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2026. URL https://arxiv.org/abs/2603.03078 .Shuyan Zhou, Frank F. Xu, Hao Zhu, Xuhui Zhou, Robert Lo, Abishek Sridhar, Xianyi Cheng, Tianyue Ou, Yonatan Bisk, Daniel Fried, Uri Alon, and Graham Neubig. WebArena: A real-istic web environment for building autonomous agents. In International Conference on Learn-ing Representations , 2024a. URL https://proceedings.iclr.cc/paper_file s/paper/2024/hash/4410c0711e9154a7a2d26f9b3816d1ef-Abstract-Conference.html .Yifei Zhou, Andrea Zanette, Jiayi Pan, Sergey Levine, and Aviral Kumar. ArCHer: Training lan-guage model agents via hierarchical multi-turn RL. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research ,pp. 62178–62209. PMLR, 2024b. URL https://proceedings.mlr.press/v235/z hou24t.html .Zilin Zhu, Longteng Guo, Yanghong Mei, Bowen Pang, Zongxun Zhang, Xingjian He, Ruyi Ji, and Jing Liu. When robots do the chores: A benchmark and agent for long-horizon household task execution, 2026. URL https://arxiv.org/abs/2605.14504 .
+
+## A IMPLEMENTATION DETAILS 
+
+A.1 EVALUATION PROTOCOL 
+
+Our runs share the same environment interface, prompts, action parser, and interaction limits. Fol-lowing GiGPO (Feng et al., 2025), we report success rates on ALFWorld and both task scores and success rates on WebShop. We evaluate each final checkpoint with three evaluation seeds. For each seed, ALFWorld uses 512 episodes on each of the In and Out splits, and WebShop uses 512 tasks. We compute each metric separately for each seed and report the mean and sample standard deviation across seeds. For the learning curves in Figure 2, all methods and checkpoints are evaluated on the same 140 ALFWorld In tasks. A.2 ROLLOUT REWARD CONVENTION 
+
+Our training runs use the same rule-based rollout reward. Following GiGPO (Feng et al., 2025), successful task completion receives a reward of 10 and failure receives 0; a format-invalid model output incurs an additional penalty: 
+
+ri,t = renv  
+
+> i,t
+
+− λfmt Iaraw  
+
+> i,t
+
+is malformed  , λfmt = 0 .1. (14) The penalty is applied before both the episodic return in Equation 2 and the discounted future return in Equation 3 are computed. It applies only when the raw output violates the prescribed response for-mat or cannot be parsed into an action. A well formed but inadmissible action is recorded separately and is not treated as a format violation. 12 Preprint A.3 EXACT CONTEXT AND LOCAL ACTION POOLING 
+
+The concrete context in Equation 4 combines the task rollout-group identifier bi with the action’s pre-execution observation. Two decisions enter the same local group only when both components match. Observation matching preserves the complete content, including concrete entities and arguments, without entity replacement or semantic matching. Thus, identical observations from different task groups remain separate, as do observations that differ in their concrete objects. Earlier interaction history and WebShop’s additional public-state fields are not used for local grouping. For action normalization, we apply Unicode NFKC normalization to the extracted action text, trim its ends, convert letters to lowercase, and collapse consecutive whitespace. This removes differences in writing without deleting the operation, entity identifiers, or arguments. The normalized text is paired with one of three validity classes: malformed output, a well formed but inadmissible action, or an executable action. Validity is determined from the parser and environment feedback after execution; it does not change the pre-action observation used for grouping. For example, case and whitespace variants of take apple 1 from table 1 represent the same normalized action. Changing the object identifier or validity class instead produces a distinct normalized action. Once the rollout is complete, discounted returns are averaged within each (c, v ) group. The baseline 
+
+μc and sample standard deviation σc are instead computed over all individual decision occurrences in c, not over equally weighted action means. The pooled advantage is assigned to every occurrence of the same action. A group is inactive when its return variation is negligible or all pooled action means coincide with the baseline, including the single-action case. All local groups and statistics are rebuilt for each rollout batch. The w/o action pooling variant replaces Qloc (cj , v j ) with Gj
+
+in Equation 5, retaining the context baseline and scale. Its activity depends on individual-return variation rather than differences between action means. For the global residual in Equation 8, we subtract μc from each occurrence’s own return Gj , not from its pooled action value. A.4 HISTORY AND TASK -PROGRESS ABSTRACTION 
+
+Construction principle. The rules follow a common construction principle across the two envi-ronments. We begin with task completion conditions and identify observable facts that track whether their prerequisites have been met. Task descriptions define goal-relative roles, while interaction his-tory and environment feedback update the relevant facts before each decision. States summarize task progress, and actions are mapped to their functions relative to the goal and current progress. This retains distinctions such as acquiring an unplaced target versus retaking a placed one, while allow-ing object identities to differ. The environment-specific rules are reused across task instances and executed automatically, without annotating individual trajectories. They define comparison groups rather than numerical advantages or additional progress rewards; action preferences are estimated from rollout returns. State construction uses only pre-action information and does not extend the policy input. 
+
+ALFWorld history and progress states. Task metadata identifies the task family, target object, destination, and required tool. Placement tasks define a destination relation; Heat, Cool, and Clean add a required property; Pick2 requires two placements; Look requires inspection under light. We reconstruct the relevant facts by replaying accepted actions, tracking possession, object locations, completed transformations, placement counts, encountered entities, and container or tool states. Rejected actions leave these facts unchanged, and removing a previously placed instance decreases the placement count. The task-progress state combines the task family, the types of goal conditions, their progress repre-sentations, and their joint completion pattern. Each condition retains goal-relative relations, a coarse progress stage, and relevant facts such as whether the target is held or the required tool is accessible. Transformation stages distinguish an undiscovered target, discovery or possession, possession with a seen or accessible tool, placement in the tool, and completed transformation. Placement conditions separately retain whether delivery remains unfinished; Pick2 additionally records placement count, while Look retains target and lighting conditions. These stages are categorical grouping features and do not provide additional rewards. 
+
+ALFWorld action functions. Commands are parsed into operations and arguments, with entities mapped to task roles such as target, destination, and tool. Functions distinguish navigation, acqui-13 Preprint sition, transformation, placement, inspection, and exploration. For Pick2, taking a target from the destination is classified as a retake rather than acquisition, separating actions that can undo com-pleted placement. 
+
+WebShop decision frontiers. Fixed patterns extract options and price limits; normalized tokens represent the requested product. These constraints are compared with the observation and public page state, including query, selected options, clickable elements, and prior interaction counts. The task-progress state retains only the page type and active decision frontier, omitting concrete query and product identities. Frontier rules are evaluated in order. On a results page, an affordable candidate covering at least two-thirds of the target product tokens marks readiness to inspect a candidate. Otherwise, query coverage below two-thirds indicates a need for query refinement. If coverage is sufficient and another results page exists, the frontier instead indicates further result exploration. On an item page, excessive price or zero product-token overlap first marks the item as unsuitable. Missing or conflicting options then indicate a need for option selection when a requested choice is available; otherwise, the item is unsuitable. Once required options are satisfied, sufficient token coverage and an acceptable price mark readiness to purchase. Remaining cases indicate a need for information only if product details have not yet been inspected; otherwise, the frontier remains unresolved. An absent price limit imposes no price restriction. These checks use current public information, not a hidden purchase-success label. 
+
+WebShop action functions. Action functions distinguish opening a strongly matching, affordable candidate from selecting a requested option that remains unmet. Conflicting or repeated selections are separated, as are inspection, purchase, backtracking, and result exploration. Table 5 illustrates these functional distinctions; sharing requires both the abstract state and action function to match. Table 5: Examples of task-relative distinctions preserved by action abstraction.          
+
+> Environment Task-relative decision Action function ALFWorld In Pick2, take a target from outside the destination. Acquire an unplaced target ALFWorld In Pick2, take a target back out of the destination. Retake a placed target WebShop Select a requested option that is not yet satisfied. Satisfy an option WebShop Select a conflicting option or repeat an already satisfied choice. Violate or repeat an option
+
+Sharing boundary. WebShop excludes unresolved frontiers and action functions from global sharing, including open-ended search queries and results whose product titles and prices cannot be aligned reliably. Item subpages are also excluded because they generally offer only a return ac-tion. Parser and execution-validity checks exclude malformed or inadmissible commands without altering the pre-action state; excluded decisions retain access to trajectory or local credit. These gates determine whether sharing is allowed; Appendix A.5 describes how support and uncertainty scale the resulting estimate. The grouping interface and estimator are shared across environments, while task parsing, tracked facts, and functional mappings remain environment-specific. A.5 GLOBAL MEMORY AND RELIABILITY 
+
+This section specifies the memory maintenance and reliability estimators used in Section 4.3. For each observed (z, u ) pair, the memory maintains the moments in Equation 9, the sum of squared observation weights, and the last update. It also tracks decayed contributions from contexts rec-ognized across updates, separately from the batch-local grouping c. For this support calculation, ALFWorld matches the task family and observation, whereas WebShop matches the task instance and observation. This tracks repeated support across updates without changing local comparison groups. Before a record is read or updated after ∆ optimization steps, its moments and context weights are multiplied by λ∆ema ; the sum of squared weights is multiplied by λ2∆ ema . We set λema = 2 −1/H for a half-life of H updates. A local context supplies new residual observations only when it contains at least two shareable occurrences with different abstract action functions. Repeated occurrences within each (c, z, u ) are then averaged as in Equation 8, and each resulting mean adds one unit of 14 Preprint weight. All eligible current-batch observations are written before the advantages for that update are queried. Let Cz,u (χ) be the decayed contribution weight of context χ under this matching rule. The effective context support is 
+
+neff (z, u ) = 
+
+ P  
+
+> χ
+
+Cz,u (χ)2
+
+P 
+
+> χ
+
+Cz,u (χ)2 . (15) We first take the harmonic mean of the effective supports of all alternatives to u, then take the harmonic mean of that value and neff (z, u ) to obtain ncmp (z, u ). This makes the support correction in Equation 11 sensitive to the less-supported side of the comparison. To compute uncertainty, let Dz,u denote the stored sum of squared observation weights. The weighted residual variance and the estimated variance of the action mean are 
+
+bv(z, u ) = max {Mz,u − S2
+
+> z,u
+
+/W z,u , 0}
+
+Wz,u − Dz,u /W z,u 
+
+, h(z, u ) = bv(z, u )max {neff (z, u ), 1} . (16) We use zero variance when its denominator is numerically negligible. For K = |U z | recorded action alternatives, the squared standard error of the centered contrast is 
+
+cSE 2diff (z, u ) = 
+
+ K − 1
+
+K
+
+2
+
+h(z, u ) + 1
+
+K2
+
+X 
+
+> u′̸=u
+
+h(z, u ′). (17) The dispersion bσ2 
+
+> z
+
+is the sample variance of the recorded action means, and η2 supplies the additive floor in Equation 11. A global group is active only when it has at least two action alternatives with non-negligible disper-sion and effective context support of at least two. For this group-level support, a context’s weight is the maximum of its weights across action alternatives, avoiding repeated counting within the group. A queried action must also have a memory record. After reliability correction, WebShop subtracts the current-batch mean over active decisions in each progress-state group; no further variance nor-malization is applied. The reported diagnostics and case values include this centering. A.6 TRAINING AND INTERACTION SETTINGS 
+
+We train for 160 policy updates, sampling 16 tasks and eight trajectories per task at each update, for a total of 128 trajectories. The policy learning rate is 10 −6, with clipping threshold ϵclip = 0 .2 and KL coefficient β = 0 .01 . We use a discount factor of γ = 0 .95 and format penalty λfmt = 0 .1.The global memory uses an EMA half-life of eight updates, with support shrinkage λsup = 4 and numerical floor η = 0 .05 . For advantage fusion, αj = 2 /3 when both step estimators are active, 
+
+1 for local credit only, and 0 for task-progress credit only. If neither estimator is active, the update uses trajectory credit alone; we set λstep = 1 throughout. Interactions are limited to 50 steps in ALFWorld and 30 in WebShop. Training and evaluation sample responses at temperatures 1.0 and 0.4, respectively. The policy retains up to two recent observation–action pairs and generates at most 512 tokens per response. After chat formatting, prompts are left-truncated to 2,048 tokens for ALFWorld and 4,096 for WebShop. A.7 COMPUTATIONAL PROFILE 
+
+The computational measurements in Table 3 use four NVIDIA A100 40GB GPUs and cover all 160 ALFWorld policy updates. We average the logged advantage-computation and full-update times across updates, excluding validation and checkpoint evaluation. Advantage computation includes local grouping, memory maintenance, and reliability estimation. Full-update time also includes rollout generation and policy optimization, so its variation reflects both computational overhead and the trajectory lengths produced by each policy. A.8 PROMPT TEMPLATES 
+
+Both environments use the same prompt templates during training and evaluation. The environment prompt is passed as a single user message through the Qwen chat template, which adds the default 15 Preprint system message and the assistant generation prefix. Each subsequent input includes the task, current observation, admissible actions, and recent history, subject to the limits in Appendix A.6. History contains actions submitted to the environment, not the model’s reasoning text. This policy input is separate from the compact history state maintained by the credit estimator. 
+
+ALFWorld. The template below is used after the initial decision. At the initial decision, its open-ing sentence is “You are an expert agent operating in the ALFRED Embodied Environment.” The task is already included in the initial observation, and the history and step counters are omitted. The admissible action list excludes help .
+
+ALFWorld prompt template 
+
+You are an expert agent operating in the ALFRED Embodied Environment. Your task is to: 
+
+{task_description} 
+
+Prior to this step, you have already taken {step_count} step(s). Below are the most recent 
+
+{history_length} observations and the corresponding actions you took: {action_history} 
+
+You are now at step {current_step} and your current observation is: {current_observation} 
+
+Your admissible actions of the current situation are: [ {admissible_actions} ]. Now it’s your turn to take an action. You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. Once you’ve finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+WebShop. The task is extracted from the instruction field, and available actions are constructed from the search interface and clickable page elements. The initial decision uses the same instructions below but omits the history sentence and replaces “You are now at step {current_step} and your current observation is:” with “Your current observation is:”. History entries in both environments take the form [Observation k: ’...’, Action k: ’...’] .
+
+WebShop prompt template 
+
+You are an expert autonomous agent operating in the WebShop e-commerce environment. Your task is to: {task_description} .Prior to this step, you have already taken {step_count} step(s). Below are the most recent 
+
+{history_length} observations and the corresponding actions you took: {action_history} 
+
+You are now at step {current_step} and your current observation is: 
+
+{current_observation} .Your admissible actions of the current situation are: [ {available_actions} ]. Now it’s your turn to take one action for the current step. You should first reason step-by-step about the current situation, then think carefully which admissible action best advances the shopping goal. This reasoning process MUST be enclosed within <think> </think> tags. Once you’ve finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+16 Preprint 
+
+## B ADDITIONAL EXPERIMENTAL DIAGNOSTICS 
+
+B.1 DATA AND STATISTICAL PROCEDURES 
+
+The credit analyses use 529,352 ALFWorld decisions and 162,121 WebShop decisions collected over 160 policy updates in each environment. Each decision is associated with its task, concrete context, task-progress state, action function, discounted return, and both credit estimates. Coverage is the proportion of decisions with a nonzero advantage from the corresponding estimator. B.2 CROSS -TASK CONSISTENCY TEST 
+
+The test in Figure 3b uses 3,473 supported action contrasts. Tasks are partitioned into five disjoint folds, keeping all records from each task together. Four folds estimate context-balanced residual action means, and the held-out fold provides comparison estimates for the same progress groups. Contributions retain their EMA weights at update 160. Both estimates are centered over common action alternatives, requiring at least two alternatives and effective context support of at least two per action on each side. We compare the signs of nonzero contrasts and bin their agreement by the confidence multiplier. Away from the numerical floor, this multiplier is 
+
+κ(z, u ) = αsup (z, u ) bσz
+
+qbσ2 
+
+> z
+
++ cSE 2diff (z, u ) + η2
+
+. (18) It measures shrinkage relative to the unscaled standardized contrast eq(z, u )/bσz , not a probability of correctness. Numerically, we divide the magnitude of the reliability-scaled contrast by that of the unscaled contrast, flooring the latter at 10 −6 and capping the ratio at one. All quantities are recom-puted from the estimation folds; agreement is summarized in four bins of width 0.25. Repeating the procedure for each held-out fold produces the five columns in the figure. B.3 COMPLETE DECISION -CREDIT DECOMPOSITION 1-20 21-80 81-140 141-160 
+
+> Policy updates
+> 025 50 75 100
+> Decisions (%)
+
+(a) ALFWorld    
+
+> 1-20 21-80 81-140 141-160
+> Policy updates
+> 025 50 75 100
+
+(b) WebShop  
+
+> Task-progress only Both same sign Both opposite signs Local only Neither
+
+Figure 6: Local and task-progress credit across training phases. Bars partition all decisions by nonzero credit availability; hatching marks shared coverage with opposing advantage signs. Figure 6 shows that broader coverage is a persistent contribution of task-progress credit, rather than an effect confined to early exploration. Its exclusive coverage remains substantial in every phase, while local-only credit accounts for less than 0.1% of ALFWorld decisions. In WebShop, task-progress-only coverage stays near 22% after the initial phase, even as local-only coverage decreases. Where both estimators are active, their signs can differ because they compare actions against differ-ent reference groups. The global branch therefore changes both the availability and the direction of decision-level supervision; the sign decomposition measures these differences, not which estimator is correct. 17 Preprint B.4 PERFORMANCE ACROSS ALFW ORLD TASK TYPES Pick Look Clean Heat Cool Pick2   
+
+> GiGPO HGPO BLPO
+
+Figure 7 shows BLPO’s largest gain on Pick2, which requires retaining completed placement progress while handling a second object. Task-progress groups can credit useful intermediate steps through comparisons with similar stages in other tasks, even when subsequent execution fails. Look instead requires target possession and lighting conditions to hold jointly. This greater dependence on the immediate configuration may offer less scope for progress-based sharing, providing a possible explanation for BLPO’s lower success than HGPO on Look. Figure 7: Success by ALFWorld task type with Qwen2.5-1.5B at update 160, evaluated on the same 140 tasks as Figure 2. Axes scale linearly from 0% at the center to 100% at the boundary. B.5 TRAINING DYNAMICS 
+
+Figure 8 reports training diagnostics over all 160 policy updates. Return is the mean undiscounted environment reward of the sampled rollout batch, before the format penalty. Entropy is averaged over output tokens, rather than executable action categories. BLPO increases return more rapidly during early and middle training, while the gap to HGPO narrows toward the end. Its entropy decreases earlier and approaches GiGPO’s level without a sustained decline in return. Meanwhile, the logged KL estimate relative to the reference policy levels off, with late values between those of GiGPO and HGPO. 0 40 80 120 160           
+
+> Policy updates
+> 0246810
+> (a) Training return
+> 040 80 120 160
+> Policy updates
+> 0.0 0.4 0.8 1.2
+> (b) Token entropy
+> 040 80 120 160
+> Policy updates
+> 0.00 0.05 0.10 0.15 0.20
+> (c) KL estimate
+> GiGPO HGPO BLPO
+
+Figure 8: Training diagnostics on ALFWorld with Qwen2.5-1.5B, using one training run per method. Pale lines show per-update measurements; solid lines show 10-update trailing means. 18

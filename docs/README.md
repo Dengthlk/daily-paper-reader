@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-25 ~ 2026-11-03</span>
+      <span class="dpr-home-dashboard-kicker">2026-11-04</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 19 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>7</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-11-03 07:20:08 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-11-04 00:19:24 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>本期扫完19篇论文（精读7篇、速读12篇），重点聚焦LLM多智能体协作与跨游戏评测。</p>
-<p>最值得看的是两篇9.0分工作：去中心化LLM协作的信念条件多智能体Actor-Critic，以及跨多样Eurogame的统一LLM Agent竞技场。</p>
-<p>普通读者可先读这两篇建立框架，再按兴趣补FOCUS等3篇8.0分长程Agent速读。</p>
+<p>今天精读 5 篇，重点关注贝叶斯离线多智能体强化学习与潜世界模型，以及基于子目标规划与图正则化信用分配的智能体强化学习。</p>
+<p>两篇 8.0 分论文分别指向两个方向：用潜世界模型提升离线多智能体学习的稳定性，以及用图结构改进长程子目标的信用分配。</p>
+<p>普通读者可以先从这两篇的摘要与方法框架入手，再顺着“世界模型”和“信用分配”两条线索追踪后续工作。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">7 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Belief-Conditioned Multi-Agent Actor Critic for Decentralized LLM Collaboration">Belief-Conditioned Multi-Agent Actor Critic for Decentralized LLM Collaboration</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Unified Arena for LLM Agents across Diverse Eurogame">A Unified Arena for LLM Agents across Diverse Eurogame</span></li><li><span class="dpr-home-dashboard-paper-title" title="Reinforcement Learning for the Game of Balatro: A Fast Simulator and Two-Policy Training Approach">Reinforcement Learning for the Game of Balatro: A Fast Simulator and Two-Policy Training Approach</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models">Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning">SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning</span></li><li><span class="dpr-home-dashboard-paper-title" title="RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs">RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">game-llm-rl <strong>5</strong></span><span class="dpr-home-dashboard-tag">rl-agents <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>5</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">12 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="FOCUS: Active Critic Learning for Long-Horizon Language Model Agents">FOCUS: Active Critic Learning for Long-Horizon Language Model Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Vision-Language Agents Can Learn in Their Own Latent Worlds">Vision-Language Agents Can Learn in Their Own Latent Worlds</span></li><li><span class="dpr-home-dashboard-paper-title" title="Action-Value Calibration via Continuation Sharing for Long-Horizon Agentic Reinforcement Learning">Action-Value Calibration via Continuation Sharing for Long-Horizon Agentic Reinforcement Learning</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>11</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>1</strong></span></div>
+
 </section>
 </div>
 

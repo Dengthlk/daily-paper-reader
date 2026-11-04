@@ -1,0 +1,515 @@
+Title: Hindsight Credit Assignment over Trees for Agentic RL
+
+URL Source: https://arxiv.org/pdf/2611.02706v1
+
+Published Time: Tue, 03 Nov 2026 05:10:54 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Hindsight Credit Assignment over Trees for Agentic RL 
+
+Penghong Zhao 1∗, Yihao Chen 1∗, Maoheng Yuan 2∗, Yunjian Zhang 1, Abudukelimu Wuerkaixi 1,
+
+Haoran Xu 1, Man Lv 1, Yaolong Wang 1, Zhijie Sun 1, Guohua Liu 1, Yuewei Zhang 1†
+
+> 1
+
+Alibaba Cloud Computing 2Fudan University 
+
+{zhaopenghong.zph, cyh535471, liyou.zyw}@alibaba-inc.com mhyuan24@m.fudan.edu.cn 
+
+Abstract 
+
+Reinforcement learning for long-horizon LLM agents faces a fundamental dilemma: success-ful experiences are essential for policy improve-ment, yet limited policy capabilities make such experiences difficult to discover. Sparse out-come rewards compound this challenge, leav-ing sampled trajectories with little relative feed-back for learning. In this paper, we propose TriGRPO, a tree-based reinforcement learning framework that turns scarce successes into ex-ploration and learning signals through hind-sight credit assignment within and across roll-out trees. TriGRPO constructs rollout trees through hindsight-guided branching: when an ongoing trajectory reaches a matched decision state, a successful action discovered during rollout initiates a sibling branch that contin-ues autonomously, enabling further exploration and parent–sibling comparisons. Three comple-mentary groups organize policy optimization over these trees: root groups capture within-prompt relative returns, node groups assign credit from parent–sibling outcome differences, and cross groups supplement sparse feedback with historical performance on related tasks. Experimental results demonstrate consistent gains in task performance and rollout efficiency across model scales, highlighting structured hindsight credit assignment as an effective ap-proach to long-horizon agent learning. 
+
+1 Introduction 
+
+Large language models (LLMs) increasingly act as agents that sustain progress through sequential deci-sions and environmental feedback. Reinforcement learning (RL) improves these capabilities from in-teraction outcomes (Wang et al., 2026a; Zhang et al., 2026; Yang et al., 2026), but must turn be-haviors discovered during exploration into reliable strategies for independent task solving. 
+
+> ∗
+
+Equal contribution. 
+
+> †
+
+Corresponding author. Cross Group    
+
+> Root Group
+> Node Group
+> (a)
+> 70
+> 80
+> 90
+> 95
+> 0.25 0.35 0.45 0.55
+> Pareto frontier
+> better
+> ours
+> cumulative rollout tokens (B)
+> peak validation SR (%) → higher
+> Method
+> GRPO
+> GiGPO
+> GSPO
+> Tree-GRPO
+> TriGRPO
+> Scale
+> Qwen2.5-1.5B
+> Qwen2.5-3B
+> Qwen2.5-7B
+> cheaper
+> (b)
+
+Figure 1: TriGRPO enhances agentic RL through hind-sight credit assignment. (a) Credit assignment across trees, within a tree, and at branch nodes. (b) Superior Pareto frontier of success versus cost. 
+
+Existing approaches compare sampled trajec-tories: GRPO (Shao et al., 2024) uses within-group returns without a learned critic, while GSPO (Zheng et al., 2025) refines sequence-level opti-mization. For multi-turn agents, GiGPO derives step-level credit from recurring states (Feng et al., 2025), and Tree-GRPO compares prefix-sharing continuations (Ji et al., 2025). CAST uses game-solver values for turn-level supervision (Wang et al., 2026b); PVPO addresses degenerate groups through difficulty filtering and pre-estimated base-lines (Feng et al., 2026). Yet autonomous exploration limits the experi-arXiv:2611.02706v1 [cs.LG] 2 Nov 2026 ence available for learning. Under sparse rewards, failures can dominate sampling without providing within-group relative signals. The policy needs successful experience to improve, yet its limited capability makes that experience difficult to obtain. Occasional successes offer a foothold: repeating useful decisions enables deeper exploration (Oh et al., 2018), while replay supports further updates (Zhan et al., 2026). We seek to make scarce suc-cesses guide new interactions, helping other trajec-tories build on discovered behaviors and learn to complete tasks independently. We propose TriGRPO (Triple Group Relative Policy Optimization), a unified framework that op-erationalizes hindsight successes into multi-scale relative optimization. Rather than passive offline replay, TriGRPO exploits discovered successes strictly online along two dimensions: within-tree hindsight branching to actively guide exploration, and across-tree hindsight credit assignment to en-rich sparse learning signals. Under exact matching of sufficient decision states, our analysis shows that success-conditioned action replacement yields a nonnegative expected gain in task success proba-bility, motivating state-aligned branching at action disagreements (Figure 1). TriGRPO structures multi-scale credit assign-ment around three comparison groups derived from this hindsight mechanism. At the prompt level, standard unguided rollouts form a root group eval-uated against within-prompt returns. Within each tree, when an ongoing rollout reaches an observ-able state previously visited by a completed suc-cessful trajectory, a new branch splits off by exe-cuting the corresponding hindsight action and con-tinues autonomously, forming a node group; this branched trajectory receives only node credit from parent–sibling outcome differences. Across trees, unguided rollouts reference related tasks’ historical performance to form a cross group without gen-erating additional rollouts, receiving cross credit against this historical benchmark. Injected actions are supervised solely with behavior cloning, while autonomous decisions are optimized via reinforce-ment learning with their corresponding credits. No external demonstrations or preliminary sampling are required. Our contributions are summarized as follows: • We establish a theoretical guarantee that success-conditioned action replacement yields nonnegative expected gains, which motivates an online hindsight-branching strategy requir-ing no offline replay, external demonstrations, or auxiliary sampling overhead. • We propose TriGRPO , a unified framework that translates hindsight experience into com-plementary policy optimization signals across three comparison groups: root groups for within-prompt relative credit, node groups for branch-level credit, and cross groups for his-torical feedback across related tasks. • Extensive experiments demonstrate that Tri-GRPO improves success rates by up to 6.2% over state-of-the-art baselines while reducing rollout token consumption by up to 39.4%. 
+
+2 Related Work 
+
+Group-Based Policy Optimization and Credit Assignment. GRPO (Shao et al., 2024) replaces the learned critic in PPO (Schulman et al., 2017) with group-relative baselines, while variants such as DAPO (Yu et al., 2025), Dr. GRPO (Liu et al., 2025), and GSPO (Zheng et al., 2025) improve op-timization stability. Other studies leverage reward variance or auxiliary rollouts to reshape feedback (Jiang et al., 2025, 2026; Feng et al., 2026). For step-level credit, GiGPO (Feng et al., 2025) clus-ters naturally recurring anchor states, and CAST (Wang et al., 2026b) relies on external solver values. In contrast, TriGRPO requires no external solvers; it couples a cross-batch historical baseline with lo-calized parent–sibling counterfactual comparisons at matched decision states. 
+
+Tree-Based Rollouts and Exploration. Tree topologies support both inference planning (Yao et al., 2023; Zhou et al., 2024) and policy optimiza-tion. TreeRL (Hou et al., 2025) and Tree-GRPO (Ji et al., 2025) employ tree rollouts with prefix sharing and hierarchical advantage estimation. Un-like Tree-GRPO’s unguided random expansion, Tri-GRPO initiates branches deterministically when an active rollout matches a state banked by a suc-cessful trajectory from the same prompt, concen-trating compute where verified alternative actions are known. We evaluate against GiGPO and Tree-GRPO as our primary baselines for step-level credit and tree exploration, respectively. 
+
+Hindsight and Experience Reuse. Hindsight learning extracts training signals from past roll-outs (Andrychowicz et al., 2017). In LLMs, ECHO (Hu et al., 2025) and HSL (Li et al., 2026) per-form post-hoc goal relabeling to construct synthetic demonstrations, while SIL (Oh et al., 2018) and ExGRPO (Zhan et al., 2026) replay prioritized suc-cesses. Rather than altering goals or replaying offline trajectories, TriGRPO applies hindsight on-line at the action level, injecting verified actions into concurrent rollouts to compute counterfactual policy-gradient advantages in real time. 
+
+3 Method 
+
+3.1 Preliminaries 
+
+We consider a multi-turn agent interacting with an environment to accomplish a task specified by a prompt x. At each step t, the agent receives an observation ot and selects an action at according to a policy πθ(· | ht), where ht = ( x, o 1, a 1, . . . , o t)
+
+denotes the interaction history. This process gen-erates a trajectory τ = ( o1, a 1, . . . , o T , a T ) un-til termination, with a binary outcome reward 
+
+R(τ ) ∈ { 0, 1} indicating task success or failure. For each prompt x we sample a group of N trajec-tories, Gx = {τi}Ni=1 .
+
+3.2 Theoretical Analyses 
+
+Let G denote the event of eventual task success and 
+
+s a sufficient decision state that captures all infor-mation relevant to future interactions, including the environment state, policy-visible history, and re-maining horizon. Under a fixed policy π, we define the state- and action-level success probabilities as              
+
+> h(s) := Pr
+> π(G|S=s),q(s, a ) := Pr
+> π(G|S=s, A =a),(1)
+
+where the trajectory continues under π after ac-tion a; by the law of total probability, h(s) = 
+
+EA∼π(·| s)[q(s, A )] .For any state satisfying h(s) > 0, Bayes’ rule gives the action distribution conditioned on even-tual success:              
+
+> π+(a|s) := Pr
+> π(A=a|S=s, G ) = π(a|s)q(s, a )
+> h(s).
+> (2)
+
+We formalize this property in the following propo-sition. 
+
+Proposition 1 (Success-Conditioned Action Ad-vantage). Consider a decision state s with h(s) >
+
+0. Let A+ ∼ π+(· | s) denote an action sam-pled from the success-conditioned distribution, and 
+
+A0 ∼ π(· | s) an action sampled from the original policy. When both actions are evaluated with sub-sequent continuation under π, the expected success-probability gain of A+ over A0 satisfies      
+
+> E[q(s, A +)−q(s, A 0)] = Var A∼π(·| s)[q(s, A )]
+> h(s)≥0.(3)
+
+Proof. Substituting Eq. (2), we obtain     
+
+> E[q(s, A +)] = EA∼π(·| s)[q(s, A )2]
+> h(s),E[q(s, A 0)] = h(s).
+> (4)
+
+Therefore,         
+
+> E[q(s, A +)−q(s, A 0)] =E[q(s, A )2]−E[q(s, A )] 2
+> h(s)= Var[ q(s, A )]
+> h(s)≥0,
+> (5)
+
+where the expectations and variance in the last two lines are taken over A ∼ π(· | s). □
+
+Implications for Branching. Proposition 1 moti-vates three principles for success-guided branching: 1. Where to branch: State alignment. The gain in Eq. (3) requires a shared decision state, motivating state alignment to identify valid branching points. 2. When to branch: Action disagreement. Let 
+
+D = {A+̸ = A0}. Since identical actions contribute no gain,     
+
+> E  q(s, A +)−q(s, A 0)1D
+> = Var A∼π(·| s)[q(s, A )]
+> h(s).
+> (6)
+
+Thus, branching can focus on action disagree-ments without losing the unconditional ex-pected replacement gain. 3. How to branch: Prefix-preserving action injection. At a matched decision state, we preserve the recipient’s prefix and inject the successful action to create an alternative con-tinuation, so that action replacement occurs at the same pre-action state (consistent with Eq. (3)) while avoiding redundant prefix gen-eration. Let Cp denote the cost of generat-ing a common prefix and Cc that of a sub-sequent continuation. Generating K sibling trajectories independently incurs K(Cp + Cc),whereas branching from the shared prefix re-quires Cp + KC c, yielding an idealized local compute saving of 
+
+∆C = ( K − 1) Cp. (7) TIME earlier later                 
+
+> Cross Group
+> Put a clean apple in fridge
+> Prompt a: Heat sth. Root Group
+> τ₁success τ₂failure τ3running τ4success τ5running
+> R=1
+> R=0
+> τ3′τ3″
+> R=1
+> τ5″
+> Hindsight Bank 𝓑
+> After τ ₁finished
+> After τ 4finished +
+> Node Group N ₁Node Group N ₂
+> Node Group N ₃Node Group N ₄
+> unguided trajectory guided sibling state-matched branch point advantage group
+> τ5′
+> Clean a mug and put it on the desk Clean a plate and put it in the cabinet
+> Prompt c: Look sth. Prompt e: Look sth. Prompt g: Pick sth. Prompt b Prompt d Prompt f Cross Group
+> ···
+> Batch Node Group State State Action Action
+> State Action
+> state-action point
+> Same State Banked Action
+
+Figure 2: Overview of the TriGRPO training pipeline. Tree-structured rollouts generate R root trajectories per prompt, expanded into prefix-sharing trees. During training, successful trajectories populate the hindsight bank in real time. Upon detecting a matched state, TriGRPO creates a guided branch by injecting the hindsight action, forming a node group. Prompts sharing the same task type form a cross group to enable cross-prompt credit assignment, propagating hindsight experience across tasks. Once batch rollouts are completed, a triple-group advantage estimator assigns node, root, and cross credits for policy updates. 
+
+In practice, this upper-bound economy amor-tizes prefix generation over active hindsight continuations while avoiding redundant roll-outs of shared decision histories. The theoretical gain holds under exact state matching and success-conditioned action sampling, while the computational benefit arises from amor-tizing shared-prefix generation costs. 
+
+3.3 TriGRPO 
+
+Building on Section 3.2, we propose TriGRPO, in-tegrating three components: (i) prefix-sharing tree rollouts, (ii) hindsight branching guided by success-ful actions, and (iii) hindsight credit assignment through root-, cross-, and node-level advantages. 
+
+Tree-structured rollouts. Rather than sampling 
+
+N trajectories independently for each prompt x,we generate R root trajectories and expand sam-pled non-leaf nodes into prefix-sharing trees (Ji et al., 2025). We denote by Gx the set of all gen-erated trajectories (root and branch) for prompt 
+
+x. Prefix sharing eliminates redundant generation and enables comparisons at multiple levels of the trajectory hierarchy. 
+
+Hindsight Branching. Following Eqs. (3) and (6), TriGRPO maintains a dynamic success bank B of successful trajectories with R(τ ) = 1 
+
+from the current prompt. When an active trajectory 
+
+τi reaches a decision state s that matches a state 
+
+s′ visited by a trajectory in B, and the two actions disagree ( a+̸ = ai, where ai is the action τi
+
+would have taken at s), we spawn a counterfactual sibling branch τj that inherits τi’s prefix up to 
+
+s, substitutes the banked action a+ ∈ B, and continues autonomously under πθ. We denote unguided trajectories by U and guided branches by 
+
+V; each pair (τi, τ j ) forms a node group isolating the causal effect of the action at s (Figure 2). 
+
+Three-level advantage estimator. We capture learning signals at three granularities. 
+
+Root-level advantage. For each unguided trajec-tory τi ∈ U :
+
+Aroot (τi) = R(τi) − ¯Rx
+
+σx
+
+, (8) where ¯Rx and σx are the mean and standard devia-tion of returns over all trajectories in Gx.
+
+Cross-sample advantage. To prevent vanishing advantages when all trajectories in a group receive identical rewards, we maintain historical baselines at both task and task-type levels. Let μf (t) and 
+
+μc(t) denote EMA rewards for task t and its task type c; after each step they move toward the cor-responding batch mean returns ¯Rt and ¯Rc with smoothing coefficient α:
+
+μk(t) ← (1 − α) μk(t) + α ¯Rk, ∀k ∈ { f, c }.
+
+(9) To balance task-specific precision against task-type stability, we apply Bayesian shrinkage toward the coarse prior: 
+
+μ(t) = nt · μf (t) + κ · μc(t)
+
+nt + κ , (10) where nt is the number of previously observed root trajectories for task t and κ controls the prior strength. The cross-sample advantage is then 
+
+Across (τi) = R(τi) − μ(t)
+
+σr
+
+, (11) where σr > 0 is a reward normalization factor; it is applied strictly to unguided trajectories τi ∈ U ,excluding guided branches from historical estima-tion. 
+
+Node-level advantage. For each node group 
+
+(τi, τ j ):
+
+Anode (τj ) = R(τj ) − R(τi). (12) Following C3 (Chen et al., 2026), instantiated here as an unguided–guided trajectory pair (τu, τ v) ∈U × V , this isolates the counterfactual gain of ac-tion a+ at decision state s. It needs no variance normalization: each node group holds exactly two binary-reward trajectories, so the difference is natu-rally bounded in {− 1, 0, 1} and any residual scale is absorbed by λnode .
+
+Combined advantage and optimization. The unified advantage is 
+
+ˆA(τ ) = 
+
+(Aroot (τ ) + λcross Across (τ ) if τ ∈ U ,λnode Anode (τ ) if τ ∈ V ,
+
+(13) where λcross and λnode control the relative contri-bution of each credit level. To further stabilize the policy around successfully injected actions and ac-celerate early training, we introduce an auxiliary behavior cloning (BC) loss. The policy is then optimized via 
+
+L = LRL + η(t) · L BC , (14) where LRL uses ˆA(τ ) within KL-regularized GRPO and LBC supervises the injected actions a+
+
+on guided branches V. The BC weight η(t) is held constant early and then decayed to a small floor, gradually shifting emphasis from imitation to rein-forcement learning. 
+
+4 Experimental Results 
+
+4.1 Setup 
+
+Experiments are conducted on two interactive benchmarks: ALFWorld (Shridhar et al., 2021) (n=128 test tasks) and SearchQA (Jin et al., 2025) (51,713 test questions spanning 7 benchmarks). We report the peak validation success rate (SR) aver-aged over 3 random seeds, alongside cumulative token consumption up to the peak step to quantify sampling efficiency. Detailed environment configu-rations are provided in Appendix A.1 and A.3. We compare against: (1) GRPO (root-only), (2) Tree-GRPO (Ji et al., 2025), (3) GiGPO (Feng et al., 2025), and (4) GSPO (Zheng et al., 2025). All baselines share the training configuration and evaluation protocol above; reproduction details are in Appendix A.4. Unless otherwise noted, all runs use a learning rate of 1 × 10 −6 with a constant schedule. On ALFWorld the tree rollout uses R=8 root trajec-tories per prompt with up to L=12 leaves and a training batch of 16 prompts per step for 150 steps; on SearchQA the budget is reduced to R=3 roots with up to L=5 leaves and a batch of 256 prompts per step. Complete hyperparameters are in Ap-pendix A.2. 
+
+4.2 ALFWorld: Long-Horizon Embodied Tasks 
+
+Table 1 reports peak validation SR per task type and cumulative token consumption up to the peak step. TriGRPO attains the highest overall SR across all Qwen2.5 scales (88.3%, 93.8%, and 93.8%), outperforming the strongest baseline at each scale by 1.6–6.2 points and root-only GRPO by 15.5– 20.9 points. Notably, the margin over Tree-GRPO which shares prefix-reusing tree rollouts and dif-fers in whether branching is hindsight-guided by successful states, widens from 1.6 points at 1.5B to 16.5 points at 3B and 7B. These gains concen-trate predominantly in multi-subgoal tasks requir-ing complex action composition: on pick2 Tri-GRPO outperforms Tree-GRPO by 30–38 points at every scale, and on heat by over 40 points at 3B and 7B, while remaining competitive on shorter tasks. This directly reflects our mechanism: within-tree hindsight branching only triggers when an un-guided rollout encounters a state matched in the success bank with a divergent action, providing targeted corrections precisely where failing trajec-tories diverge and where blind random expansion Method pick look clean heat cool pick2 All Tokens                                                                                                                                                 
+
+> Qwen2.5-1.5B-Instruct
+> Base (no RL) 5.9 5.5 3.3 9.7 4.2 0.0 4.1 –GRPO 85.3 53.7 84.5 78.2 59.7 53.5 72.8 0.413B GiGPO 94.4 67.5 94.8 94.4 79.8 76.4 86.7 0.397B GSPO 89.3 55.3 87.7 83.2 78.5 54.0 74.7 0.417B Tree-GRPO 97.1 73.3 95.5 94.4 95.2 50.0 86.7 0.583B TriGRPO (ours) 92.3 66.7 100.0 94.7 76.5 85.7 88.3 0.353B
+> Qwen2.5-3B-Instruct
+> Base (no RL) 36.3 20.7 6.9 12.8 9.1 5.5 15.2 –GRPO 91.4 63.6 70.6 71.4 64.0 76.2 72.9 0.403B GiGPO 90.1 78.9 85.6 92.1 95.2 83.8 87.6 0.360B GSPO 92.6 71.4 88.5 60.0 78.1 78.3 78.2 0.415B Tree-GRPO 96.7 73.3 88.9 46.2 75.0 57.9 77.3 0.501B TriGRPO (ours) 96.6 86.7 95.8 100.0 91.3 88.2 93.8 0.338B
+> Qwen2.5-7B-Instruct
+> Base (no RL) 33.4 21.6 19.3 6.9 2.8 3.2 14.8 –GRPO 90.8 66.1 89.3 74.7 72.5 64.7 77.6 0.376B GiGPO 97.7 82.7 98.8 83.7 89.3 79.2 90.8 0.265B
+> GSPO 100.0 100.0 100.0 92.9 96.8 56.0 91.0 0.386B Tree-GRPO 90.3 92.9 95.7 50.0 77.8 53.8 77.3 0.491B TriGRPO (ours) 100.0 94.4 100.0 93.8 76.5 91.7 93.8 0.319B
+
+Table 1: Per-type and overall ( All ) peak validation SR (%) on the ALFWorld test split, together with cumulative token consumption up to the peak step ( Tokens ). Bold marks the best value in each column (highest SR, lowest token cost). Base is the untrained instruct model. 
+
+fails. Beyond task performance, TriGRPO delivers substantial rollout efficiency. It is the most token-efficient method at 1.5B and 3B, requiring 32.5– 39.4% fewer tokens than Tree-GRPO and 14.5– 16.1% fewer than GRPO. At 7B, it remains second only to GiGPO (trailing by 0.054B tokens while outperforming it by 3.0 SR points). Complete cost comparisons, per-type localization, and baseline or-dering across scales are detailed in Appendix B.1. 
+
+4.3 SearchQA: Retrieval-Augmented Multi-Hop QA 
+
+In SearchQA the agent answers open-domain ques-tions via iterative query-and-read steps, emitting a single scored answer and a sparse terminal reward per episode. Following the prevailing mixed train-ing recipe (Jin et al., 2025), we evaluate on seven benchmarks—four multi-hop (HotpotQA (Yang et al., 2018), 2WikiMultihopQA (Ho et al., 2020), MuSiQue (Trivedi et al., 2022), Bamboogle (Press et al., 2023)) and three single-hop (Natural Ques-tions (Kwiatkowski et al., 2019), TriviaQA (Joshi et al., 2017), PopQA (Mallen et al., 2023)); Table 2 summarizes the results. TriGRPO achieves the top multi-hop averages at both scales (26.6% at 1.5B, 38.3% at 3B), out-performing GRPO by 15.3 and 6.5 points and the strongest baseline (GiGPO) by 1.5 and 0.7 points. On such sparse-reward prompts every rollout can fail and the group-relative advantage vanishes; both forms of hindsight credit act: the across-tree signal 
+
+Across restores a nonzero, difficulty-normalized sig-nal from the historical baseline of Eq. (10), while within-tree hindsight branching imports a query formulation that succeeded elsewhere in the batch into a failing trajectory at a matched decision state, supervised by Anode rather than an uninformative group mean. Per-benchmark margins are in Ap-pendix B.2. Single-hop benchmarks need only one retrieved evidence span rather than multi-round reasoning; here TriGRPO again leads with 49.6% and 52.1% average success over the strongest baseline (Tree-GRPO, 47.5% and 50.0%), topping TriviaQA and PopQA at both scales and NQ at 1.5B. Its mar-gins over GRPO are about half the multi-hop ones (+6 .3 and +3 .8 vs. +15 .3 and +6 .5 points), con-sistent with the mechanism: with a single deci-sive span, unguided rollouts already solve enough prompts that within-group variance rarely collapses and within-tree hindsight branching fires less often, leaving few failing trajectories at matched states to receive an imported query formulation. Per-benchmark columns, including the small-set Bam-Multi-hop Single-hop Method HotpotQA 2Wiki MuSiQue Bamboogle Avg. NQ TriviaQA PopQA Avg.                                                                                                             
+
+> Qwen2.5-1.5B-Instruct
+> Base (no RL) 5.9 4.3 2.6 8.0 5.2 7.1 22.4 9.9 13.1 GRPO 14.6 24.4 2.2 4.0 11.3 39.4 51.0 39.7 43.3 GiGPO 16.7 25.6 3.4 54.8 25.1 16.4 34.8 14.9 22.0 GSPO 15.8 23.7 2.5 4.8 11.7 36.8 48.9 37.3 41.0 Tree-GRPO 29.5 26.8 6.6 13.6 19.1 43.6 57.3 41.6 47.5 TriGRPO (ours) 37.9 32.7 10.8 24.8 26.6 45.1 60.4 43.3 49.6
+> Qwen2.5-3B-Instruct
+> Base (no RL) 14.9 24.4 2.0 2.4 10.9 10.6 28.8 10.8 16.7 GRPO 39.0 36.3 15.2 36.8 31.8 44.4 58.0 42.5 48.3 GiGPO 36.9 37.0 12.6 64.1 37.6 42.0 59.5 42.4 48.0 GSPO 40.2 39.8 17.0 36.8 33.5 43.0 58.8 42.5 48.1 Tree-GRPO 42.4 43.7 17.8 43.3 36.8 46.8 59.7 43.6 50.0 TriGRPO (ours) 51.8 41.7 21.2 38.5 38.3 46.6 63.0 46.6 52.1
+
+Table 2: SearchQA accuracy (%) on four multi-hop and three single-hop benchmarks, with Avg. the unweighted mean over each group. Bold marks the best value per column within a model block; Base is the untrained instruct model.                                                 
+
+> Method pick look clean heat cool pick2 All Tokens
+> TriGRPO (root+cross+node) 96.6 86.7 95.8 100.0 91.3 88.2 93.8 0.338B root+cross (w/o node) 98.9 73.2 91.4 96.7 78.7 91.0 89.8 0.294B root+node (w/o cross) 93.1 70.8 90.0 69.9 71.4 80.2 81.9 0.249B GiGPO+cross 95.0 74.6 94.0 89.8 83.1 87.8 89.5 0.459B GRPO (root only) 91.4 63.6 70.6 71.4 64.0 76.2 72.9 0.403B
+
+Table 3: Component ablation on ALFWorld (Qwen2.5-3B-Instruct, 150 training steps). Per-type and overall ( All )peak validation SR (%) are measured on the validation split ( n=128 , t=0 .4); Tokens is the cumulative token consumption up to the peak step. The GiGPO+cross row replaces TriGRPO’s hindsight-guided node grouping with GiGPO state-prefix grouping while retaining Across .
+
+boogle column, are in Appendix B.2. 
+
+4.4 Ablation Study 
+
+We conduct three complementary ablations on ALFWorld with Qwen2.5-3B-Instruct: a compo-nent ablation that removes or replaces individ-ual terms of the three-level advantage estimator, a prefix-credit ablation that varies whether subtree credit is written into the loss of shared prefix tokens, and a cross-advantage ablation that dissects the his-torical baseline of Across . Detailed protocols and the full results of the latter two suites are provided in Appendix C; here we present the component ablation and the key findings. 
+
+Component ablation. The full model com-bines root advantage Aroot (within-prompt group-relative), cross-sample advantage Across (across-tree hindsight baseline), and node advantage Anode 
+
+(within-tree hindsight branch credit). We selec-tively remove or replace individual components while keeping all other configurations identical: 
+
+root+cross (w/o node) sets wnode =0 ; root+node 
+
+(w/o cross) sets λcross =0 ; and GiGPO+cross re-places within-tree hindsight node grouping with GiGPO’s state-prefix grouping while retaining 
+
+Across .
+
+Results. Table 3 summarizes the component ab-lation. The full TriGRPO achieves 93.8% peak SR. Removing Anode (root+cross) drops perfor-mance to 89.8% ( −4.0 points); removing Across 
+
+(root+node) drops it to 81.9% ( −11 .9 points); and replacing hindsight branching with GiGPO state-prefix grouping (GiGPO+cross) yields 89.5% (−4.3 points). All tree-structured configurations nevertheless outperform root-only GRPO (72.9%) by 9.0–20.9 points, confirming that the root-level tree structure itself contributes substantially over flat GRPO sampling. 
+
+Analysis. Two findings emerge from the compo-nent ablation. (1) Across-tree hindsight credit is the dominant contributor: the 11.9-point drop when 
+
+λcross =0 shows that Across provides critical learn-ing signal beyond within-prompt comparisons, sus-taining informative gradients even when all rollouts for a prompt yield identical outcomes—a frequent failure mode in sparse-reward environments where GRPO’s group-relative signal vanishes. (2) Within-tree hindsight branch credit is not interchange-able with generic step-level grouping: disabling 
+
+Anode costs 4.0 points (89.8% vs. 93.8%) and sub-stituting GiGPO’s state-prefix grouping under the same cross advantage costs 4.3 points (89.5%), in-dicating that the gain comes from hindsight-guided branching itself—counterfactual branch points at matched states—rather than from the mere pres-ence of any node-level grouping. The prefix-credit and cross-advantage ablations (findings 3–4) and the token-efficiency analysis are reported in Ap-pendix C, specifically Appendix C.2, C.3, and C.4. 
+
+4.5 Performance across Difficulty Levels 
+
+We examine whether TriGRPO improves au-tonomous task solving when initial successes are scarce. Starting from Qwen2.5-3B-Instruct, we train TriGRPO and root-only GRPO for 150 steps and evaluate on 128 held-out ALFWorld 
+
+valid_seen tasks. We estimate each task’s ini-tial success rate ˆp0 from 64 unguided trials and freeze its difficulty label before training. For visu-alization, we group tasks into ˆp0 > 0.2 (38 tasks), 
+
+0 < ˆp0 ≤ 0.2 (50 tasks), and no observed initial success (40 tasks). At steps 40, 80, 120, and 150, each task receives four unguided evaluation trials. 
+
+Learning dynamics. Figure 3(a) shows larger gains on initially difficult tasks. In the low but nonzero initial-success group, TriGRPO reaches 65.5% success at step 40, compared with 23.0% for GRPO, a gain of 42.5 percentage points. In the group with no initial success, the gap reaches 36.25 points at step 120 (70.6% versus 34.4%). The advantage persists at step 150: TriGRPO achieves 84.5% versus 69.0% in the former group and 70.6% versus 38.1% in the latter. Both methods reach 94.1% in the highest-initial-success group, where less room for improvement remains. These trajec-tories indicate that TriGRPO acquires autonomous solving behavior earlier on tasks that are initially difficult for the shared starting policy. 
+
+Repeated success. Figure 3(b) distinguishes solving a task at least once from succeeding across repeated attempts. Among the 24 very hard tasks, both methods solve 21 at least once, but the number solved in all four trials rises from 8 with GRPO 0 40 80 120 150                          
+
+> Training step
+> 025 50 75 100
+> Unguided success rate (%)
+> +42.50 pp +36.25 pp
+> Initial SR >20% (n=38) Initial SR: 0 < SR ≤20% (n=50) No initial success: 0/64 (n=40) GRPO TriGRPO
+> (a) Learning by initial difficulty 025 50 75 100
+> Share of tasks (%)
+> GRPO TriGRPO GRPO TriGRPO 34548
+> 321414
+> 13 12 357
+> 43610 17
+> Very hard (n=24) No initial success (n=40)
+> 0/4 1/4 2/4 3/4 4/4
+> (b) Repeated unguided success
+
+Figure 3: Autonomous performance by initial task diffi-culty. (a) Mean unguided success rates throughout train-ing; annotations show TriGRPO–GRPO differences in percentage points. Initial trials define both the groups and the shared starting points. (b) Per-task success counts across four trials at step 150, for very hard tasks (0 < ˆp0 ≤ 0.05 ) and tasks with no initial success. Seg-ment widths show task proportions; numbers give task counts. 
+
+to 14 with TriGRPO. Among the 40 tasks with no initial success, the number solved at least once in-creases from 27 to 36, while the number solved in all four trials increases from 7 to 17. TriGRPO therefore improves both observed coverage and re-peated success on the hardest group. Because all evaluations are unguided, these gains concern the learned policy’s autonomous behavior and support the motivation of consolidating scarce successes into stronger task-solving capability. 
+
+5 Conclusion 
+
+We propose TriGRPO, a tree-based policy opti-mization method that performs hindsight credit as-signment over trees via a triple-group structure. Empirical results across diverse tasks and model scales demonstrate superior performance and token efficiency, validating the effectiveness of online hindsight credit assignment. 
+
+Limitations 
+
+A key limitation of our approach lies in hindsight branching, which hinges on exact state matching and intermediate environment resettability. Conse-quently, extending this mechanism to continuous or irreversible domains remains challenging. 
+
+References 
+
+Marcin Andrychowicz, Dwight Crow, Alex Ray, Jonas Schneider, Rachel Fong, Peter Welinder, Bob Mc-Grew, Josh Tobin, Pieter Abbeel, and Wojciech Zaremba. 2017. Hindsight experience replay. In 
+
+Advances in Neural Information Processing Systems 30: Annual Conference on Neural Information Pro-cessing Systems 2017, December 4-9, 2017, Long Beach, CA, USA , pages 5048–5058. Yanjun Chen, Yirong Sun, Hanlin Wang, Xinming Zhang, Xiaoyu Shen, Wenjie Li, and Wei Zhang. 2026. The trace is the state: Exact credit assign-ment for LLM agent teams. CoRR , abs/2603.06859. Version 4. Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. 2025. Group-in-group policy optimization for llm agent training. Preprint , arXiv:2505.10978. NeurIPS 2025. Wenfeng Feng, Penghong Zhao, Guochao Jiang, Chuzhan Hao, Guohua Liu, and Yuewei Zhang. 2026. PVPO: pre-estimated value-based policy optimiza-tion for agentic reasoning. In Findings of the As-sociation for Computational Linguistics, ACL 2026, San Diego, California, United States, July 2-7, 2026 ,pages 3729–3748. Association for Computational Linguistics. Xanh Ho, Anh-Khoa Duong Nguyen, Saku Sugawara, and Akiko Aizawa. 2020. Constructing a multi-hop QA dataset for comprehensive evaluation of reason-ing steps. In Proceedings of the 28th International Conference on Computational Linguistics (COLING) ,pages 6609–6625. Zhenyu Hou, Ziniu Hu, Yujiang Li, Rui Lu, Jie Tang, and Yuxiao Dong. 2025. TreeRL: LLM reinforce-ment learning with on-policy tree search. In Proceed-ings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Pa-pers), ACL 2025, Vienna, Austria, July 27 - August 1, 2025 , pages 12355–12369. Association for Computa-tional Linguistics. Michael Y. Hu, Benjamin Van Durme, Jacob Andreas, and Harsh Jhamtani. 2025. Sample-efficient online learning in lm agents via hindsight trajectory rewrit-ing. Preprint , arXiv:2510.10304. Yuxiang Ji, Ziyu Ma, Yong Wang, Guanhua Chen, Xi-angxiang Chu, and Liaoni Wu. 2025. Tree search for llm agent reinforcement learning. Preprint ,arXiv:2509.21240. ICLR 2026. Guochao Jiang, Wenfeng Feng, Guofeng Quan, Chuzhan Hao, Yuewei Zhang, Guohua Liu, and Hao Wang. 2025. VCRL: Variance-based curriculum rein-forcement learning for large language models. arXiv preprint arXiv:2509.19803 .Guochao Jiang, Jingyi Song, Guofeng Quan, Chuzhan Hao, Guohua Liu, and Yuewei Zhang. 2026. DVAO: Dynamic variance-adaptive advantage optimization for multi-reward reinforcement learning. arXiv preprint arXiv:2605.25604 .Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan O. Arik, Dong Wang, Hamed Zamani, and Jiawei Han. 2025. Search-R1: Training LLMs to rea-son and leverage search engines with reinforcement learning. Preprint , arXiv:2503.09516. Mandar Joshi, Eunsol Choi, Daniel S. Weld, and Luke Zettlemoyer. 2017. TriviaQA: A large scale distantly supervised challenge dataset for reading comprehen-sion. In Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (ACL) ,pages 1601–1611. Tom Kwiatkowski, Jennimaria Palomaki, Olivia Red-field, Michael Collins, Ankur Parikh, Chris Alberti, Danielle Epstein, Illia Polosukhin, Jacob Devlin, Ken-ton Lee, et al. 2019. Natural questions: A benchmark for question answering research. Transactions of the Association for Computational Linguistics , 7:452– 466. Zichao Li, Gang Wu, Zichao Wang, Ruiyi Zhang, Wan-rong Zhu, Ryan A. Rossi, Vlad I. Morariu, and Ji-hyung Kil. 2026. Spinning straw into gold: Relabel-ing llm agent trajectories in hindsight for successful demonstrations. Preprint , arXiv:2607.04235. ICLR 2026. Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. 2025. Understanding r1-zero-like training: A critical perspective. Preprint , arXiv:2503.20783. Published at COLM 2025. Alex Mallen, Akari Asai, Victor Zhong, Rajarshi Das, Hannaneh Hajishirzi, and Eric Kandpal. 2023. When not to trust language models: Investigating effective-ness of parametric and non-parametric memories. In 
+
+Proceedings of the 61st Annual Meeting of the Asso-ciation for Computational Linguistics (ACL) , pages 9812–9822. Junhyuk Oh, Yijie Guo, Satinder Singh, and Honglak Lee. 2018. Self-imitation learning. In Proceedings of the 35th International Conference on Machine Learn-ing , volume 80 of Proceedings of Machine Learning Research , pages 3878–3887. PMLR. Ofir Press, Muru Zhang, Sewon Min, Ludwig Schmidt, Noah A. Smith, and Mike Lewis. 2023. Measuring and narrowing the compositionality gap in language models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP) .John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017. Prox-imal policy optimization algorithms. Preprint ,arXiv:1707.06347. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. Deepseekmath: Pushing the limits of mathemati-cal reasoning in open language models. Preprint ,arXiv:2402.03300. Mohit Shridhar, Xingdi Yuan, Marc-Alexandre Côté, Yonatan Bisk, Adam Trischler, and Matthew Hausknecht. 2021. ALFWorld: Aligning text and embodied environments for interactive learning. In 
+
+International Conference on Learning Representa-tions (ICLR) .Harsh Trivedi, Niranjan Balasubramanian, Tushar Khot, and Ashish Sabharwal. 2022. MuSiQue: Multi-hop questions via single-hop question composition. 
+
+Transactions of the Association for Computational Linguistics , 10:539–554. Sudong Wang, Weiquan Huang, Xiaomin Yu, Zuhao Yang, Hehai Lin, Keming Wu, Chaojun Xiao, Chen Chen, Wenxuan Wang, Beier Zhu, et al. 2026a. Beyond sft-to-rl: Pre-alignment via black-box on-policy distillation for multimodal rl. arXiv preprint arXiv:2604.28123 .Yu Wang, Yi-Kai Zhang, Wentao Shi, Ziang Ye, Yuchun Miao, Yueqing Sun, Qi Gu, Xunliang Cai, Lan-Zhe Guo, Han-Jia Ye, and Fuli Feng. 2026b. CAST: game solvers as turn-level teachers for LLM agents. CoRR ,abs/2607.25308. Xin Yang, Letian Li, Abudukelimu Wuerkaixi, Xuxin Cheng, Cao Liu, Ke Zeng, Xunliang Cai, and Wenyuan Jiang. 2026. Towards self-robust llms: In-trinsic prompt noise resistance via coipo. In The Fourteenth International Conference on Learning Representations, ICLR 2026, Rio de Janeiro, Brazil, April 23-27, 2026 . proceedings.iclr.cc. Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Ben-gio, William W. Cohen, Ruslan Salakhutdinov, and Christopher D. Manning. 2018. HotpotQA: A dataset for diverse, explainable multi-hop question answer-ing. In Proceedings of the 2018 Conference on Em-pirical Methods in Natural Language Processing (EMNLP) , pages 2369–2380. Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan. 2023. Tree of thoughts: Deliberate problem solving with large language models. In Advances in Neural Information Processing Systems 36: Annual Confer-ence on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xi-aochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gao-hong Liu, Juncai Liu, Lingjun Liu, Xin Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Guangming Sheng, Yuxuan Tong, Chi Zhang, Mofan Zhang, and 17 others. 2025. DAPO: an open-source LLM reinforcement learning system at scale. In Advances in Neural Information Processing Systems 38: Annual Conference on Neu-ral Information Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, December 2-7, 2025 / Mexico City, Mexico, November 30 - December 5, 2025 .Runzhe Zhan, Yafu Li, Zhi Wang, Xiaoye Qu, Dongrui Liu, Jing Shao, Derek Wong, and Yu Cheng. 2026. ExGRPO: Learning to reason from experience. In 
+
+The Fourteenth International Conference on Learn-ing Representations, ICLR 2026, Rio de Janeiro, Brazil, April 23-27, 2026 . proceedings.iclr.cc. Yunjian Zhang, Sudong Wang, Yang Li, Peiran Xu, Con-ghao Zhou, Xiaoyue Ma, Jianing Li, and Yao Zhu. 2026. Resource-efficient reinforcement for reasoning large language models via dynamic one-shot policy refinement. arXiv preprint arXiv:2602.00815 .Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, Jingren Zhou, and Jun-yang Lin. 2025. Group sequence policy optimization. 
+
+Preprint , arXiv:2507.18071. Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, and Yu-Xiong Wang. 2024. Lan-guage agent tree search unifies reasoning, acting, and planning in language models. In Forty-first Interna-tional Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 , volume 235 of 
+
+Proceedings of Machine Learning Research , pages 62138–62160. PMLR / OpenReview.net. 
+
+A Detailed Experimental Settings 
+
+A.1 Environments and Tools 
+
+All models are trained with vLLM-accelerated tree rollouts. On ALFWorld we set the vLLM GPU memory fraction to 0.55 with tensor parallelism 1; on SearchQA the GPU memory fraction is 0.5 with tensor parallelism 1. All experiments adopt the Qwen2.5-Instruct base model. Specifically, we evaluate on: • ALFWorld : Evaluated across 1.5B, 3B, and 7B scales. It consists of six household interactive task types ( pick, look, clean, heat, cool, pick-two )evaluated on the standard n = 128 test games. • SearchQA : Evaluated on 1.5B and 3B scales. It comprises 51,713 multi-hop reasoning questions aggregated across seven standard open-domain QA test sets, requiring iterative web search and multi-turn reasoning. 
+
+A.2 Hyperparameter Settings ALFWorld. All ALFWorld runs use the follow-ing hyperparameters unless otherwise noted. The tree rollout employs R=8 root trajectories per prompt with up to L=12 maximum leaves. We set the learning rate to 1 × 10 −6 with a constant sched-ule, KL penalty coefficient β=0 .01 (low-variance estimator), and advantage clipping at 10.0. The training batch size is 16 prompts per step; the val-idation batch is 128 tasks. Maximum prompt and response lengths are 2048 and 512 tokens, respec-tively. For the across-tree hindsight advantage, we use scaling weight λcross =1 .2, EMA smoothing 
+
+α=0 .3, and shrinkage κ=8 .0. The node-level ad-vantage weight is wnode =1 .0 with branch credit minimum gap 1.0. Within-tree hindsight branching uses an injection budget of 96, saturation threshold 0.5, divergence requirement enabled, with at most 2 branches per path and minimum branch interval 5. Behavior cloning applies weight 0.15 with a hold schedule (steps 30–100, floor 0.002). Train-ing runs for 150 steps with evaluation every 5 steps, yielding 31 validation points. 
+
+SearchQA. On SearchQA the tree budget is re-duced to R=3 root trajectories with up to L=5 
+
+leaves per prompt to accommodate longer retrieval-augmented contexts, and the training batch is 256 prompts per step, giving a rollout group of n=5 
+
+trajectories per prompt at temperature t=1 .0. The environment horizon is 10 interaction steps with matching history length; maximum prompt and response lengths are 9216 and 512 tokens, respec-tively, and each retrieved observation is capped at 768 tokens. The learning rate ( 1 × 10 −6, con-stant), advantage clipping (10.0), the across-tree hindsight weights ( λcross =1 .2, α=0 .3, κ=8 .0), and the node-level weight ( wnode =1 .0) are as on ALF-World, whereas the KL coefficient is β=0 .001 un-der the same low-variance estimator and the branch credit minimum gap is lowered to 0.1. Within-tree hindsight branching keeps the injection budget of 96 and at most 2 branches per path, with the satu-ration threshold at 1.0, the divergence requirement disabled, and the minimum branch interval reduced to 1; the behavior cloning schedule (weight 0.15, steps 30–100, floor 0.002) is unchanged. Training follows a one-epoch budget of 663 update steps, with checkpoints selected by periodic validation every 10 steps on a fixed set of 400 multi-hop ques-tions (100 per multi-hop benchmark, seed 42) and training stopped at the validation peak. 
+
+A.3 Evaluation Protocols Multi-Seed Validation. To ensure statistical ro-bustness, all training runs are repeated across three independent random seeds. We record the peak validation success rate (SR) for each run and report the mean. 
+
+Sampling Efficiency Metric. We track cumu-lative token consumption up to the training step where the policy attains its peak validation SR. This reflects the token and compute budget required to reach optimal performance. 
+
+ALFWorld. We report peak validation success rate (SR) over the 31 evaluation checkpoints, mea-sured on the ALFWorld test split ( n=128 ) with temperature t=0 .4 and sampling enabled. Per-type SR is reported for descriptive analysis; due to small per-type sample sizes (5–29), we do not perform statistical inference on individual task categories. We additionally report cumulative token consump-tion ( total_num_tokens ) up to the peak step as a measure of sampling efficiency. 
+
+SearchQA. Periodic validation is used only for checkpoint selection. Every reported SearchQA number comes from a separate full evaluation of the selected checkpoint: greedy decoding with an environment horizon of 10 steps on the complete test split of each benchmark (51,713 questions in total across the seven benchmarks). 
+
+A.4 Baseline Reproduction 
+
+All baselines are trained from the same Qwen2.5-Instruct checkpoints under the identical configura-tion and evaluation protocol described above (same rollout budget, decoding settings, and step count), so observed differences reflect the optimization ob-jective rather than baseline-specific tuning. 
+
+B Experimental Details and Supplementary Results 
+
+B.1 ALFWorld Per-Type and Efficiency Details Per-type profile. On the four shorter types ( pick ,
+
+look , clean , cool ), TriGRPO is the best or tied-best method on five of the twelve scale-by-type cells— clean at 1.5B (100.0%), 3B (95.8%), and 7B (100.0%, tied with GSPO), look at 3B (86.7%), and pick at 7B (100.0%, tied with GSPO)—and lies at or within three points of the best method on six of the twelve in total. It falls behind on the other six: by more than five points on cool at 1.5B (76.5 vs. Tree-GRPO’s 95.2), cool at 7B (76.5 vs. GSPO’s 96.8), look at 1.5B (66.7 vs. Tree-GRPO’s 73.3), and look at 7B (94.4 vs. GSPO’s 100.0), and by 3.9 and 4.8 points on cool at 3B (91.3 vs. GiGPO’s 95.2) and pick at 1.5B (92.3 vs. Tree-GRPO’s 97.1). 
+
+Why the margin widens with scale. The widen-ing is not a scale effect in TriGRPO’s favor alone: Tree-GRPO falls from 86.7% overall SR at 1.5B to 77.3% at 3B and 7B while consuming the largest token budget of any method (0.491–0.583B): its lead over flat GRPO shrinks to 4.4 points at 3B (77.3% vs. 72.9%) and reverses at 7B (77.3% vs. 77.6%). Undirected branching thus turns harmful as the policy strengthens—expanding random non-leaf nodes increasingly duplicates continuations the policy would already produce—whereas gat-ing branches on a banked verified-successful action (Eq. (6)) keeps the same tree machinery improv-ing with scale. Among the baselines the leader changes with scale—GiGPO and Tree-GRPO tie at 1.5B (86.7%), GiGPO leads at 3B (87.6%), and GSPO at 7B (91.0%)—so no baseline is a consis-tent reference point, while TriGRPO ranks first at all three. 
+
+Sampling cost comparison. Prefix sharing alone does not account for this: Tree-GRPO shares pre-fixes yet costs up to 1.6 × more. Within-tree hind-sight branching converts banked successful actions into high-value continuations that are likely to com-plete the task, instead of another exploratory dead end whose tokens are spent without producing us-able relative signal. 
+
+Cross-family run. TriGRPO obtains 84.4% over-all against 87.5% for GiGPO, the strongest base-line at this scale, while using 26.2% fewer tokens (0.367B vs. 0.497B) and 47.6% fewer than Tree-GRPO (0.700B). Its per-type profile is complemen-tary rather than uniformly weaker: it attains the best cool SR (96.3%) and the second-best look 
+
+(87.5%) and clean (89.2%), and the 3.1-point over-all deficit is driven almost entirely by pick , on which all other RL baselines score 83.3–97.1%. With a single evaluation seed over 128 tasks, 3.1 points correspond to four tasks; we therefore read this run as parity in accuracy at substantially lower sampling cost rather than as a counterexample, and rest the main claim on the three Qwen2.5 scales, which agree in direction and magnitude. 
+
+B.2 QA Per-Benchmark Details In-domain and unseen benchmarks. Two of them (NQ and HotpotQA) also appear in the train-ing mixture and are therefore in-domain for all trained methods; the remaining five are unseen. 
+
+Per-benchmark margins. It is also the only method placed in the top two on all seven bench-marks at 1.5B. The advantage is largest exactly where the reward is sparsest: on MuSiQue, whose questions require three to four retrieval hops, the untrained models score 2.0–2.6%, GRPO fails to improve over the base at 1.5B (2.2% vs. 2.6%), and Tree-GRPO reaches 6.6% and 17.8%, whereas TriGRPO reaches 10.8% and 21.2%. 
+
+Tree-baseline ranking across environments. 
+
+The two environments also rank the tree base-line differently: Tree-GRPO, which is the most expensive method on ALFWorld and falls below flat GRPO there at 7B (77.3% vs. 77.6%), is the strongest baseline on both single-hop QA averages. Undirected branching retains value when an ac-tion is an arbitrary query string rather than one of a handful of environment commands, so random expansion still yields diverse informative continua-tions. Even there it trails TriGRPO—by 2.1 points on the single-hop average at both scales and by 7.5 and 1.5 points on the multi-hop average—which separates the contribution of the branching criterion from that of the tree structure itself. 
+
+Small-set columns. Bamboogle contains only 125 test items, so a single question moves its score by 0.8 points, and it is the only benchmark on which TriGRPO falls outside the top two at ei-ther scale (24.8% and 38.5%, against GiGPO’s 54.8% and 64.1%). GiGPO’s Bamboogle scores coexist with single-hop accuracy below GRPO’s at both scales (1.5B: NQ 16.4% vs. 39.4%, PopQA 14.9% vs. 39.7%), a profile more consistent with high-variance optimization on a small set than with uniform multi-hop skill. Apart from Bamboogle, TriGRPO’s only non-leading columns at 3B are 2Wiki (41.7 vs. 43.7) and NQ (46.6 vs. 46.8), gaps of 2.0 and 0.2 points against Tree-GRPO. We there-fore treat the group averages, where the ordering is stable across scales, as the primary comparison and read individual small-set columns as descriptive, in line with the protocol of Section 4.1. 
+
+C Ablation Details 
+
+C.1 Component Ablation Groups 
+
+• root + cross (w/o node): Sets wnode =0 , dis-abling within-tree hindsight branch credit. Un-guided trajectories still receive both root and cross advantages; hindsight branches con-tribute only through behavior cloning. • root + node (w/o cross): Sets λcross =0 ,removing the across-tree hindsight base-line. Trajectories receive root advantage plus within-tree hindsight branch credit, but with-out difficulty-normalized correction from past performance on related tasks. • GiGPO + cross : Replaces TriGRPO’s within-tree hindsight node grouping with GiGPO’s state-prefix grouping, while retain-ing the same across-tree hindsight advantage (λcross =1 .2). This tests whether the node-level signal requires hindsight branching or can be achieved through alternative step-level grouping mechanisms. 
+
+C.2 Prefix-Credit Ablation 
+
+By default, TriGRPO enforces a credit-isolation invariant: only node-level credit enters the PPO/-GRPO policy loss, and it multiplies exclusively the tokens (actions) added after the branch point of the corresponding child; shared prefix tokens preceding the branch point neither gain nor lose gradient from the quality of the child branches, and subtree returns are never back-propagated or aggregated into ancestor or root advantages. We ab-late this design with three variants that additionally write subtree credit into the loss of shared prefix tokens: (i) mean aggregation , which injects the average performance of on-policy continuations sampled from the prefix under the current policy; (ii) max aggregation , which injects the best con-tinuation observed from that prefix, asking whether an exceptionally good completion ever existed; and (iii) shuffle , a control that permutes the real per-prefix credits already computed within the current batch without replacement, preserving their mean, variance, extremes, and total gradient scale while breaking the correspondence between each credit and its prefix. Table 4 reports the prefix-credit ablation: writing subtree credit into shared prefix tokens degrades the full model from 93.8% to 88.3% under mean aggregation, to 88.3% under max aggregation, and to 87.5% under the shuffle control. (3) Injecting subtree credit into shared prefixes is harmful, and the harm is neither a scaling artifact nor a con-tent artifact. All three variants that violate the credit-isolation invariant degrade the full model substantially (mean aggregation 88.3%, max ag-gregation 88.3%, shuffle 87.5%, vs. 93.8%), and the three remain within 0.8 points of one another. The shuffle control is diagnostic: it preserves the mean, variance, extremes, and total gradient scale of the injected credits while destroying only their correspondence to the originating prefixes, yet it degrades performance just as much as the faith-ful mean variant—so the damage stems from the act of charging shared prefix tokens for the quality of downstream subtrees, not from a mismatched credit scale. The max variant is diagnostic in the or-thogonal direction: it injects the strongest possible positive signal (the best continuation ever observed from each prefix, an upper-biased version of the mean credit), yet it fails to beat mean aggregation, so the harm is not attributable to the pessimistic content of the injected signal either. Notably, the existence of an exceptionally good continuation from a prefix—the question the max variant was designed to answer—carries no exploitable learn-ing signal once written into the prefix tokens. This supports TriGRPO’s default credit isolation: pre-fix tokens receive only the outcome credit of their own rows, while branch credit acts exclusively on tokens generated after the branch point. 
+
+C.3 Across-Tree Hindsight (Cross) Advantage Ablation 
+
+The across-tree hindsight advantage corrects each trajectory’s return by a historical baseline μ[t] main-tained per task t. We track two exponential moving averages, a fine-grained per-task baseline μfine [t]
+
+and a coarse-grained per-type baseline μcoarse [c],each updated with smoothing coefficient α toward the current-batch mean return, and combine them by shrinkage, 
+
+μ[t] = nt μfine [t] + κ μ coarse [c(t)] 
+
+nt + κ , (15) Method pick look clean heat cool pick2 All Tokens                                 
+
+> TriGRPO (prefix-only loss) 96.6 86.7 95.8 100.0 91.3 88.2 93.8 0.338B + branch mean aggregation 89.7 87.5 96.2 90.0 68.2 95.7 88.3 0.292B + branch max aggregation 100.0 62.5 100.0 88.2 90.0 71.4 88.3 0.389B + branch mean agg. w/ shuffle 94.3 80.0 95.0 73.3 73.9 96.0 87.5 0.325B
+> Table 4: Prefix-credit ablation on ALFWorld (Qwen2.5-3B-Instruct); columns follow Table 3. The default TriGRPO row writes only each trajectory’s own outcome credit into its tokens (branch credit applies solely to tokens after the branch point). The mean variant additionally writes the average on-policy continuation performance from each shared prefix into the prefix tokens’ loss; the max variant instead writes the best continuation observed from each prefix into the prefix tokens’ loss; the shuffle control permutes the real per-prefix credits within each batch without replacement, preserving their mean, variance, extremes, and total gradient scale while breaking the credit–prefix correspondence.
+
+where nt is the accumulated sample count of task 
+
+t and κ is a prior equivalent sample size; the ad-vantage is then Across = ( R − μ[t]) /scale with scale =10 normalizing ALFWorld’s 0/10 success reward to roughly [−1, 1] . The default config-uration uses α=0 .3 and κ=8 . We ablate three aspects: (i) κ=0 (no coarse prior), which drops the task-type shrinkage term so the baseline relies purely on fine per-task history, testing whether the coarse prior is useful; (ii) no fine EMA (coarse-only), which removes the fine per-task baseline and keeps only the task-type EMA through a ded-icated coarse-only cross-advantage function, test-ing whether fine-grained task identity matters; and (iii) α=1 .0, which replaces the smoothed history with the raw current-batch mean, testing whether historical smoothing is necessary. Table 5 dissects the cross-sample baseline: rela-tive to the default two-component configuration (α=0 .3, κ =8 ; 93.8%), fine-only (keeping only the fine per-task EMA) costs 3.2 points (90.6%), coarse-only (keeping only the coarse prior) costs 2.4 points (91.4%), and disabling EMA smooth-ing ( α=1 .0) costs 10.2 points (83.6%). (4) The across-tree hindsight baseline needs both histori-cal smoothing and its two-level fine/coarse struc-ture. Disabling EMA smoothing ( α=1 .0) is by far the most damaging single change (83.6%, 
+
+−10 .2 points): substituting the raw current-batch mean for the smoothed history makes the baseline high-variance and non-stationary, so the difficulty-normalized correction that sustains informative gra-dients on sparse-reward prompts collapses. The two-level structure is likewise justified—removing the coarse task-type prior ( κ=0 , −3.2 points) and removing the fine per-task EMA (coarse-only, 
+
+−2.4 points) both degrade performance. The fine baseline captures task-specific difficulty while the coarse prior supplies a stable fallback when fine-grained samples are scarce, and their shrinkage combination is strictly better than either compo-nent alone. 
+
+C.4 Token Efficiency 
+
+Tree-structured configurations consume 0.249– 0.338B tokens (full TriGRPO 0.338B; root+node 0.249B), whereas the flat-sampling alterna-tives require 0.403B (GRPO) and 0.459B (GiGPO+cross)—a token reduction of roughly 16– 38% for tree rollouts. Within the prefix-credit abla-tion, the mean (0.292B) and shuffle (0.325B) vari-ants are cheaper than the full model yet perform 5.5 and 6.3 points worse, while the max variant is the most expensive configuration of the entire study (0.389B, above even the full model’s 0.338B) and still scores 5.5 points lower—showing that vi-olating credit isolation buys neither accuracy nor sampling efficiency. The same holds for the cross-advantage baseline: the default α=0 .3, κ =8 con-figuration is also the most token-efficient (0.338B), whereas every ablated variant consumes more to-kens (0.375–0.417B) yet scores lower, making the default cross configuration Pareto-optimal on both success rate and sampling cost. 
+
+D Prompts 
+
+Prompt sources and parity. All compared meth-ods (our TriGRPO and the baselines: GRPO ,
+
+GiGPO , and Tree-GRPO ) share exactly the same task prompt templates. Only the advantage esti-mator and the rollout expansion policy differ, so any measured gap cannot be attributed to prompt engineering. The templates are defined in the envi-ronment package of our verl codebase, and follow the original schema of each task: • ALFWorld (embodied agent): follows the standard ALFWorld (ALFRED) text-Method pick look clean heat cool pick2 All Tokens                                            
+
+> TriGRPO ( α=0 .3,κ=8 )96.6 86.7 95.8 100.0 91.3 88.2 93.8 0.338B fine-only ( κ=0 )100.0 77.8 93.3 88.2 94.4 78.3 90.6 0.383B coarse-only (fine EMA off) 96.8 87.5 94.6 91.7 81.5 92.3 91.4 0.375B no EMA smoothing ( α=1 .0)96.4 84.6 85.7 84.6 69.6 78.3 83.6 0.417B
+> Table 5: Cross-advantage ablation on ALFWorld (Qwen2.5-3B-Instruct); columns follow Table 3. All variants keep the full three-level estimator and modify only the historical baseline μ[t]of Across . The default row uses EMA smoothing α=0 .3with coarse-prior shrinkage κ=8 ;κ=0 removes the task-type prior, “coarse-only” removes the fine per-task EMA, and α=1 .0replaces the smoothed history with the raw current-batch mean.
+
+environment ReAct schema. The agent rea-sons inside <think> and selects one admissi-ble action inside <action> .• QA (search agent): follows the search-augmented ReAct schema introduced by Search-R1. The agent reasons inside <think> ,optionally issues a retrieval query inside 
+
+<search> , and finally emits the answer inside 
+
+<answer> .
+
+Multi-turn variants. Both tasks are multi-turn. At the first turn there is no history yet, so a no-history template is used (Figures 4 and 5); from the second turn onward the prompt is augmented with the recent interaction history (Figures 6 and 7). The two variants differ only in the presence of the history block; the task description, the available actions/tools, and the output format instructions are identical. Both variants are shared verbatim by TriGRPO and all baselines. 
+
+Hindsight-branch prompt. The only TriGRPO-specific change to the model input occurs on hind-sight branches, and only at their first turn. To seed such a branch with a previously successful action, one successful action is injected into the generation prompt, as illustrated in Figure 8. The observation content itself (task, observation, ad-missible actions/queries) is left unchanged, and no answer, reward, or future observation is ever in-jected. The injected action span is subsequently relocated to the response side and supervised only by the behavior-cloning (BC) loss; the remaining turns of the branch are generated autonomously. Unguided rollouts, as well as all baseline roll-outs, never receive this prefix. 
+
+E Code 
+
+TriGRPO is task-agnostic. The only task-dependent ingredients are (i) the decision state 
+
+that decides when two decisions occur at the same environment state, and (ii) the action surface (a search query for QA, an admissible command for ALFWorld). The two tasks expose differ-ent primitives, which we abstract behind this sin-gle descriptor: in ALFWorld the state is read di-rectly from the simulator as the tuple ( gamef ile ,
+
+observation , sorted (admissible _commands )), whose hash uniquely identifies a room configura-tion together with the current inventory, so two deci-sions are at the same state iff their hashes match; in QA there is no simulator snapshot, and the state is the task together with the ordered chain of queries 
+
+already issued (the query prefix), so two decisions are at the same state iff they share the same question and query prefix. Everything downstream is writ-ten against this single abstraction and is therefore shared verbatim across both tasks: the success bank 
+
+B update and selection, the counterfactual branch created from a matched state, and the three-level advantage estimator. Listing 1 shows the decision-state definition and equality test, the success-bank update and selection, and the counterfactual branch; Listing 2 shows the three-level advantage estimator with its cross-sample baseline. You are an expert agent operating in the ALFRED Embodied Environment. Your current observation is: {current_observation} Your admissible actions of the current situation are: [{admissible_actions}]. Now it’s your turn to take an action. You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. Once you’ve finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+> Figure 4: First-turn (no-history) prompt template for the ALFWorld embodied agent.
+
+You are an expert agent tasked with answering the given question step-by-step. Your question: {task_description} Now it’s your turn to respond for the current step. You should first conduct reasoning process. This process MUST be enclosed within <think> </think> tags. After completing your reasoning, choose only one of the following actions (do not perform both): (1) If you find you lack some knowledge, you can call a search engine to get more external information using format: <search> your query </search> .(2) If you have enough knowledge to answer the question confidently, provide your fi-nal answer within <answer> </answer> tags, without detailed illustrations. For example, 
+
+<answer>Beijing</answer> .
+
+> Figure 5: First-turn (no-history) prompt template for the search QA agent.
+
+You are an expert agent operating in the ALFRED Embodied Environment. Your task is to: {task_description} Prior to this step, you have already taken {step_count} step(s). Below are the most recent {history_length} observations and the corresponding actions you took: {action_history} You are now at step {current_step} and your current observation is: {current_observation} Your admissible actions of the current situation are: [{admissible_actions}]. Now it’s your turn to take an action. You should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. Once you’ve finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags. 
+
+> Figure 6: Prompt template for the ALFWorld embodied multi-turn agent.
+
+You are an expert agent tasked with answering the given question step-by-step. Your question: {task_description} Prior to this step, you have already taken {step_count} step(s). Below is the interaction history where <search> </search> wrapped your past search queries and <information> </information> wrapped the corresponding search results returned by the external search engine. History: {memory_context} Now it’s your turn to respond for the current step. You should first conduct reasoning process. This process MUST be enclosed within <think> </think> tags. After completing your reasoning, choose only one of the following actions (do not perform both): (1) If you find you lack some knowledge, you can call a search engine to get more external information using format: <search> your query </search> .(2) If you have enough knowledge to answer the question confidently, provide your fi-nal answer within <answer> </answer> tags, without detailed illustrations. For example, 
+
+<answer>Beijing</answer> .
+
+> Figure 7: Prompt template for the search-augmented multi-turn QA agent.
+
+[observation prompt as above for action task] 
+
+<think></think><action> {forced_action} </action> 
+
+[observation prompt as above for QA task] 
+
+<think></think><search> {forced_query} </search>   
+
+> Figure 8: Hindsight branch: at training time TriGRPO injects one successful action (empty <think> + a single action span) into the generation prompt of the first step of a hindsight branch. Observation content is unchanged; the injected span is relocated to the response side and receives only behavior-cloning (BC) loss.
+
+Listing 1: Decision-state definition and equality, the success bank B, and the counterfactual branch. Only the decision state and the action surface differ between QA and ALFWorld; the bank policy is shared. 
+
+# ---- decision-state definition & equality (the ONLY task-dependent part) ----# ALFWorld : state = (gamefile, observation, sorted(admissible_commands)) # equal iff blake2b hash matches -> same room/objects/inventory # QA : state = (question, ordered query prefix) # equal iff they share the same query prefix def state_key(task, snap): if task == "alfworld": return blake2b(snap.gamefile, snap.observation, sorted(snap.admissible_commands)) return (task_fine_key(snap.source, snap.question), tuple(v.query for v in snap.visits)) # ---- per-prompt success bank $\mathcal{B}$ (task-agnostic update policy) ----class SuccessBank: def register_success(self, traj_uid, visits, total_steps): # one candidate action per visit, ranked by (steps_to_success, uid, depth, action) for v in visits: if not v.valid: continue donor = DonorAction(v.action, total_steps - v.depth, traj_uid, v.depth) keep_best(self._bank, donor, key=donor_rank) # dedup, keep best def select(self, seen, remaining_steps, accept): if self.saturated: # successes / roots >= ratio return None if remaining_steps < 2: return None for donor in sorted(self._bank.values(), key=donor_rank): if donor.action in seen: continue if donor.steps_to_success > remaining_steps: continue if not accept(donor.action): continue return donor # best valid, unseen donor # ---- reuse: on a matched state, create a counterfactual branch from the exact # pre-action snapshot and inject one successful donor action ----donor = bank.select(state.seen_actions, remaining_steps, accept=action_fits) if donor is not None: branch = parent.clone_at_matched_state(env.snapshot(state)) # same state branch.pending_inject_text = inject_target(donor.action) branch.pending_forced_action = True Listing 2: Three-level advantage estimator with the cross-sample baseline, shared by ALFWorld and QA. Each trajectory receives exactly one signal class: unguided trajectories get the root term plus the cross-sample baseline; guided branches get the node term. 
+
+# verl/trainer/ppo/core_algos.py -- identical structure for ALFWorld and QA def ema_baseline(R, fine_key, coarse_key, state, cfg): # blend a per-task EMA (fine) with a per-task-type EMA (coarse) by shrinkage; # cold start falls back to whichever EMA exists, else 0 mu_f = state.mu_fine.get(fine_key) # None on first occurrence mu_c = state.mu_coarse.get(coarse_key) if mu_f is None and mu_c is None: return zeros_like(R) if mu_f is None: return mu_c if mu_c is None: return mu_f n = state.count_fine.get(fine_key, 0) # #root trajectories seen (fine) return (n * mu_f + cfg.kappa * mu_c) / (n + cfg.kappa) # kappa = 8 def update_ema(R, fine_key, coarse_key, state, alpha): # alpha = 0.3 # updated AFTER this step's advantages are computed (preserves causality) m = R.mean() state.mu_fine[fine_key] = ema(state.mu_fine.get(fine_key), m, alpha) state.mu_coarse[coarse_key] = ema(state.mu_coarse.get(coarse_key), m, alpha) state.count_fine[fine_key] = state.count_fine.get(fine_key, 0) + 1 # ema(old, new, alpha) = alpha * new + (1 - alpha) * old (first step: = new) def compute_hindsight_tree_advantage(batch, cfg): R = batch.returns # (1) ROOT : GRPO over the unguided trajectories of the same prompt A_root = group_relative(R, group=batch.uid) # (2) NODE : outcome difference within each 2-member node group # (the parent trajectory + the guided branch cloned from its state) A_node = batch.R_branch - batch.R_parent # no variance normalization # (3) CROSS: deviation of the return from a historical baseline A_cross = (R - ema_baseline(R, batch.fine_key, batch.coarse_key, batch.state, cfg)) / cfg.sigma_r return where(batch.tree_guided, cfg.lambda_node * A_node, A_root + cfg.lambda_cross * A_cross)

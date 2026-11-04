@@ -1,0 +1,89 @@
+{
+  "date": "20261104",
+  "date_label": "",
+  "generated_at": "2026-11-04 00:19:24 UTC",
+  "recommend_exists": true,
+  "run_count": 1,
+  "papers": [
+    {
+      "paper_id": "2610.39576v2",
+      "route": "202611/04/2610.39576v2-bayesian-offline-multi-agent-reinforcement-learning-with-latent-world-models",
+      "title": "Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向部分可观测的贝叶斯离线多智能体强化学习与潜在世界模型",
+      "first_seen_at": "2026-11-04 00:19:24 UTC",
+      "updated_at": "2026-11-04 00:19:24 UTC"
+    },
+    {
+      "paper_id": "2611.02414v1",
+      "route": "202611/04/2611.02414v1-sgr-opsd-learning-from-subgoal-plans-with-graph-regularized-credit-assignment-for-agentic-reinforcement-learning",
+      "title": "SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向智能体强化学习的子目标引导图正则化回合级信用分配",
+      "first_seen_at": "2026-11-04 00:19:24 UTC",
+      "updated_at": "2026-11-04 00:19:24 UTC"
+    },
+    {
+      "paper_id": "2611.02455v1",
+      "route": "202611/04/2611.02455v1-rlid-reinforcement-learning-in-the-decision-plane-for-language-agents-and-llms",
+      "title": "RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向语言智能体、优化可执行动作概率的决策平面强化学习",
+      "first_seen_at": "2026-11-04 00:19:24 UTC",
+      "updated_at": "2026-11-04 00:19:24 UTC"
+    },
+    {
+      "paper_id": "2611.02706v1",
+      "route": "202611/04/2611.02706v1-hindsight-credit-assignment-over-trees-for-agentic-rl",
+      "title": "Hindsight Credit Assignment over Trees for Agentic RL",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向长程智能体强化学习的树状事后信用分配",
+      "first_seen_at": "2026-11-04 00:19:24 UTC",
+      "updated_at": "2026-11-04 00:19:24 UTC"
+    },
+    {
+      "paper_id": "2611.03005v1",
+      "route": "202611/04/2611.03005v1-blpo-beyond-local-policy-optimization-for-long-horizon-llm-agents",
+      "title": "BLPO: Beyond-Local Policy Optimization for Long-Horizon LLM Agents",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向长程LLM智能体的跨任务信用分配策略优化",
+      "first_seen_at": "2026-11-04 00:19:24 UTC",
+      "updated_at": "2026-11-04 00:19:24 UTC"
+    }
+  ]
+}

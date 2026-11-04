@@ -1,0 +1,705 @@
+Title: RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs
+
+URL Source: https://arxiv.org/pdf/2611.02455v1
+
+Published Time: Tue, 03 Nov 2026 04:44:29 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs 
+
+Ziyi Chen 1 Yan Zhang 2 Jianhui Wei 3 Jianing Yin 4 Daoan Zhang 5
+
+## Abstract 
+
+Reinforcement learning (RL) has improved the ca-pabilities of large language models (LLMs) across a wide range of tasks. However, token-level RL assigns an action’s advantage to the entire gen-erated response, including tokens specifying the parsed action, reasoning chains, and malformed content. Although the environment executes only the parsed action, variation in how the action is expressed in natural language can introduce ad-ditional variance into policy-gradient estimates. We propose RLiD (Reinforcement Learning inthe Decision plane), a framework that directly optimizes the probabilities of executable action options. RLiD compiles observations, an optional compact memory, and a labeled action menu into the model input, and uses a large decision model (LDM ) to select an action in a single forward pass. By eliminating autoregressive token generation and bypassing action parsing, RLiD avoids invalid action outputs and improves RL rollout efficiency. Our analysis shows that, within a fixed text pol-icy, marginalizing over alternative realizations of the same action removes a zero-mean gradient component without changing the expected update. We further distill trained LDM policies into gen-erative LLMs through supervision on their action trajectories. Experiments on ARC, Countdown, and Sokoban demonstrate improved performance or lower computational cost across several set-tings. On ALFWorld, the complete training and distillation pipeline reaches 99.3% success in 12.7 H100 GPU-hours, compared with 86.6% in 17.3 GPU-hours for token-level RL of the same LLM. With compiled memory, our strongest Qwen2.5-1.5B LDM and distilled generative LLM achieve 100% success on all 134 unseen and 140 seen ALFWorld evaluation games. 
+
+> 1
+
+University of Illinois Urbana-Champaign. 2National Univer-sity of Singapore. 3Zhejiang University. 4University of Pennsylva-nia. 5University of Rochester. 
+
+Preprint. October 21, 2026. 
+
+## 1. Introduction 
+
+Reinforcement learning (RL) has improved the capabilities of large language models (LLMs) in reasoning and interac-tive decision-making tasks (Shao et al., 2024; Wang et al., 2025; Feng et al., 2025). For language agents, RL typically operates in the token plane . The model generates a response, often a rationale followed by an action command, and the action’s advantage is assigned to every generated token. However, the environment executes only the parsed action, while training also updates reasoning chains, formatting to-kens, and potentially malformed content. Different natural-language responses can specify the same action yet produce different policy-gradient estimates. This variation can in-troduce additional gradient variance without changing the executed decision. Autoregressive generation also adds roll-out cost, and unparseable outputs can waste interactions. These observations motivate directly optimizing the proba-bilities of executable action options. We propose RLiD (Reinforcement Learning in the Deci-sion Plane) for tasks with a finite menu of available actions, such as admissible commands, grid-world moves, or answer options. A compiler prepares the observation, an optional compact memory from past feedback, and a labeled action menu. A large decision model ( LDM ) reads this input in one forward pass and outputs a categorical distribution over menu labels (Chen et al., 2026a). Existing RL objectives then optimize the selected actions’ probabilities. This for-mulation eliminates autoregressive token generation during rollouts and bypasses action parsing, ensuring that every selected action belongs to the executable menu (Figure 1). Our analysis relates text-level and decision-level credit. When reward depends on text only through the parsed action, the whole-string score decomposes into the induced action score and a zero-mean realization score. Within the same text policy, marginalizing over alternative expressions pre-serves the expected update and removes the associated vari-ance component (Proposition 1). An LDM models actions directly and has no text-realization component. Temporal credit assignment still requires estimators such as GiGPO (Feng et al., 2025). The analysis does not guarantee su-periority over generative policies, whose reasoning tokens 1arXiv:2611.02455v1 [cs.AI] 2 Nov 2026 RLiD: Reinforcement Learning in the Decision Plane (a) Token plane (b) Decision plane (RLiD) Environment       
+
+> LLM
+> Autoregressive generation
+> Ishould check cabinet …Answer: B
+> Advantage on every token
+> “Let me see … done” Invalid / unparseable
+> Parse + execute action
+> Environment
+> Compiler
+> Observation Memory
+> from past feedback
+> Executable menu
+> A go to cabinet 3 B open drawer 1 C take mug 1 …
+
+LDM    
+
+> One forward pass
+> ABCD
+> Advantage on chosen decision
+> Execute action B
+> Same decision, different wording
+> “Open drawer 1.” “I should open drawer 1.” “Let’s open drawer 1.”
+> Parse
+
+B
+
+open drawer 1            
+
+> Wording variation
+> Marginalise wording
+> Decision gradient
+> (c) Learn from successful LDM trajectories Teacher LDM
+> Rollouts
+> ABD✓
+> CCC×
+> BDA✓
+> Keep successes
+> Student LDM
+> Behavior cloning
+> ABC
+> RL
+> Select a menu action
+> Generative LLM
+> Supervised fine-tuning
+> “open drawer 1”
+> Generate an action command
+
+Figure 1. (a) token-level RL credits every generated token, can produce unparseable outputs and pays for generation. (b) RLiD: a large decision model reads the compiled state and labelled menu in one pass. The advantage moves the probability of the executed decision directly (Proposition 1). (c) successful teacher trajectories supervise student LDMs through behavior cloning followed by decision-level RL, or generative LLMs through supervised fine-tuning on action commands. 
+
+provide additional computation. Successful LDM trajectories can also supervise a generative LLM to write action commands as free text. This provides a post-training route that learns decisions with RL and then transfers them to text generation. We evaluate performance and computational cost on ARC, Countdown, Sokoban, and ALFWorld, including both decision policies and generative students. Because menus and memory affect the available in-formation, we compare identical menus where possible and report interface differences and settings where the method does not help. 
+
+Contributions. 
+
+• RLiD. Single-pass language policies over compiled menus, their Rao–Blackwell relation to token-level RL, and simple fixes for four failure modes (Section 2). • Matched comparisons (Section 4). ARC: +2.6 points at about 10 × lower cost with Qwen2.5-1.5B, while on Qwen3.5-2B, whose rationale zero-shot is stronger, token GRPO is 1.8 points ahead at about four times the cost. Countdown-after (frozen protocol): signifi-cant +12 to +14 points over token RL, mostly from the label regulariser. Performance does not differ signifi-cantly from a rationale-plus-label hybrid, while train-ing takes 0.46 × as long. Plain Countdown is weak at 1.5B. Same-runner Sokoban: 44.5% vs. at most 26%. • An exact credit audit (Section 5). On FrozenLake, exact advantages give a batch gradient with cosine 0.88 to the true gradient. Realisation noise accounts for 71% (answer only) and 97% (30-word rationale) of a token policy’s unweighted score second moment. The decision plane has no realisation noise. • Distillation across models (Sections 4–6). Decision-plane RL of a teacher, distillation on the shared menu and student RL give 100% unseen and seen success for Qwen2.5-1.5B and 7B with 2.1–5.1 GPU-h of student RL, above state-of-the-art token RL (GiGPO 86.7 / 90.8, DARS 96.9 / 98.6). On Countdown-after the distilled student exceeds its teacher (70.2 vs. 67.4). • Back to the generative LLM (Section 6.2). Sequence-level distillation gives a free-text Qwen2.5-1.5B 100% unseen and seen ALFWorld success with compiled memory, greedily and under sampling. Success reaches 99.3% without the admissible-action list and 90.5% without memory (GiGPO: 86.7%). In a separately timed end-to-end run, the whole route reaches 99.3% success in 12.7 GPU-h, whereas token RL of the same LLM needs 17.3 GPU-h to reach 86.6%. 
+
+## 2. RLiD: RL in the Decision Plane 
+
+Compiled decision problems. An agent faces a partially observed task. A compiler C maps each interaction state to a finite menu of executable actions Mt = ( mt, 1, . . . , m t,k t ),an observation rendering ot, and optionally a compact mem-ory bt (a belief state computed from past feedback, never from privileged simulator information). The compiler is ordinary code: benchmark-native admissible actions (ALF-World, Sokoban, FrozenLake), choices of an answer key (ARC), or a menu written once by a frontier language model (Countdown, Section 3). Menus may also show the after-state of each action, i.e., its deterministic effect. All of these change the decision problem the policy faces. We therefore report compiled menus as part of the method and compare policies on identical menus, except where an interface dif-2RLiD: Reinforcement Learning in the Decision Plane 
+
+ference is marked. 
+
+Single-pass decision models. A large decision model 
+
+(LDM ) (Chen et al., 2026a) is a language-model backbone 
+
+fθ read out once per decision. The prompt xt contains the task, a short history of (observation, action) pairs, bt, ot and the menu with entry j prefixed by the single-token label 
+
+ℓj ∈ { A, . . . , Z, a, . . . , z, 0, . . . , 9}. With hθ (x) the final hidden state at the last prompt position and W the output embedding, 
+
+πθ (j | x) = softmax j≤k
+
+ zj
+
+, zj = W ⊤ 
+
+> ℓj
+
+hθ (x) − βk,j .
+
+(1) 
+
+βk, · is a content-independent letter calibration, described below. A decision costs one prefill and no generation. The policy is an explicit categorical distribution over executable actions: there are no invalid outputs, and no length nor-malisation is needed for multi-token action strings, unlike scoring every action by its token likelihood (Tan et al., 2024; Carta et al., 2023). 
+
+Decision-level policy optimisation. We collect G
+
+episodes per task with the current policy. With episode returns R(i), the GRPO-style advantage (Shao et al., 2024) is ˆA(i) 
+
+> ep
+
+= ( R(i) − ¯R)/(σR + ϵ). GiGPO (Feng et al., 2025) adds a step-level term that groups decisions taken from the same anchor state (same task and same compiled obser-vation) and centres their discounted returns-to-go. Both estimators act on decisions, so they apply unchanged to an 
+
+> LDM
+
+. Every decision (xt, j t) contributes the PPO-clip term (Schulman et al., 2017) 
+
+ℓt(θ) = − min  ρt ˆAt, clip( ρt, 1 ± ϵ) ˆAt
+
+, ρ t = πθ (jt|xt) 
+
+> πold (jt|xt)
+
+.
+
+(2) We train LoRA adapters (Hu et al., 2022) only. 
+
+What the decision plane changes. Contrast this with the usual token plane . There the policy writes a string y ∼
+
+pθ (· | x), typically a short rationale followed by an answer, and the environment executes the parsed action a = g(y),or treats y as invalid. Token-level REINFORCE/PPO uses the score of the whole string. 
+
+Proposition 1 (Decision-plane credit is the Rao–Black-wellised token credit) . Let the reward depend on y only through a = g(y), and let πθ (a | x) = P 
+
+> y:g(y)= a
+
+pθ (y | x)
+
+be the induced decision policy. Then 
+
+∇ log pθ (y | x) = ∇ log πθ (a | x)
+
+| {z }
+
+> decision score
+
++ ∇ log pθ (y | x, a )
+
+| {z }
+
+> realisation score
+
+,
+
+and E[∇ log pθ (y | x, a ) | x, a ] = 0 . Hence for any advan-tage ˆA that is conditionally independent of y given (x, a ),
+
+E[ ˆA ∇ log pθ (y | x) | x, a, ˆA] = ˆA ∇ log πθ (a | x), and 
+
+tr Cov  ˆA ∇ log pθ (y | x) − tr Cov  ˆA ∇ log πθ (a | x)
+
+= E ˆA2 ∥∇ log pθ (y | x, a )∥2 ≥ 0.
+
+The proof uses the chain rule and total covariance (Ap-pendix A). This is an identity within one policy : marginal-ising its text removes realisation noise without changing the expected update. An LDM parameterises the action distribution directly, so this term is zero. The proposition does not compare differently parameterised policies, nor whole-string scores with our token-averaged PPO baseline; rationales also add computation. Sections 4 and 5 test these empirical differences. The proposition concerns where credit lands, not when . Tem-poral credit assignment, i.e., which decisions in an episode caused the outcome, is still estimated by ˆA, with all the usual noise. The credit audit (Section 5) measures both against exact dynamic-programming advantages. 
+
+Making the decision plane trainable. Four issues recur across environments, each with a simple decision-level fix (Appendix D). (i) Label bias: pretrained models prefer some labels regardless of content (Zheng et al., 2024), and RL can amplify this into collapse onto one label. We shuffle menus during training. We either add a penalty KL( u ∥ ¯πk)
+
+between the uniform distribution and the mean label dis-tribution of each micro-batch, per menu size (Sokoban, Qwen2.5 runs on Countdown and FrozenLake), or subtract a calibration βk that receives no gradient and is updated after each iteration from the observed label marginal (ALF-World, Qwen3.5 runs on Countdown and FrozenLake); the penalty works better on small fixed menus, the calibration on menus whose size varies (Appendix D). (ii) Length weight-ing (ALFWorld; Qwen3.5 Countdown runs): each decision is weighted by ¯T /T (i), changing the surrogate so that every episode carries equal total weight. (iii) Anchors: the GiGPO anchor key excludes path-dependent memory, which would make almost every state unique. (iv) Evaluation: greedy decoding can loop, so we also report sampled ( T =1 ) evalu-ation. 
+
+Distill + RL. Teacher choices in successful rollouts super-vise another LDM on freshly shuffled menus, followed by decision-level RL. They also supervise a generative LLM on action strings, transferring the policy back to the token plane (Section 6). 
+
+## 3. Experimental Setup 
+
+Environments. We use five environments with differ-ent credit-assignment structure (Appendix Table 8). ARC-Challenge (Clark et al., 2018) is a one-step bandit: 1,119 training, 299 validation and 1,172 test questions, with the answer options as the menu. Countdown (Pan et al., 2025) requires combining 3–4 numbers with arithmetic to hit a target in up to three reductions. Its menu of “slot i op slot 
+
+j” reductions was written once by a frontier model (gpt-6-3RLiD: Reinforcement Learning in the Decision Plane 
+
+astra) from a task description and audited. The afterstate variant additionally shows each reduction’s result and the re-maining numbers. We use 100k training and 1,024 held-out problems. Sokoban (6 ×6, one box) and FrozenLake (4 ×4, slippery; slips are seeded per task, so the episodes of a group share slip randomness, unlike the credit audit) follow the RAGEN protocol (Wang et al., 2025): at most 10 ac-tions, four moves, 512 test seeds and 512 out-of-distribution seeds (Sokoban 8 ×8 with two boxes; FrozenLake 6 ×6). 
+
+ALFWorld (Shridhar et al., 2021) has 50-step household tasks with admissible commands as the menu. We follow the GiGPO protocol (Feng et al., 2025): 134 unseen and 140 seen evaluation games. Its compiled memory tracks location, held object, contents of visited receptacles, unvis-ited receptacles and completed operations, computed from textual feedback only. 
+
+Models and training. Backbones are Qwen2.5-Instruct (0.5B, 1.5B, 3B, 7B) (Qwen Team, 2025) and Qwen3.5 (2B, 4B, 9B) (Qwen Team, 2026), each with LoRA rank 16 on all linear layers of the language model. An iteration samples 16 tasks with G=8 episodes each (ARC: 64 ques-tions; Countdown-after: 32 problems), so groups are formed per task. Sequential environments use GiGPO advantages, ARC uses GRPO. Updates are PPO-clip(0.2) with AdamW and four to 24 minibatches per iteration. Learning rates (1e-5 to 1e-4) were chosen per backbone on validation data. Checkpoints are selected on a validation split: ARC’s own, otherwise 256 held-out training tasks. The test split is also logged every 10–25 iterations for learning curves, which permits adaptive peeking during development. We therefore report the final checkpoint (Countdown-after: a common matched budget), not the best test point, and list validation-selected results in the appendix. Appendix G lists every run. 
+
+Token-plane baselines. (a) Own runs. On ARC and plain Countdown: GRPO with a short rationale (TRL); on Countdown-after: our token-averaged policy gradient on the same menus, and token arms inside the LDM runner. On Sokoban the token plane runs inside the same runner 
+
+(environment, menus, history, grouping, GiGPO, PPO, opti-miser, learning rate, LoRA, interactions): the policy writes text ending in “ Answer: <label> ”, every generated token receives the decision’s advantage (token-averaged per decision), and an unparseable answer executes a random action with a 0.1 penalty. Variants: answer only, a ratio-nale of at most 30 words, and a rationale followed by a constrained label readout with the LDM ’s label regulariser (“rationale + decision”); we also report the LDM without its regulariser. The credit audit uses its own sampler and plain policy-gradient steps for both planes. (b) Published results :RAGEN (StarPO) on Sokoban and GiGPO/GRPO on ALF-World, for context only, since implementations, prompts, evaluation temperatures and hardware differ. 
+
+Compute accounting. Every run logs wall-clock seconds per phase (rollout, update, evaluation) and token counts. GPU-hours (GPU-h) are the number of GPUs times wall clock, including periodic evaluation, on H100 unless marked A100. Our runs share a node with other jobs, which inflates wall clock for both planes; same-runner comparisons are therefore also reported per training interaction. For pub-lished baselines we quote the authors’ configurations; where they do not report compute we give an estimate and mark it as such. 
+
+## 4. Decision Plane versus Token Plane 
+
+4.1. Matched comparisons 
+
+Table 1 compares the two planes on the same tasks, rewards and backbones, on identical menus except where marked. 
+
+One-step decisions. On ARC the LDM improves Qwen2.5-1.5B from 73.0% to 78 .6 ± 0.5% in 0.12 GPU-h; token-level GRPO with a short rationale reaches 75 .9 ± 0.7
+
+(3) in 1.17 GPU-h (corrected reruns; an earlier version could not parse ARC’s numeric labels). On Qwen3.5-2B, whose rationale zero-shot accuracy exceeds its single-pass accu-racy, the planes end at 84.0 vs. 85.8 at a quarter of the cost or less. 
+
+Planning with a compiled menu. On plain slot-reference Countdown menus both planes are weak (Appendix Ta-ble 22); compiling afterstates (the numbers left after each reduction) into the menu helps both. Under a frozen protocol (validation-tuned learning rate per arm, final checkpoints, strict success; Appendix L) the LDM reaches 44.4% on test and 42.2% on 2,048 untouched problems. It beats answer-only and rationale token RL by 12–14 points (statistically significant, paired p < 0.001 ) and shows no significant dif-ference from the scored hybrid at 26 vs. 56 s per iteration (Appendix M). Most of this lead comes from the label reg-ulariser, which a menu policy can apply directly: without it the LDM is level with answer-only token RL (no signifi-cant difference), at lower cost. Distillation lifts it to 70.2% (Section 6). 
+
+Same runner, multi-step. Table 2 compares the planes in-side one runner on Sokoban (Qwen2.5-0.5B, 300 iterations of 128 episodes, learning rate 10 −4, GiGPO). Environment, two-step history, menus, rollout grouping, advantages, PPO, optimiser and LoRA are shared code. The decision plane reaches 44 .5 ± 2.7% (1.8–2.8 GPU-h per run; Figure 2c), far above every token-plane variant. The answer-only to-ken policy almost always parses but drifts towards label preferences (the top label takes 36–100% of decisions vs. 4RLiD: Reinforcement Learning in the Decision Plane 0.0 0.2 0.4 0.6 0.8 1.0 1.2 GPU-hours 025 50 75 100 test accuracy (%) 
+
+(a) ARC-C, Qwen2.5-1.5B     
+
+> decision plane (ours) token GRPO, short rationale
+> 78.6
+> 01234GPU-hours 025 50 75 100
+
+(b) Countdown-after, Qwen2.5-1.5B       
+
+> decision plane (ours) decision, no label reg. token, answer only token, rationale token, rationale + label
+> 44.4
+> 050 100 150 200 250 300 iterations (x128 episodes) 025 50 75 100 test success (%)
+
+(c) Sokoban, same runner, Qwen2.5-0.5B        
+
+> decision plane (ours) decision, no label reg. token, answer only token, rationale token, rationale + label
+> 44.5
+> 0246810 12 14 GPU-hours (distill+RL: cumulative pipeline) 025 50 75 100
+> distill+RL (purple), one clock: teacher RL (blue), dump + BC (dashed), student RL
+
+(d) ALFWorld, unseen games   
+
+> Q3.5-2B RL, memory (teacher) Q3.5-2B RL, no memory Q2.5-1.5B RL teacher dump + student BC GiGPO 1.5B / 7B (publ.)
+> 97.8 1.5B: 100 7B: 100
+
+Figure 2. Test success during training. Solid lines: decision plane (ours); dotted/dashed: token plane and published baselines. Stars mark our main runs’ final evaluations (seed mean on the full test set, as reported in the tables); curves use periodic evaluations on test subsets. In (a)–(c) each line is the mean over seeds at the same iteration (three seeds per plane in (a), eight per arm in (b), completed seeds in (c)) and the band is ± one s.d.; the GPU-h axis is the seed mean. (a) ARC-C. (b) Countdown with afterstate menus, frozen protocol (GPU-h on shared H100s; exclusive timing in Table 1). (c) Sokoban with the same runner. (d) ALFWorld, one run per curve, on one pipeline clock: the distill + RL route (purple) continues from the teacher’s RL (blue, 7.9 h) through the teacher dump and student BC (dashed; on an exclusive H100 the dump takes 0.17 h and BC 0.45 h for the 1.5B student and 1.15 h for the 7B student) into student RL (solid). BC alone already solves 99.3–100% of unseen games (Section 6). 
+
+25% for a content-driven policy) and ends at 16.3% on av-erage. The 30-word rationale policy learns to parse within 50 iterations (invalid outputs fall from 86% to about 1%) yet stays at 6% and ends at 5.9%. The LDM without its label regulariser collapses onto one label (5.9%), so label collapse affects labelled menus in either plane; the decision plane’s explicit label distribution makes it easy to correct. The format-valid rationale + decision variant, with the same regulariser, ends at 14.5%. Its loss is label PPO plus mean PPO over scored rationale tokens; unscored end-of-turn or malformed triggers fall back to a fixed suffix (62% and 100% of final decisions), so it does not fully credit when the rationale stops. Its rationale shrinks to one token in some runs and grows to the 64-token cap in others. With end-of-turn masked until the answer cue, it ends at 11.4%: masking end-of-turn does not close the gap (a malformed answer cue still ends the rationale through the fixed suffix). 
+
+Cost per decision. Timing the same 256 Sokoban deci-sions per policy on one GPU (rollout plus training pass; Appendix Table 16), the decision plane processes 1.5–1.7 ×
+
+more decisions per second than an answer-only token pol-icy and 3.4–4.9 × more than one with a 30-word rationale: generation scales with output length, a decision costs one prefill. 
+
+4.2. Against published multi-step agents 
+
+Table 3 gives contextual comparisons; protocols, prompts and hardware differ. Additional ALFWorld backbones are in Appendix Table 12. The retrospective maximum on visual Sokoban is 92 .7% 
+
+(LDM + SPEAR replay + curriculum); SPEAR reports 87.9% under the 128-puzzle protocol. The selected recipe averages three training seeds, including its selection pilot; other additions remain pilots. 5RLiD: Reinforcement Learning in the Decision Plane 
+
+Table 1. Decision plane ( LDM ) vs. token-level RL: test success (%), mean ± s.d. over seeds (seed counts and per-seed results in Appendix L). Bold: larger paired mean, not significance. Episodes and H100 GPU-h through the iteration (incl. periodic evaluation; TRL timers exclude the initial zero-shot evaluation; Countdown-after: see c): decision / token. Countdown menu-policy pairs share one runner (environment, menus, grouping, advantages, PPO, optimiser, episodes; learning rate tuned per arm); greedy evaluation. Task, backbone Token-plane comparator Episodes (k) Decision Token GPU-h 
+
+One-step decisions (ARC-C, all 1,172 test questions) 
+
+Qwen2.5-1.5B GRPO (TRL), short rationale 61.4 / 26.7 78 .6 ± 0.5 75 .9 ± 0.7 0.12 / 1.17 Qwen3.5-2B GRPO (TRL), ≤20-word rationale 61.4 / 17.8 84 .0 ± 0.4 85 .8 ± 0.7 0.15–0.18 / 0.76 
+
+Countdown-after, Qwen2.5-1.5B, frozen protocol c: test (1,024) / untouched problems (2,048, mean)  
+
+> LDM
+
+answer only 25.6 44 .4 ± 5.2 / 42.2 32 .0 ± 2.2 / 30.3 0.71 / 1.06  
+
+> LDM
+
+30-word rationale 25.6 44 .4 ± 5.2 / 42.2 30 .7 ± 2.5 / 28.4 0.71 / 1.53  
+
+> LDM
+
+rationale + legal label a 25.6 44 .4 ± 5.2 / 42.2 44 .2 ± 5.5 / 41.9 0.71 / 1.57 
+
+> LDM
+
+, no label reg. answer only 25.6 33 .1 ± 2.0 / 31.6 32 .0 ± 2.2 / 30.3 0.70 / 1.06 
+
+> a
+
+Hybrid: a rationale, then a menu-label readout with the LDM ’s label regulariser; end-of-turn is masked and a malformed answer cue ends the rationale with its trigger token scored, so every sampled stop is scored. cLearning rate per arm chosen on validation, then several seeds; final checkpoints, greedy, strict success (unparseable text fails); untouched problems are in neither training nor test data; GPU-h: per-iteration rollout + update time on one exclusive H100 × 100 , no evaluation (elapsed hours through the last training iteration, incl. periodic evaluation, in Appendix L). Plain Countdown (no afterstates) is weak for both planes (Appendix Table 22); with distillation the Countdown-after student reaches 70.2% (Table 5). 
+
+Table 2. Same-runner Sokoban (Qwen2.5-0.5B, 512 test seeds, greedy). Final: test success after 300 iterations, mean ± s.d. over completed seeds. GPU-h per run (shared node); last column: success at 2.5 GPU-h (curves, 256 seeds). Policy final GPU-h at 2.5 GPU-h decision plane ( LDM ) 44 .5 ± 2.7 2.3 44 .9 ± 3.3                     
+
+> LDM without letter regulariser 5.9 2.9 6.2 token plane, answer only 16 .3±8.42.9 17 .2±4.5
+> token plane, 30-word rationale 5.9 5.6 6.2 token plane, rationale + decision 14 .5±1.15.9 12 .3±0.8
+
+## 5. An Exact Credit Audit 
+
+How accurate is the credit that a decision-plane update ap-plies, and how does the token plane compare? On Frozen-Lake (4 ×4, slippery, 10 steps) dynamic programming makes the decision-plane audit exact; token-plane quantities are estimated. 
+
+Protocol. Prompts are history-free (map, cell, menu), so the policy is Markov in (map, cell). For 16 held-out maps, dynamic programming over all cells and remaining horizons 
+
+h ≤ 10 gives the exact advantage Aπh (s, a ) and objective 
+
+J (mean success probability), and, for the LDM , the exact policy gradient g⋆ in one backward pass. From independent batches of G=8 episodes per map (about 800 decisions) we form sampled gradients with GRPO, GiGPO and exact (“oracle”) advantages. We report their cosine to the refer-ence gradient, sign agreement with exact advantages, and the improvement ∆J after one SGD step scaled to a mean decision-distribution KL of 0.01. In the token plane the semantic policy is estimated from 32 completions per cell. Appendix J gives all details. 
+
+Where credit lands. With exact advantages, a single batch of about 800 sampled decisions gives a decision-plane gra-dient whose cosine with the exact policy gradient is 0.88. Every one of the 32 steps improves the exact objective, by 
+
+9.9 ± 0.6×10 −3 on average at KL 0.01. With exact ad-vantages, the aggregate update is thus well aligned and im-proving in every audited trial; the remaining misalignment reflects sampling noise over which decisions were visited. In the token plane a large share of each update acts else-where: on fixed probe texts, only 61%–63% (answer only) and 0.3%–0.3% (30-word rationale) of an update’s absolute log-probability change falls on the answer-label token, and per-step improvements have smaller point estimates with greater estimation uncertainty; the rationale comparisons are inconclusive (Table 4; Appendix J). This is descriptive. The quantity Proposition 1 speaks about is measured next. 
+
+Realisation variance. Proposition 1 predicts how much of the token-plane score is noise about how the action was writ-ten. For each of 24 FrozenLake cells we sample 48 comple-tions and compute each completion’s score ∇ log p(y | x).Grouping completions by outcome class (parsed label or invalid), the law of total variance splits the score’s second moment into a decision part E∥∇ log π(c | x)∥2 and a reali-sation part E∥∇ log p(y | x, c )∥2. We estimate within-class variances with nc − 1 denominators and count classes with a single completion entirely as decision variance, which lowers the expected realisation numerator (not a guaranteed bound on each pooled ratio). Pooled over cells, 71% of the answer-only policy’s score second moment is realisation variance (4-token outputs, 0.4% invalid), and 97% with a 30-word rationale (43 tokens, 84.6% invalid); With twice as many completions per cell (96) on a different random set of cells, the shares are 69% and 98%. (The second run 6RLiD: Reinforcement Learning in the Decision Plane 
+
+Table 3. Published comparisons (context only): success (%) and per-run budget. LDM visual rows use final checkpoints.                                                                                         
+
+> Method (backbone) success budget
+> ALFWorld, token plane (Qwen2.5-1.5B / 7B)
+> PPO 54 .4/80 .4150 it RLOO 69 .7/75 .5150 it GRPO 72 .8/77 .6150 it GiGPO 86 .7/90 .8150 it, 2 / 4 GPU GiGPO 86 .9/98 .1500 it DARS (token SOTA) 96 .9/98 .6500 it
+> ALFWorld, decision plane (Qwen2.5-1.5B / 7B)
+> LDM 82.5 / 90.3 150 / 100 it, 11–17 h §
+> LDM distill+RL 100 /100 100 it, 2.1–5.1 h ¶
+> Sokoban (Qwen2.5)
+> RAGEN, 0.5B (1 act./turn) 12.1 ≤200 it ActFocus (PPO), 0.5B 34.0 200 it, 4 GPU
+> LDM , 0.5B 74 .9±11 .51000 it, 6.0–6.3 h §
+> LDM , 1.5B 77 .2±5.21000 it, 3.5–4 h
+> LDM distill+RL, 0.5B 75 .7±4.0150 it, 0.6–2.5 h §‡
+> LDM distill+RL, 1.5B 75 .5±3.4150 it, 0.8–2.5 h §‡
+> Sokoban, visual (Qwen2.5-VL-3B, verl-agent, image only)
+> GRPO 67.1 200 epochs, 32 GPU GiGPO 81.0 200 epochs, 32 GPU SPEAR (Dr.BoT, GiGPO) 87 .9200 epochs, 32 GPU
+> LDM 84 .8±3.0200 it, 7.0–10.5 h §
+> + continuation control 89 .8180+200 it, 7.0+4.3 h + SPEAR replay 91 .9180+200 it, 7.0+4.6 h + outcome curriculum 91 .1±0.8360–380 it, 11.7–15.6 h
+> + SPEAR replay + curriculum 92 .7180+200 it, 7.0+5.3 h + SPEAR replay (from base) 55 .5200 it, 7.4 h + outcome curriculum (from base) 89 .1200 it, 5.7 h + unnormalized advantages 85 .7200 it, 6.4 h Sources: Feng et al. (2025); Chen et al. (2026b); He et al. (2026); Youtu-Agent Team (2025); ActFocus is PPO-based; interfaces and visual recipe details in Appendix G. LDM text Sokoban: final checkpoints, mean ±s.d. over three runs (Section 6). LDM visual Sokoban: 128 fixed puzzles, T=0 .4,≤15 actions; means average decoding streams within training seeds. All completed LDM variants are shown; the verified replicated mean replaces its pilot result. Visual rows denote bundled recipes; GPU-h are elapsed times on shared hosts and charge prior search. §Shared node.
+> ¶Student RL after BC from Qwen3.5-2B (teacher RL 8.0 h). ‡Same, Qwen3.5-4B (2.9 h). Exact overlap with the allowed training pool: 107/128 benchmark puzzles (Appendix G).
+
+also re-initialises the LoRA adapter, so this shows stability across samples rather than paired convergence.) The deci-sion plane has none. These are unweighted whole-string score moments within each token policy, relative to its own decision marginal; weighted by squared advantages, this part is exactly the token-plane estimator’s excess variance (Proposition 1). They are not training-time PPO variance, nor variance saved by a differently parameterised LDM .On one fixed enumerable text policy, marginalising its ra-tionale aligns the gradient better (6/6), with no detected one-step gain and a small training gain (area +0 .49 ± 0.13 ,
+
+t=3 .8) that a pre-registered replication did not confirm; af-ter training, realisation noise persists in a Sokoban rationale policy (94%) and is near zero for answer-only policies (Ap-pendix K). 
+
+When credit is earned. The larger error source in the de-cision plane is advantage estimation. Estimated advantages (group-centred, so signs may legitimately differ) agree in sign with exact advantages on only 0.52 of the decisions where |Aπh | > 0.02 (about 42% of all decisions). About 46% of decisions get no credit because whole groups suc-
+
+Table 4. Credit audit on FrozenLake (Qwen2.5-0.5B at the start of RL, 16 maps; batches of 128 episodes: decision plane 32, token answer-only 8, token rationale 4 from shards; mean ± s.e. over batches). cos : cosine to the reference gradient (exact for the decision plane; a Monte Carlo plug-in for the token plane, so token cosines are not comparable across planes). Sign: agreement of estimated with exact advantage (token plane: plug-in oracle from the estimated semantic policy) where |A| > 0.02 . ∆J:improvement after one step at mean KL 0.01 (exact for the decision plane, re-estimated for the token plane). Dec. share: fraction of an update’s absolute log-probability change at the answer-label token. Token rows: whole-string / token-mean score. Details in Appendix J. advantage cos sign ∆J (×10 −3) dec. share 
+
+Decision plane (J=0 .217 )oracle 0.88 1.00 9.9 ± 0.6 1.000 GRPO 0.54 0.52 5.7 ± 0.7 1.000 GiGPO 0.52 0.52 6.3 ± 0.7 1.000 
+
+Token, answer only (J=0 .209 )oracle 0.67 † 1.00 7.0 ± 1.5 / 6.7 ± 1.7 0.610 / 0.628 GRPO 0.18 † 0.57 4.0 ± 1.4 / 4.3 ± 1.3 0.412 / 0.441 GiGPO 0.22 † 0.57 5.2 ± 1.1 / 3.1 ± 1.7 0.442 / 0.495 
+
+Token, 30-word rationale (J=0 .196 )oracle 0.01 † 1.00 4.0 ± 1.6 / −0.2 ± 2.0 0.003 / 0.003 GRPO 0.06 † 0.53 2.9 ± 0.5 / 0.0 ± 2.7 0.001 / 0.002 GiGPO 0.03 † 0.53 2.9 ± 3.2 / 4.8 ± 2.5 0.002 / 0.002 
+
+ceed or fail together. With these estimates the cosine drops to 0.54–0.52, yet the updates still recover 58% (GRPO) and 64% (GiGPO) of the oracle improvement per step. Credit 
+
+placement thus carries no realisation noise in the decision plane, while estimation (which decisions deserve credit) accounts for most of the remaining gap to the oracle. 
+
+## 6. Distillation across Models and Planes 
+
+6.1. Across model families 
+
+Qwen2.5-1.5B needs 11–14 GPU-h to reach 80–86% on ALFWorld with its own RL. Policy distillation followed by RL (Rusu et al., 2016; Ross et al., 2011) transfers choices on a shared menu across families and tokenizers. We roll out a Qwen3.5 teacher LDM on training tasks, keep decisions from successful episodes, re-render freshly shuffled menus, and train a Qwen2.5 student with two epochs of cross-entropy before decision-level RL. Table 5 shows where demonstrations help. On ALFWorld BC alone gives 99.3–100% on unseen games and RL retains it at 2.1–2.6 GPU-h, far less than the student’s own RL needs. On Sokoban, 150 student RL iterations bring both students to about 76%, a level pure RL needs about 1,000 iterations to reach. On Countdown-after, filtering successful teacher episodes lets BC exceed its teacher (69.3 vs. 67.4%), and RL preserves it (70.2%). Appendix H gives the data budgets and transfer details. 7RLiD: Reinforcement Learning in the Decision Plane 
+
+Table 5. Distill + RL. Students are Qwen2.5, teachers are Qwen3.5 
+
+> LDM
+
+s trained with decision-level RL. Test success (ALFWorld: 134 unseen, greedy; Sokoban: 512 seeds, greedy; Countdown-after: 1,024 items, greedy). GPU-h counts student RL only; teacher RL cost in brackets. Task (student) teacher pure RL distill distill+RL ALFWorld (1.5B) 98.5 [8.0] 79.9 / 85.1 100 / 99.3 100 / 100                                                         
+
+> GPU-h 11.2 / 14.3 –2.1 / 2.6 ALFWorld (7B) 98.5 [8.0] 90.3 100 100 100
+> GPU-h 17 §–5.1 Sokoban (1.5B) 74.2 [2.9] 77 .2±5.21000 70.3 75 .5±3.4
+> GPU-h 3.5–4 e–0.8–2.5 §
+> Sokoban (0.5B) 74.2 [2.9] 74 .9±11 .51000 74.0 75 .7±4.0
+> GPU-h 6.0–6.3 §–0.6–2.5 §
+> Countdown-after (1.5B) 67.4 [5.8] 57.9 69.3 70.2
+> GPU-h 2.7 –2.6
+> †A100. Countdown-after: 400 RL iterations, same recipe; BC on 24k teacher episodes. Sokoban: final checkpoints, mean ±
+> s.d. over training runs (BC-only column: one run); distill+RL uses 150 student RL iterations from one teacher corpus (BC and RL seeds vary). 1000 1,000 RL iterations, learning rate 10 −4(for 1.5B chosen on validation over {3×10 −5,10 −4}); validation-selected checkpoints give 81 .8±2.8(1.5B) and 78 .6±6.2
+> (0.5B). eExclusive H100, estimated from late-training itera-tion time; logged times of these co-located runs are higher.
+> 100 Greedy, after 100 iterations. §Shared node.
+
+Table 6. RLiD → generative LLM: ALFWorld success (%), Qwen2.5-1.5B student unless named. Greedy, except the no-memory row at T =0 .4. Seeds and sampled reads in Appendix N. Student unseen seen Memory prompt 100 100 
+
+Memory prompt, no action list 99.3 100 
+
+No memory 90.5 97.1 Granite-3.3-2B, memory prompt 100 100 
+
+SmolLM2-1.7B, memory prompt 96.3 99.3 Qwen2.5-0.5B, memory prompt 98.5 100 
+
+GiGPO (published) 86.7 –Token RL, same LLM and runner 86.6 –
+
+6.2. Back to the generative LLM 
+
+RLiD also post-trains ordinary generative LLMs. The 100% ALFWorld 1.5B LDM of Table 5 plays one episode per training game, and sequence-level SFT teaches a gen-erative LLM to write the chosen command as free text, 
+
+<action>command</action> , parsed by verl-agent’s projection (Appendix N). With compiled memory the generative student solves ev-ery unseen and seen game, both greedily and at T =0 .4. It keeps 99.3% unseen and 100% seen success without the admissible-action list, so deployment needs no menu. With-out memory it reaches 90.5% at T =0 .4, against GiGPO’s published 86.7%. The transfer holds across model families and sizes: Granite-3.3-2B reaches 100%, SmolLM2-1.7B 96.3% and Qwen2.5-0.5B 98.5% unseen (Table 6). The route is also cheaper than token-level RL. Including teacher training, the generative student reaches 99.3% un-seen success in 12.7 H100 GPU-h, versus 86.6% in 17.3 GPU-h for token-level RL of the same LLM with the same prompt and runner. Given a trained LDM , collection and 100 SFT steps (4.7 minutes) cost 0.47 GPU-h and give 100% unseen success. Distilling directly from the Qwen3.5-2B  
+
+> LDM
+
+also gives 99.3%, and GSM8K and ARC-C scores are preserved (Appendix N). 
+
+## 7. Related Work 
+
+Language models as policies over admissible actions. 
+
+SayCan (Ahn et al., 2022) scores actions without RL on the language model. GLAM (Carta et al., 2023) and TWO-SOME (Tan et al., 2024) fine-tune language models with online RL over admissible actions., scoring each action string by token likelihood; we read one categorical from a single prefill. Verbalised action masking (Zhang et al., 2026) and POAD (Wen et al., 2024) keep generation and token credit. Large decision models (Chen et al., 2026a) and other supervised single-token readouts (TypeSafe, 2026; Bespoke Labs, 2026; Dai et al., 2026; OpenJev authors, 2026), con-strained decoding and policy distillation also exist; RLiD adds the credit identity, controlled RL comparisons, an exact audit and distillation in both directions. 
+
+RL for language agents and credit. Group-baseline to-ken RL (Shao et al., 2024) extends to agents in RAGEN (Wang et al., 2025), ArCHer (Zhou et al., 2024) and GiGPO (Feng et al., 2025), whose decision-level anchor advantages we reuse; DARS (Chen et al., 2026b) shapes step credit by task dependencies. Proposition 1 is a Rao–Blackwell argu-ment for score-function estimators (Williams, 1992; Sutton et al., 2000). 
+
+## 8. Conclusion 
+
+RLiD gives RL one prefill per decision, no realisation noise and no invalid outputs. Its policies distil back into ordi-nary generative LLMs that act without an admissible menu, hold their success under sampling and are reached at lower measured cost than token-level RL, so RLiD serves the post-training of both LDM s and LLMs. 8RLiD: Reinforcement Learning in the Decision Plane 
+
+## References 
+
+Ahn, M. et al. Do as I can, not as I say: Grounding language in robotic affordances. In Conference on Robot Learning ,2022. Bespoke Labs. Nimble: open single-pass decision models. Model release and public benchmark, 2026. Carta, T., Romac, C., Wolf, T., Lamprier, S., Sigaud, O., and Oudeyer, P.-Y. Grounding large language models in inter-active environments with online reinforcement learning. In International Conference on Machine Learning , 2023. Chen, Z., Zhang, Y., Wei, J., Yin, J., and Zhang, D. Large decision models: Repurposing large language models as single-pass decision makers. arXiv preprint arXiv:2610.15501 , 2026a. Chen, Z., Zhang, Y., Wei, J., Zhang, D., and Liu, Z. Dependency-aware reward shaping for agentic reinforce-ment learning. arXiv preprint arXiv:2610.01207 , 2026b. Clark, P., Cowhey, I., Etzioni, O., Khot, T., Sabharwal, A., Schoenick, C., and Tafjord, O. Think you have solved question answering? try ARC, the AI2 reasoning chal-lenge. arXiv preprint arXiv:1803.05457 , 2018. Dai, S., Pentyala, S. K., Liu, Y., Mehrotra, S., Banerjee, S., Zhu, J., Bi, B., and Asur, S. Koa-action: Fast and consistent structured decision making with generative LLMs. arXiv preprint arXiv:2609.36115 , 2026. Feng, L., Xue, Z., Liu, T., and An, B. Group-in-group policy optimization for LLM agent training. arXiv preprint arXiv:2505.10978 , 2025. He, L., Zhu, J., Zhou, Y., Gu, Z., Liu, J., Huang, W.-C., Zou, H. P., Wipf, D., Yu, P. S., and Wu, Q. Resolving action bottleneck: Agentic reinforcement learning informed by token-level energy. arXiv preprint arXiv:2605.14558 ,2026. Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., and Chen, W. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations , 2022. OpenJev authors. OpenJev: an open-weights system-one decision model. Model release, 2026. Pan, J., Zhang, J., Wang, X., Yuan, L., Peng, H., and Suhr, A. TinyZero. https://github.com/Jiayi-Pan/ TinyZero , 2025. Qwen Team. Qwen2.5 technical report. arXiv preprint arXiv:2412.15115 , 2025. Qwen Team. Qwen3.5. Model release, 2026. Ross, S., Gordon, G., and Bagnell, D. A reduction of imitation learning and structured prediction to no-regret online learning. In International Conference on Artificial Intelligence and Statistics , 2011. Rusu, A. A. et al. Policy distillation. In International Conference on Learning Representations , 2016. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 , 2017. Shao, Z. et al. DeepSeekMath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Shridhar, M., Yuan, X., Côté, M.-A., Bisk, Y., Trischler, A., and Hausknecht, M. ALFWorld: Aligning text and embodied environments for interactive learning. In Inter-national Conference on Learning Representations , 2021. Sutton, R. S., McAllester, D., Singh, S., and Mansour, Y. Policy gradient methods for reinforcement learning with function approximation. In Advances in Neural Informa-tion Processing Systems , 2000. Tan, W., Zhang, W., Liu, S., Zheng, L., Wang, X., and An, B. True knowledge comes from practice: Aligning LLMs with embodied environments via reinforcement learning. In International Conference on Learning Representations ,2024. TypeSafe. Jev: typed system-one decisions as a service. Hosted API, version 1.13.0, 2026. Wang, Z. et al. RAGEN: Understanding self-evolution in LLM agents via multi-turn reinforcement learning. arXiv preprint arXiv:2504.20073 , 2025. Wen, M., Wan, Z., Zhang, W., Wang, J., and Wen, Y. Re-inforcing language agents via policy optimization with action decomposition. In Advances in Neural Information Processing Systems , 2024. Williams, R. J. Simple statistical gradient-following algo-rithms for connectionist reinforcement learning. Machine Learning , 8:229–256, 1992. Youtu-Agent Team. Learn the ropes, then trust the wins: Self-imitation with progressive exploration for agentic reinforcement learning. arXiv preprint arXiv:2509.22601 ,2025. Zhang, Z., Wang, Z., Du, Y., and Fang, F. VAM: Ver-balized action masking for controllable exploration in RL post-training – a chess case study. arXiv preprint arXiv:2602.16833 , 2026. 9RLiD: Reinforcement Learning in the Decision Plane 
+
+Zheng, C., Zhou, H., Meng, F., Zhou, J., and Huang, M. Large language models are not robust multiple choice selectors. In International Conference on Learning Rep-resentations , 2024. Zhou, Y., Zanette, A., Pan, J., Levine, S., and Kumar, A. ArCHer: Training language model agents via hierarchical multi-turn RL. In International Conference on Machine Learning , 2024. 10 RLiD: Reinforcement Learning in the Decision Plane 
+
+## A. Proof of Proposition 1 
+
+Assume the parser g does not depend on θ, pθ (y | x) is differentiable in θ with finite support or dominated derivatives, and the estimators have finite second moments. Write pθ (y | x) = πθ (a | x) pθ (y | x, a ) with a = g(y) and pθ (y | x, a ) = 
+
+pθ (y | x)/π θ (a | x) on {y : g(y) = a}. Taking logarithms and gradients gives the decomposition. For fixed (x, a ) with 
+
+πθ (a | x) > 0, P 
+
+> y:g(y)= a
+
+pθ (y | x, a ) = 1 for all θ, so E[∇ log pθ (y | x, a ) | x, a ] = P 
+
+> y
+
+∇pθ (y | x, a ) = ∇1 = 0 . Let 
+
+sd = ∇ log πθ (a | x) and sr = ∇ log pθ (y | x, a ). If ˆA is conditionally independent of y given (x, a ), then E[ ˆA(sd + sr ) |
+
+x, a, ˆA] = ˆAs d, so both estimators have the same mean. The difference of second moments is E[ ˆA2(2 s⊤ 
+
+> d
+
+sr + ∥sr ∥2)] ; the cross term vanishes by conditioning on (x, a, ˆA). Hence tr Cov differs by E[ ˆA2∥sr ∥2].
+
+When does the independence hold? In our runner the history shown at later steps contains the executed action string and the observation, never the generated rationale. Future states, rewards and other episodes therefore depend on y only through a,and so does any advantage computed from them, including GRPO, GiGPO and oracle advantages. If rationales were fed back into later prompts, future states would depend on y beyond a, the conditional-independence assumption would fail, and the proposition would not apply without further assumptions. 
+
+Invalid outputs and format penalties. In our token-plane runner an unparseable string executes a uniformly random action and receives a penalty. Rewards then depend on y through the outcome class c = g′(y) ∈ { 1, . . . , k } ∪ {⊥} (a parsed label, or invalid) together with an execution kernel that maps ⊥ to a random action. The proposition holds verbatim with 
+
+a replaced by c: p(y | x) = π(c | x)p(y | x, c ), the realisation score ∇ log p(y | x, c ) has zero conditional mean, and any advantage that depends on y only through c and the execution randomness is conditionally independent of the realisation given c. The decision plane has no ⊥ class. 
+
+Interpretation of the identity. Proposition 1 is an identity within one policy : for a fixed text policy, its own score-function gradient equals the gradient of its induced decision policy plus a zero-mean term. That term assigns the decision’s advantage to how the action was verbalised: rationale tokens, formatting, and which of several strings parse to the same action. Estimating ∇ log πθ (a | x) instead removes this output-realisation sampling noise without changing the expected update. A free-form token policy cannot do this, because its marginal over strings is intractable. An LDM (or, equivalently, generation constrained to a single legal label) parameterises πθ (a | x) directly, so the realisation term is identically zero. This does not mean that an advantage moves only the evaluated decision’s probability: parameters are shared across states, as in any policy gradient. The proposition does not compare an LDM with a token policy of different parameters: the two planes induce different policy classes (rationales add computation), and our token-plane baseline uses token-averaged PPO rather than the whole-string score. These are empirical questions, which Sections 4 and 5 address. 
+
+## B. Memory and History on ALFWorld 
+
+A single-pass policy sees only what the prompt contains. Appendix Table 7 crosses history length with the compiled memory on ALFWorld (Qwen3.5-2B, same optimiser settings, 150 iterations); dumped trajectories suggest why it helps. Memory-free 2-step failures in the inspected dumps are mostly 50-step exploration loops: the agent cycles through three or four receptacles with high confidence (repeating states for 31–36 of 50 steps) while unvisited cabinets stay closed. The compiled memory lists visited and unvisited receptacles and makes such loops visible in one line. In a matched comparison (same recipe and compiler, 2-step history) the memory raises success from 52.2% to 79.9% after 40 iterations (different evaluation menu orders) and from 91.8% to 97.8% at the end. State tracking moves into the compiler; the policy keeps only the choice.          
+
+> Table 7. ALFWorld (Qwen3.5-2B, 134 unseen games): history length ×compiled memory. Final test success, sampled / greedy; in parentheses, sampled success at iteration 40. The no-memory runs predate several compiler changes (history as (action, resulting observation) instead of (observation, action), 52 instead of 62 labels, different menu truncation and anchor keys), so this table compares compiler and recipe versions rather than isolating memory; a matched no-memory run with (observation, action) history reaches 91.8%. no memory compiled memory 2-step history 77.6 / 70.9 (45.5) 97.8 / 98.5 (79.9 )6-step history 93.3 / 92.5 (45.5) 98.5 / 97.8 (44.0)
+
+11 RLiD: Reinforcement Learning in the Decision Plane 
+
+## C. Environments                          
+
+> Table 8. Environments. kis the menu size; “steps” is the per-episode decision budget. Env steps kmenu source ARC-C 13–5 answer options Countdown 3≤36 LLM-written compiler Sokoban 10 4native moves FrozenLake 10 4native moves ALFWorld 50 5–62 ‡admissible commands
+> ‡The retained menu holds at most 62 single-token labels. When ALFWorld’s admissible commands exceed 62, generic commands are dropped first ( examine , then look ,inventory ,close ), never by reward (ldmrl/core.py ); in the reported ALFWorld runs truncation affects 0.2–0.7% of all decisions over a whole run (training and evaluation, cumulative trunc_rate ); per-iteration rates are higher in some iterations and are not separately logged. If the priority removals do not suffice, the remaining menu is cut positionally ( keep[:62] ).
+
+## D. Stability Lessons and Ablations 
+
+On variable-size menus we use calibration (Eq. 1). Most menu sizes have few decisions per batch, so a per-size marginal regulariser can be satisfied most cheaply by flattening every row, i.e. it acts as an entropy bonus; we observed steadily rising entropy in ALFWorld pilots (logs not retained). On fixed four-action menus the regulariser is better. Episode-length weighting changes the surrogate so that long failed episodes, each with up to 50 negatively weighted decisions, do not dominate the update. With the environment’s state key (which excludes the path-dependent memory), 63–95% of ALFWorld decisions fall into anchor groups of size ≥ 2 (alfD_q35_2b_h2).              
+
+> Table 9. Ablations behind the stability fixes of Section 2 (test success, %). Issue Setting Without fix With fix Too few updates per iteration ALFWorld, Qwen3.5-2B, it. 40 27.6 (4 minibatches) 45.5 (24 minibatches) ALFWorld, Qwen2.5-1.5B, it. 40 8.2 (4) 14.2 (24) Letter bias on fixed 4-action menus Sokoban, Qwen2.5-0.5B, final 17.2 (calibration) 37.9 / 55.3 / 42.2 (marginal regulariser, 3 seeds) Greedy evaluation of a stochastic policy ALFWorld, Qwen3.5-2B, no memory, final 70.9 (greedy) 77.6 (sampled, T=1 )
+
+## E. Qualitative Decision Statistics 
+
+In dumped episodes on unseen ALFWorld games (memory-free policies), the base Qwen3.5-2B LDM solves 1 of 30 episodes, using 48.6 of 50 steps on average. Its mean chosen-action probability is 0.33, and 79% of its decisions have probability below 0.5. After RL the mean chosen probability is 0.75–0.87, only 8–22% of decisions fall below 0.5, and episodes take 10.8–16.1 steps at 82–93% success. The decision entropy of the 1.5B student falls from 1.04 to 0.27 nats under pure RL, and to 0.07 nats under distill + RL (Section 6). 
+
+## F. Failure Modes by Plane 
+
+Failure modes that only exist in the token plane. Two failure modes are specific to the token plane: unparseable outputs (86% of early Sokoban decisions with a short rationale) and credit spent on form (Section 5). 
+
+Label bias (both planes). Label bias affects RL over labelled menus in both planes (Section 4). Pretrained backbones put content-independent mass on early letters, and RL with unshuffled menus amplifies it to near-deterministic collapse onto one label. Shuffling menus during training makes a content-driven policy’s label marginal uniform. The marginal regulariser or the calibration in Eq. (1) then removes the residual preference. On fixed four-action menus (Sokoban) the regulariser gives 38–55% with Qwen2.5-0.5B, against 17% with calibration. On variable-size menus (ALFWorld) we use calibration instead (Appendix D). Appendix D gives the remaining ablations. 12 RLiD: Reinforcement Learning in the Decision Plane 
+
+## G. Run Index and Hyperparameters 
+
+Most table numbers are generated by paper/extract_finals.py and paper/make_macros.py from run logs and audit/benchmark artifacts; numbers in the narrative (and a few constants in make_macros.py , e.g. the 0.12 GPU-h ARC cost) were checked against the same artifacts by hand. BC-only results come from the evaluation files of the distillation pipeline. Table 10 maps entries to runs. Token-plane sampling. Every token-plane rollout samples at temperature 1 with top-p=1 , no top-k and no repetition penalty, so the sampled text comes from the distribution whose log-probabilities enter the PPO ratio. Qwen2.5’s default generation configuration (repetition penalty 1.1, top-k 20) would otherwise apply silently; earlier versions of the Sokoban token arms and of the Countdown-after token baseline ( tokrl_cda_q25_1.5b ,25.2%) inherited it and are superseded by the reruns reported here ( mSf_* , tokrl_cdafix_q25_1.5b_s{17,1,2} ). 
+
+Recipe sensitivity (Countdown-after). The first LDM run predates two code changes to the label regulariser: a per-iteration (“global”) variant became the default, and zero-advantage rows were fed to the regulariser. Replicates with both changes (-marg-mode global , all rows; three seeds) over-regularised to near-uniform decisions and reached 7.4, 7.8 and 12.9% at 12.8k episodes; a micro-batch variant on all rows showed the same entropy rise and was stopped after 12–13 iterations. The reported replicates restore the per-micro-batch penalty on non-zero-advantage rows ( -marg-mode micro -marg-rows adv ), which is our intended reconstruction of the original recipe; the original code revision was not retained. Metrics of the unsuccessful attempts are in results/metrics_failed . The Countdown-after comparison is therefore between the tested recipes. Evaluation randomness. An invalid token-plane output is replaced by a uniformly random menu item. In the reported runs this fallback drew from the training RNG during evaluation unless menus were shuffled, so a token-plane evaluation could shift later training randomness and greedy token evaluations are not fully deterministic (the decision plane has no invalid outputs and is unaffected). The released code gives evaluation its own fixed-seed Python RNG and restores the PyTorch RNG state after seeded sampling; apart from mC_rcd_s1 (run after the Python-RNG fix), reported token-plane runs predate these fixes and were not rerun. 13 RLiD: Reinforcement Learning in the Decision Plane 
+
+Table 10. Run index (run names refer to logs released with the code). Runs on A100-40GB: arcX_q7b, flX_q3b, sok_q05_lr1e4, cd_q15_lr5e5, cda_q15_lr5e5; all others on H100. Entry Runs ARC LDM Qwen2.5-1.5B / Qwen3.5-2B arc_q15_lr1e5, arc_q15_s{1,2} / arc_q35_2b_lr1e5, arc_q35_s{1,2} ARC token GRPO (corrected parser) tokrl_arcfix_q25_1.5b_s{17,1,2}, tokrl_arcfix_q35_2b_s{17,1} Countdown plain / afterstate cd_q35_2b_m, cd_q15_lr5e5 / cda_q15_lr5e5, replicates cdaR_q15_s{0..3} ( -marg-mode micro -marg-rows adv , our intended reconstruction of the original run’s regulariser), cdaX_q35_{2b,4b}; tokrl_cd_*; token Countdown-after (aligned sampling) tokrl_cdafix_q25_1.5b_s{17,1,2} (superseded: tokrl_cda_q25_1.5b); same-runner token arms mC_{ans,cot,rcd}_s{0,1} (cdaR hyperparameters plus -policy , -fmt-pen 0; the label regulariser acts only in the rcd path; mC_rcd_s1 run after the evaluation-RNG fix); LDM without label regulariser cdaN_q15_s{0,1} (cdaR hyperparameters with -marg 0, policy=ldm )Countdown frozen protocol (Appendix L) LR grid pr_{ldm,hyb,ans,cot}_lr{2e5,5e5,1e4}_s0; seeds pr_{arm}_sel_s{1,2,3}; stop-scored hybrid 
+
+-rcd-stop scored -rcd-early-stop 1; exclusive timing tm_*; sealed split se_{arm}_s{0..3}_sh{0,1}; plain Countdown cdP_q15_s{0,1}, cdP_q35_2b_s0, mP_{ans,rcd}_s0; earlier stop-corrected hybrid mCx_rcd_s{0,1}, mCx2_rcd_s{2,3}; strict re-evaluations strict_mC_*; aggregation scripts/protocol_report.py 
+
+FrozenLake protocol flP_{ldm,hyb}_lr{1e5,1e4}_s0, flP_{ldm,hyb}_sel_s{1,2} Distill (Countdown-after) teacher dump + BC cdD24k (results/bc/cdD24k), RL cdD24k_rl; second student seed results/bc/cdD24k_seed1, cdD24k_rl_s1; teacher-KL variant cdD24k_T Sokoban long / visual sokL_q05_s{0,1,2} (1,000 it); vaS_vl3b_rl, vaD_va_q35_4b_to_vl3b_rl (eval_t04_{best,final}.jsonl) Sokoban sok_q05_lr1e4(_s1,_s2), sok_q15_m, sokM_q35_{2b,4b}; same-runner: mS_ldm_s{0,1,2}, mS_ldmplain_s{0,1}, token plane with aligned sampling mSf_{ans,cot,rcd}_s* FrozenLake fl_q05_m, fl_q15_m, flX_q3b, flX_q35_2b ALFWorld Qwen3.5 alfD_q35_2b_h2, alfE_q35_2b_h2_s1, alfD_q35_2b_h2_s2, alfD_q35_2b, alfE_q35_4b_h2, alfm_q35_2b_lr1e5, alfh6_q35_2b_lr1e5 ALFWorld Qwen2.5 alfE_q15_h2, alfH_q15_s1, alfH_q7b; distill + RL: alfG_q15_bcrl (BC: bc_alf_q15), alfG_q15_bcrl_s1 (BC seed 1: 133/134 unseen before RL), alfG_q7b_bcrl; all BC from the same teacher corpus (dumps/teacher_alf_q35_2b_train.jsonl, 15,224 decisions) ALFWorld memory (matched) alfD_q35_2b_h2 vs. alfP_q35_2b_nomem Distill + RL sokBC_q15, sokBC_q05r (0.5B; sokBC_q05 crashed at it. 31), cdaBC_q15, cdaE_* Credit audit / realisation variance credit_{ldm,tok0,tok30}_q05_base; realvar_tok{0,30}(_n96) Standalone evaluations results/evals: ALFWorld re-evaluation of alfD_q35_2b_h2 and alfD_q35_2b final adapters (ldmrl/evaluate.py, shuffled menus, pre-action history 2 / 6, memory on, T =1 and greedy, 134 unseen + 140 seen games); BC-only evaluations of the distillation pipeline; Countdown on the token baseline’s items 
+
+All LDM and same-runner token-plane runs use LoRA rank 16 ( α=32 ), PPO clip 0.2, one PPO epoch, AdamW (β=(0 .9, 0.999) , no weight decay), gradient clipping 1.0, 16 tasks × 8 episodes per iteration (ARC: 64 × 8; Count-down: 32 × 8), and shuffled menus during training. Learning rates are 10 −5 (Qwen3.5, ALFWorld), 3 · 10 −5–5 · 10 −5
+
+(Qwen2.5 on Countdown/ALFWorld) and 10 −4 (0.5B Sokoban, Qwen3.5-4B Sokoban). Discount 0.95 for GiGPO; std-normalised advantages. Sokoban out-of-distribution maps were generated with a per-process randomised retry hash in all reported runs (about 7% of OOD maps can differ between processes); the generator now uses a fixed CRC32 hash. Evaluation maps never use the retry path (four training IDs do). Splits are by seed, not by puzzle: 246 of the 512 Sokoban test seeds and 139 of the 256 validation seeds generate an initial puzzle identical to one in the training pool, so Sokoban results measure the shared distribution, not unseen-board generalisation (as for FrozenLake, Appendix L). 14 RLiD: Reinforcement Learning in the Decision Plane                                               
+
+> Table 11. Final vs. validation-selected adapter (test success, %). Run final val-selected selected iteration ARC Qwen2.5-1.5B s1 78.4 78.4 100 ARC Qwen2.5-1.5B s2 79.1 78.8 90 ARC Qwen3.5-4B 92.9 92.6 110 ARC Qwen3.5-9B 94.6 93.9 20 Countdown-after Qwen2.5-1.5B 60.4 60.4 400 Countdown-after Qwen3.5-4B 67.4 67.9 325 Sokoban Qwen2.5-0.5B s1 55.3 55.3 300 Sokoban Qwen3.5-4B 74.2 74.2 300 FrozenLake Qwen3.5-2B 74.6 74.0 120 ALFWorld Qwen3.5-2B (T=1) 97.8 96.3 140 ALFWorld Qwen3.5-2B s1 (T=1) 97.0 97.0 150 ALFWorld Qwen3.5-4B (T=1) 99.3 99.3 90 ALFWorld Qwen2.5-1.5B (T=1) 79.9 77.6 130 ALFWorld Qwen2.5-1.5B s1 (T=1) 85.8 85.8 150
+
+Fixed label order on Sokoban. Sokoban’s four native moves always appear in the same order, so their labels can stay fixed. On Qwen2.5-0.5B (300 iterations, same host), a fixed order reaches 70.1% eval and 23.2% OOD in 0.63 GPU-h, against 64.5% and 20.7% in 0.74 GPU-h with shuffled labels; at iteration 100 the fixed order leads 36.7% to 21.5%. 
+
+Visual Sokoban and published comparisons (Table 3). The published comparisons are contextual, not matched protocols. ALFWorld decision-plane rows use 134 unseen games: Qwen2.5 greedy (1.5B / 7B), Qwen3.5 sampled / greedy. PPO– GiGPO at 150 iterations come from Feng et al. (2025); GiGPO and DARS at 500 from Chen et al. (2026b), who use 128 games, one training run per arm and a mean over decoding draws (7B validation-selected).            
+
+> Table 12. Additional ALFWorld backbones: success (%) on 134 unseen games, sampled / greedy, and per-run budget. Method (backbone) success budget
+> LDM , Qwen3.5-2B 97 .4±0.5/98 .5150 it, 8–9 h
+> LDM , Qwen3.5-4B 99.3 / 99.3 150 it, 11 h
+
+Visual Sokoban follows the verl-agent generator: 6 × 6, one box, search depth 30, native rewards and at most 15 primitive actions. The actor sees the rendered image and four directional actions, with no text grid or observation history. SPEAR describes RGB and textual inputs; its released RGB path pairs images with static instructions and action-format text, without a textual board rendering. Our language-model LoRA and one-pass menu-label readout differ from SPEAR’s full-parameter token policy and reasoning interface. Benchmark seeds are the fixed first draw of 128 validation seeds, rather than redrawn at each validation. Final adapters of vaS_vl3b_rl and its seeds 1–2 train for 200 iterations of 32 × 8 episodes. Each training seed is evaluated at T = 0 .4 with three decoding streams (0, 1, 2); their within-seed means are 82.8125, 83.3333 and 88.2813%, giving 84 .8 ± 3.0% across training seeds. The historic stream-0-only mean is 85 .2 ± 2.7% . The best observed seed is a retrospective maximum, not a recipe selected independently of the benchmark, and does not establish a reliable lead over SPEAR’s reported 87.9%. The text-teacher result below retains the original single-run, stream-0 final evaluation. GiGPO’s reported seed variation is over inference seeds. Our pure-RL LDM baseline varies three independent training seeds and averages three decoding streams within each seed; these two sources of variation are reported separately. 
+
+Recipes and attribution. The short Table 3 labels denote bundled recipes. Continuations load adapter weights with a fresh AdamW optimizer, learning rate 5×10 −5 and cosine decay to 20% of that rate. SPEAR replay is our decision-level adaptation: capacity 2,048, batch 512, maximum age 10 iterations, peak weight 0.1 and warmup 30 iterations (100 from base). Admission requires positive original GiGPO credit and episode return above the median of up to 10,240 puzzle-group mean returns; this history covers the whole 200-iteration run. Replay arms also widen the on-policy upper PPO clip to 0.28. Curriculum samples at most half the batch by success EMA p (decay 0.9), with priority min(1 .31 , 0.1 + 0 .4(1 − p) + 4 p(1 − p)) , and also adds normalized-entropy floor 0.15 with coefficient 0.2. Curriculum from base adds the same learning-rate decay to the otherwise constant-10 −4 baseline; replay from base uses constant 10 −4. The unnormalized-advantage arm also sets γ = 1 ,learning rate 5 × 10 −5, cosine decay and upper clip 0.28. GiGPO’s training-only anchor key is the text-grid state, equivalent to grouping identical rendered images; it is never passed to the actor. 15 RLiD: Reinforcement Learning in the Decision Plane 
+
+Replay eligibility is sparse in the replay-only continuation (20 replay decisions at the final iteration). Its four extra AdamW steps per iteration reuse the on-policy optimizer: stored momentum can move weights even when replay gradients are tiny. We have no matched clipping/optimizer-step control, so gains do not isolate self-imitation. The continuation control is 7.0 points above its original seed-0 final; replay, curriculum and their combination add 2.1, 0.8 and 2.9 points over that control. These are exploratory point estimates, with no paired per-puzzle significance test or independent-seed evidence yet for the replay/combination recipes. Three decoding streams do not substitute for independent training seeds. Shared-host elapsed GPU-hours are not isolated throughput measurements. The standard seed split does not guarantee distinct initial boards: the 65,535 training seeds generate 21,495 distinct boards, and 104 of the 124 distinct benchmark boards occur in that pool. After excluding the 256 selection seeds, 103 benchmark boards still occur in the remaining training pool (107 of the 128 benchmark seed draws). Those selection seeds produce 249 distinct boards, of which 205 occur in the remaining training pool and six occur in the benchmark. Selection is therefore held out by seed, not by board. These counts compare allowed training pools, not the episodes actually sampled by each run. The separately frozen 1,024-puzzle holdout excludes exact initial-state matches (walls, targets, boxes and player) with training, benchmark and selection. It retains symmetry overlap: 728 of 1,024 puzzles (679 of 971 classes) are rotated or reflected copies of boards in the training pool. Also ignoring player position within the same reach-able component raises overlap to 914 of 1,024 puzzles (699 of 807 classes), though this can change action costs under the 15-action budget. For the benchmark, 122 of 128 seed draws match the training pool up to symmetry, and 127 of 128 under the component comparison. Neither split establishes generalization to novel puzzle struc-tures. The audit covers initial states; intermediate-state overlap and pretrained-model contamination are unmea-sured. The seed-list SHA1 remains b8218d00b281421a16ea6cb0547053a42cebf4c6 ; the read-only audit is 
+
+results/sokoban_visual_spear/equivalence_board_audit.json .On the holdout, at T =0 .4 with validation-selected checkpoints (mean ± s.d. over three training runs; benchmark in parentheses), teacher-free RL reaches 76 .7 ± 1.6 (83 .7 ± 1.8), text-teacher BC alone 75 .2 ± 0.3 (83 .1 ± 0.7), and text-teacher BC then RL 81 .2 ± 1.6 (85 .9 ± 1.6): every model loses 4.7–7.9 points, and the text teacher’s benefit is larger there (+4.5 vs. +2.2). The holdout filter rejected 4,828 of 5,881 scanned candidates for training-board matches, shifting the sample toward rarer generator outputs; the score drop does not isolate memorization. New replay/curriculum experiments log only selection-puzzle evaluations during training and evaluate the benchmark after training completes. The current holdout campaign evaluates frozen final adapters without using holdout outcomes for optimization or recipe/checkpoint selection. Replay from base was not declared in that five-variant holdout campaign. Replay uses the actor’s own decisions and episode outcomes; it supplies no solver or text-teacher labels. Table 3’s generated rows require completed training, final evaluations, matching arguments and recorded initialization hashes. New rows use final checkpoints and three decoding streams per training seed. Pilot recipes each use one training seed; verified replications use three independent training prefixes. Continued rows start from iteration 160 (prior search: 200 iterations, 10.5 GPU-h); iteration 180 (prior search: 200 iterations, 7.0 GPU-h); iteration 180 (prior search: 200 iterations, 10.0 GPU-h); budgets include those prior search costs. Every completed declared arm is reported in the main table, regardless of its benchmark score; the highest displayed visual-Sokoban mean is bold. Incomplete arms are ineligible. Recipes are selected by final-checkpoint greedy success on the 256 held-out-training selection puzzles (mean across declared training seeds; exact ties use frozen manifest arm order). Benchmark scores never choose a recipe. An arm appears once in the main table; its original pilot and verified replicated result are retained separately here. For independent-prefix replication, the recipe is frozen after all four continuation pilots finish, using their final selection success and manifest-order ties, including the control as a candidate. The main recipe row changes to the replicated mean only when all three declared training seeds are complete. Each seed starts from its own training-selected pure-RL checkpoint; hash and prior cost are verified separately. Where prefixes differ, budgets show the range of total policy-gradient iterations and total search GPU-hours per seed. Seed 0 participated in recipe selection, so its inclusion conditions the three-seed mean on that selection; seeds 1 and 2 are fresh replications. Fresh seeds 1–2 alone reach 
+
+91 .3 ± 0.9% on the benchmark (mean ± s.d. over these two training seeds). 
+
+Final checkpoints on the sealed holdout. Table 14 evaluates frozen final adapters on the separate 1,024-board holdout at T = 0 .4, with the same image-only interface and 15-action budget. New variants check checkpoint and source hashes before and after evaluation; complete records match the sealed seed-list hash and original training specification. Legacy pure-RL records verify the full protocol and checkpoint paths, but did not record checkpoint content hashes at evaluation. 5 of 5 frozen variant evaluations are complete. The pure-RL mean averages three training seeds; the matching seed-0 final is also shown. Each new variant uses seed 0. Means first average three decoding streams within each training seed. These 16 RLiD: Reinforcement Learning in the Decision Plane 
+
+Table 13. All completed visual Sokoban experiments, final checkpoints. Selection is greedy success (%) on 256 reserved training seeds; benchmark success (%) averages three decoding streams at T = 0 .4 within each training seed. Pilot recipes use one training seed; replicated results use three independent prefixes. Budgets charge the prior search and the new training. Method selection benchmark budget LDM continuation control 91 .0 89 .8 180+200 it, 7.0+4.3 h LDM + SPEAR replay 89 .8 91 .9 180+200 it, 7.0+4.6 h LDM + outcome curriculum 92 .6 90 .6 180+200 it, 7.0+4.7 h LDM + replay + curriculum 92 .2 92 .7 180+200 it, 7.0+5.3 h LDM + replay, from base 61 .3 55 .5 200 it, 7.4 h LDM + curriculum, from base 90 .2 89 .1 200 it, 5.7 h LDM, unnormalized advantages 82 .4 85 .7 200 it, 6.4 h LDM + outcome curriculum (replicated) 91 .8 ± 0.8 91 .1 ± 0.8 360–380 it, 11.7–15.6 h LDM, retrospective best pure-RL seed — 88 .3 200 it, 10.5 h LDM, privileged text-teacher BC+RL — 87 .5 200 it, 4.4 h ∗∗The teacher supplies text-grid decisions during BC; student inference is image only. Teacher rollouts and BC add 0.4 h to the student RL budget shown. The seed maximum is retrospective; the teacher result uses its original decoding stream. These two results are separate from recipe selection. 
+
+final-checkpoint results differ from the validation-selected baseline results above. Holdout outcomes never select a recipe or checkpoint; Table 3 remains the 128-puzzle benchmark. 
+
+Table 14. Visual Sokoban on the 1,024-puzzle holdout, final checkpoints; success (%). Exact initial-board duplicates are excluded; rotated and reflected copies remain. Baseline: mean ± s.d. over three training seeds. New variants: seed 0. Each seed averages three decoding streams. Only complete evaluations are shown. Method holdout LDM, pure RL 74 .6 ± 3.9
+
+LDM, pure RL (seed 0) 70 .1
+
+LDM + continuation control 83 .4
+
+LDM + SPEAR replay 84 .0
+
+LDM + outcome curriculum 85 .3
+
+LDM + SPEAR replay + curriculum 84 .4
+
+LDM + outcome curriculum (from base) 81 .0
+
+## H. Distillation Ablation 
+
+Table 15 compares hard and soft teacher labels, with and without an entropy floor during student RL, for the Countdown-after student of Section 6, distilled from the first, small dump (3,000 teacher episodes) with an earlier RL recipe (learning rate 
+
+2 × 10 −5, calibration 0.5, no label regulariser, 150 iterations). With the current recipe for 400 iterations, RL from this BC adapter ends at 60.9% and pure RL at 57.9%. The main-text result uses a dump eight times larger. 
+
+Table 15. Countdown with afterstates: Qwen2.5-1.5B student, Qwen3.5-4B teacher. Test success after 0, 50 and 150 RL iterations (same 512-item subset, 32 tasks × 8 episodes per iteration), and final (1,024 items; RL iterations in brackets). Entropy: retained-update-batch decision entropy in nats at the first and last RL iteration (its sampled population changes with filtering and regularisation, so it is not a final-policy entropy). Student training it. 0 it. 50 it. 150 final H first H last pure RL 11.3 30.7 49.0 60.4 (400) 1.68 1.53 hard BC → RL 51.8 56.2 54.7 56.2 (150) 0.84 0.12 soft BC → RL 53.5 56.6 55.1 56.5 (150) 0.74 0.11 hard BC → RL + entropy floor 51.8 56.4 55.7 55.9 (150) 0.95 0.13 soft BC → RL + entropy floor 53.5 56.8 55.5 57.0 (150) 0.85 0.23 
+
+Across-family transfer details. ALFWorld. The student’s own RL stays below the teacher (79.9–85.8 vs. 98.5). Decision-level BC alone gives 99.3–100% on unseen games for both Qwen2.5-1.5B and Qwen2.5-7B (from 15,224 teacher decisions), RL mostly retains it, and the student’s RL budget falls from 11–14 to 2.1–2.6 GPU-h. Sokoban: speed, not ceiling. BC on 8,019 decisions of the Qwen3.5-4B teacher gives 70.3–74.0%. Three distill+RL runs per student (one teacher corpus; BC 17 RLiD: Reinforcement Learning in the Decision Plane 
+
+and RL seeds vary; 150 iterations) end at 75 .7 ± 4.0 (0.5B; runs 77.5, 71.1, 78.3) and 75 .5 ± 3.4 (1.5B), with 21 .4 ± 4.2
+
+and 20 .7 ± 2.4 on 8 ×8 two-box maps (validation-selected). Pure RL needs about 1,000 iterations to get there but then matches or exceeds it: final 74 .9 ± 11 .5 (0.5B) and 77 .2 ± 5.2 (1.5B), validation-selected 78 .6 ± 6.2 and 81 .8 ± 2.8, OOD 
+
+29 .4 ± 5.8 and 28 .8 ± 5.3. For 1.5B the learning rate was chosen before inspecting test results by mean validation success at the selected checkpoints ( 10 −4: 80.7; 3 × 10 −5: 70.2, test 73 .3 ± 11 .8 final). An earlier 1.5B pure-RL run at 10 −5 for 300 iterations (19.7%) was untuned and is superseded. When pure RL is already strong. On Countdown-after the student’s own RL reaches 57.9% after 400 iterations. With 3,000 teacher episodes BC gave 53.5% (Appendix Table 15); with 24k sampled at temperature 1 (38.5k decisions from the 69% that succeed), BC alone reaches 69.3%, above the teacher’s greedy 67.4%: keeping only successful samples filters out the teacher’s mistakes. RL then preserves it (70.2%; on untouched problems 70.1 vs. teacher 65.9 and pure RL 56.6). 
+
+## I. Controlled Throughput 
+
+Table 16 gives the microbenchmark behind the cost-per-decision comparison of Section 4.                                         
+
+> Table 16. Controlled throughput on 256 Sokoban decisions (one H100 shared with other jobs; all policies timed back to back with identical micro-batch sizes; median of five repetitions, all repetitions are in the released artifact). Gen.: mean generated tokens per decision. Roll / train: seconds for rollout (generation and log-probabilities, no gradient) and for a training forward/backward pass. Dec/s: decisions per second over both phases. Backbone policy gen. roll (s) train (s) dec/s LDM speed-up Qwen2.5-0.5B decision plane ( LDM )1 (label) 0.5 1.7 119.2 –token, answer only 4.3 1.9 1.8 69.6 1.7 ×
+> token, 30-word rationale 45.9 8.3 2.3 24.2 4.9 ×
+> Qwen2.5-1.5B decision plane ( LDM )1 (label) 1.1 3.5 56.2 –token, answer only 4.3 3.0 3.7 37.9 1.5 ×
+> token, 30-word rationale 20.7 10.9 4.5 16.6 3.4 ×
+
+## J. Credit Audit Details 
+
+Setting. Qwen2.5-0.5B-Instruct with a freshly initialised LoRA adapter (rank 16), i.e. the start of RL. 16 FrozenLake maps (the first 16 test seeds), 4 ×4, slip model with 80% intended move, horizon 10, reward 1 on reaching the goal, γ = 1 .Prompts contain map, current cell and the fixed canonical menu (no history, memory or step counter), so the policy is Markov in (map, cell) and exact policy evaluation applies. Batches. Each batch samples 8 episodes per map (about 730–890 decisions) with independent slip and action randomness. Advantages: GRPO (episode return minus group mean), GiGPO (plus centred return-to-go at (map, cell) anchors), and the exact Aπh (s, a ). Update and ∆J. The batch gradient (ascent direction, no clipping, entropy or regularisers) is followed by an SGD step whose size is found by a line search (up to 6 trials, starting at unit-gradient scale 0.01) so that the mean KL between old and new decision distributions over visited cells is 0.01; achieved KLs (for the token plane, the smoothed Monte Carlo estimate used for step selection, not an independently verified semantic KL) average 0.0100 (decision plane), 0.0099 (answer only) and 0.0108 (rationale). Weights are restored after each step. For the decision plane ∆J is exact. For the token plane the semantic policy is re-estimated from 32 sampled completions per cell before and after the step (paired seeds), and ∆J is computed by the same dynamic programming on the estimated policies. Token-plane reference and shares. The token reference gradient is a Monte Carlo estimate from the same 32 completions per cell with exact DP advantages of the estimated policy; because policy, advantages and reference are coupled plug-in estimates, the token-plane cosines have no guaranteed bias direction. Shards share the reference sample and evaluation seed streams (which depend on the local batch index), so reported standard errors are conditional on that shared randomness. The decision share is the fraction of the summed absolute change in token log-probabilities, over 64 fixed probe completions, that falls on the answer-label token. Runs. Decision plane: 32 batches, 166 GPU-seconds. Token, answer only: 8 batches, 3302 GPU-seconds, invalid answers 0.5%. Token, 30-word rationale: 4 batches from independent shards (different batch seeds, same policy and maps; shards merged batch-wise), invalid answers 84.2% at the start of RL. Line-search bug note: an earlier version could select a null step when no trial came close to the KL target; it was fixed before all reported runs. 
+
+Token-plane updates in detail. In the token plane we describe where updates act. On fixed probe texts we measure how an update’s absolute change in token log-probabilities is distributed over generated tokens. This is a descriptive statistic, not 18 RLiD: Reinforcement Learning in the Decision Plane 
+
+the realisation variance of Proposition 1, which we measure directly below. For an answer-only policy, whose outputs are almost always “ Answer: X” (0.4% invalid), 61%–63% of the change falls on the answer label under oracle advantages; the rest moves format tokens. Its mean improvement per step is 7.0 / 6.7 ×10 −3 (whole-string / token-mean score), with 1.4–1.8 times the batch-to-batch variance in ∆J of the decision plane; that variance also includes the noise of estimating the token policy. With a 30-word rationale, 84.2% of the base policy’s outputs do not parse and only 0.3%–0.3% of the change falls on the answer label. Improvements are inconclusive: 4.0 / -0.2 ×10 −3 for oracle and 2.9 / 0.0 ×10 −3 for GRPO advantages, with oracle standard errors of 1.6 / 2.0 ×10 −3 (GRPO: 0.5 / 2.7 ×10 −3). These rationale results rest on 4 batches from shards that share policy estimates. Token-plane cosines are not comparable with the decision plane’s exact ones. For invalid token outputs, the oracle advantage of the randomly executed fallback action is used, so token-plane oracle updates retain fallback-action noise. 
+
+## K. Estimator Test and Realisation Noise After Training 
+
+Same policy, two estimators. To separate the estimator from the policy class, we audit a fully enumerable text policy on FrozenLake (Qwen2.5-0.5B, LoRA rank 16; ldmrl/estimator_audit.py , results/est2 ). At each state it first emits one of R single-token rationales r, then an action label a: p(r, a | x) = p(r | x) p(a | x, r ), with no invalid strings. Its action policy is the exact marginal π(a | x) = P 
+
+> r
+
+p(r | x)p(a | x, r ). On the same sampled (s, r, a ) and exact advantages we compare the whole-string estimator W = A ∇ log p(r, a | x) with the marginalised estimator M = A ∇ log π(a | x),which is what the decision plane computes for this policy. Both average over the random number of visited decisions, so they are ratio estimators with the same expectation but are not unbiased for ∇J; their episode-normalised versions (sums divided by the number of episodes) are, and the error column uses those. Cosines and update directions are unaffected by this positive rescaling. Each update is line-searched to a semantic KL of 0.01 with a 3% relative tolerance (up to 40 trials); achieved KL lies in 0.0089–0.0104, and 12–16 of 16 batch pairs per setting have both updates within tolerance. The return comparison uses only those matched pairs; the exact change in return is computed by dynamic programming (16 maps, 16 batches of 8 episodes per map, parameters restored after each update).                                                    
+
+> Table 17. Estimator test (entries W / M). Cosine and episode-normalised relative squared error to the exact gradient (all 16 batches); ∆J:paired difference M −W of the exact return change ( ×10 −3, mean ±s.e.) over batch pairs whose two updates both meet the KL tolerance, and the number of those pairs where M is better. Policy cosine rel. error ∆J(M −W) M better base, R=2 0.980 / 0.985 0.196 / 0.238 +0 .06 ±0.34 5/12 base, R=3 0.970 / 0.990 0.122 / 0.064 −0.23 ±0.48 6/14 base, R=4 0.945 / 0.993 0.150 / 0.048 +0 .57 ±0.36 10/16 random init 1, R=3 0.848 / 0.912 0.319 / 0.209 +0 .33 ±0.73 8/16 random init 2, R=3 0.922 / 0.945 0.253 / 0.154 +0 .59 ±0.73 8/14 trained FrozenLake, R=3 0.956 / 0.975 0.181 / 0.137 +0 .06 ±0.24 8/15
+
+Marginalising over the rationale gives a gradient closer to the exact one (cosine higher in 6/6 settings, error lower in 5/6). Its effect on the one-step return is not detectable: the paired differences are positive in 5 of 6 settings but within two standard errors in each, and pooled over all 87 matched pairs the difference is +0 .24 ± 0.23 ×10 −3 (45 positive; standard error clustered over the 46 groups of pairs that share a batch random stream, since settings with the same seed reuse batch seeds). This is no detected gain, not evidence of equivalence. In this small, valid-output setting, removing realisation noise therefore yields a better-aligned gradient but no detected per-step return gain; the larger gaps of Section 4 also involve invalid outputs, longer realisations and recipe effects. 
+
+Longer rationales and training. We extend the same policy to rationales of L tokens, each from the same R=3 choices, enumerating all 3L paths exactly. Realisation noise grows with L (one-step diagnostics with oracle advantages and episode-normalised errors; random init at scale 0.02, whereas training below uses 0.01, so these ratios do not measure noise along the trained GRPO trajectories): the ratio of the realisation term E∥gW − gM ∥2 to the marginalised estimator’s own error is 0.7 (base) and 1.3 (random init) at L=1 , against 4.2 and 7.1 at L=3 , and W’s cosine to the exact gradient falls to 0.62 / 0.88 (W / M). We then train W and M separately for 30 iterations from identical starting parameters (random LoRA init, scale 0.01) with identical per-iteration sampling seeds, keeping each KL-targeted step (semantic KL 0.01; the closest searched step is kept even when the 3% tolerance is missed, so both arms take every step; mean achieved KL is balanced and the matched counts are in the table) and tracking exact J by dynamic programming. Each seed is an independent pair of runs. 19 RLiD: Reinforcement Learning in the Decision Plane                                                  
+
+> Table 18. W vs. M over 30 KL-targeted training iterations (Qwen2.5-0.5B, FrozenLake, 16 maps, 8 episodes per map per iteration). Final
+> J(mean over seeds, W / M); paired differences M −W of final Jand of the area under the exact-Jcurve, mean ±s.e. over seeds (positive seeds in brackets); matched steps out of all steps (W, M). Advantages, rationale seeds final J∆final J∆area matched steps GRPO adv., 3-token rationale 80.291 / 0.300 +0 .009 ±0.004 (6) +0 .17 ±0.14 (7) 214/240, 215/240 GRPO adv., 1-token rationale 80.284 / 0.295 +0 .011 ±0.009 (4) +0 .35 ±0.15 (6) 221/240, 214/240 oracle adv., 3-token rationale 40.304 / 0.319 +0 .015 ±0.008 (3) +0 .16 ±0.05 (4) 94/120, 107/120
+
+M has higher mean returns than W in every arm, with substantial seed uncertainty, and the effect is small: with GRPO-estimated advantages and three-token rationales the final-J difference is +0 .009 ± 0.004 (about 3% of W’s final J; the area difference +0 .17 ± 0.14 , positive in 7/8 seeds, has an interval that includes zero), with oracle advantages +0 .015 ± 0.008 
+
+and area +0 .16 ± 0.05 (4/4), and the effect does not grow from one to three rationale tokens even though the realisation noise does. In this setting, removing realisation noise yields a consistently better-aligned gradient but only a small learning advantage that is not clearly distinguished from zero (seed-level 95% t-intervals for the GRPO depth-3 differences: final J
+
+[−0.002 , +0 .019] , area [−0.16 , +0 .50] ; oracle area [−0.00 , +0 .32] ). We therefore do not attribute the larger benchmark gaps to realisation noise alone. 
+
+Unparseable outputs. Unparseable outputs, which execute a random action, are one failure mode of the token arms of Section 4 (86% of early Sokoban rationale decisions), although trained rationale policies become largely valid. We add this regime to the same within-policy test: the policy can also emit one of N invalid label tokens (a fixed logit bias, learnable logits underneath, sets the initial invalid mass), and an invalid emission executes a uniformly random action, with no penalty. W scores the emitted string including an invalid label; M scores the exact probability of the executed action, π(a | x) = P 
+
+> r
+
+p(r | x) [ p(a | x, r ) + p(inv | x, r )/4] . Training as above (GRPO-estimated advantages, one-token rationales, 30 KL-targeted iterations, eight seeds per arm; endpoints fixed before the runs: paired differences in final J and area under the J curve).                                                                        
+
+> Table 19. W vs. M with unparseable outputs (GRPO advantages). Rows are named by the logit bias (low / high; nominal targets 30% / 80%); the actual mean initial invalid mass (%) is given, and the number of invalid labels Ndoes not hold that mass fixed. Paired M −Wdifferences in area under the exact-Jcurve and in final J, mean with seed-level 95% t-interval (positive seeds in brackets); mean achieved KL ( ×10 −3), matched steps and skipped steps (non-finite or zero gradient), each W / M over 240 steps. Invalid labels init. mass seeds ∆area ∆final JKL matched skipped none 08+0 .35 [ −0.01 ,+0 .71] (6) +0 .011 [ −0.011 ,+0 .033] (4) 10.0 / 10.1 221 / 214 0 / 0 4 tokens, low bias 20 8+0 .50 [+0 .07 ,+0 .93] (6) +0 .023 [ −0.001 ,+0 .046] (7) 10.1 / 10.0 222 / 221 0 / 0 1 token, low bias 25 8+0 .25 [ −0.18 ,+0 .68] (6) +0 .016 [ −0.010 ,+0 .042] (5) 10.1 / 10.0 203 / 214 0 / 0 4 tokens, high bias 61 8+0 .83 [+0 .25 ,+1 .40] (6) +0 .024 [ −0.018 ,+0 .067] (5) 7.5 / 10.1 163 / 204 35 / 0 1 token, high bias 64 8+0 .52 [ −0.21 ,+1 .25] (6) +0 .019 [ −0.004 ,+0 .041] (6) 10.2 / 10.0 203 / 200 0 / 0
+
+M has the larger area in every arm. Pooled over all 40 pairs, with uncertainty clustered by seed because arms share seeds, the area difference is +0 .49 ± 0.13 (t=3 .8, positive in 7/8 seed clusters), about 7% of W’s area: removing realisation noise gives a statistically clear but modest learning advantage. The final-J differences are not individually distinguished from zero, and the dose response is not significant (slope of the area difference in initial invalid mass +0 .38 ± 0.56 , standard error clustered by seed). In one 4-token, high-bias seed W’s policy collapsed onto invalid labels (95% invalid mass), its gradient became non-finite and 25 of its updates were skipped, while M continued to improve; this seed is included as pre-declared, and excluding it leaves the pooled area difference at +0 .47 ± 0.13 (95% interval [+0 .16 , +0 .77] ). In that 4-token, high-bias arm the line search was also unstable for W (mean achieved KL 0.0075 vs. 0.0101 for M, fewer matched steps, very large accepted step scales before the collapse), so its result is an advantage under this estimator and update procedure, not a clean equal-KL variance intervention. Without an invalidity penalty both estimators often drift towards high invalid mass, since an invalid output is then just a random action. 
+
+A pre-registered realisation-sampling intervention. Finally we ran a design fixed in advance together with its success criterion (learning-curve area of M at least 10% above W, a seed-level 95% interval excluding zero, at least 7 of 8 seeds, and a realisation-averaged arm recovering at least half of the gap): three-token rationales, GRPO advantages, 20 KL-targeted updates, 8 fresh seeds, three arms from identical starts: W; W 4, which keeps each decision’s action and advantage but averages its whole-string score over four rationale realisations drawn from the exact posterior p(r | x, a ); and M. Mean 20 RLiD: Reinforcement Learning in the Decision Plane 
+
+achieved KL is 0.0100 in every arm with no skipped updates, but 11/160 (W), 14/160 (W 4) and 9/160 (M) updates miss the 3% KL tolerance. M’s area exceeds W’s by +1.3% (absolute area difference [−0.21 , +0 .34] , 5/8 seeds), and W 4’s exceeds W’s by +2.4% ( [−0.14 , +0 .38] , 6/8), so M lies below W 4; no final-J difference was detected. The frozen shared-checkpoint diagnostics of the original design were not run. The criterion is not met: in this setting, reducing realisation noise does not produce a detectable learning benefit, and the paper’s benchmark gains should not be attributed to it. 
+
+Realisation noise after training. ldmrl/realisation_var2.py (results/rv2b ) repeats the measurement of Section 5 on 32 Sokoban and Countdown-after states per policy (32 scored completions each), for base and trained token policies ( mSf_{ans,cot}_s0 , mC_{ans,cot}_s0 ). States come from short random prefixes and are kept only if successor solvability differs across actions. The weights are an auxiliary solvability diagnostic, not the training advantages: 
+
+A(s, c ) = v(s′
+
+> c
+
+) − P 
+
+> c′
+
+Pref (c′)v(s′ 
+
+> c′
+
+), with v the exact solvability of the successor within the remaining budget (Sokoban: BFS within the 10-step training budget; Countdown: exhaustive search) and Pref estimated from 32 further, independent completions, so the weights do not depend on the scored completions. An invalid output executes a random action. Classes with one completion count as decision variance.                                                 
+
+> Table 20. Realisation share (%) of the score second moment for base and trained token policies. Raw: unweighted, all outputs; adv., valid: weighted by A(s, c )2and restricted to parseable outputs, with a 95% bootstrap interval over states and the number of states that contribute non-negligibly; last column: token-mean score (as in token GRPO). Sequence-sum score otherwise. Policy valid (%) raw adv., valid [95% CI] states adv., valid, mean Sokoban 0.5B, base, answer only 99.1 70 68 [57, 76] 32 49 Sokoban 0.5B, trained, answer only 100.0 00 [0, 0] 20Sokoban 0.5B, base, rationale 16.1 94 53 [39, 67] 32 58 Sokoban 0.5B, trained, rationale 99.7 96 94 [91, 96] 29 94 Countdown-after 1.5B, base, answer only 99.5 29 30 [19, 41] 30 18 Countdown-after 1.5B, trained, answer only 93.7 20 [0, 0] 70Countdown-after 1.5B, base, rationale 76.2 82 78 [69, 85] 30 78 Countdown-after 1.5B, trained, rationale 98.9 54 9 [2, 27] 12 8
+
+Realisation noise survives training in a predominantly valid rationale policy on Sokoban (99.7% valid; 94 [91, 96]% of the advantage-weighted score). Trained answer-only policies produce predominantly canonical “ Answer: X” outputs with approximately zero weighted within-class score variation on this panel; only 2 (Sokoban) and 7 (Countdown) states contribute, bootstrap draws with no contributing state are discarded, and single-completion classes have no within-class term, so their 0% intervals do not indicate population-level certainty. A trained Countdown rationale policy retains 9 [2, 27]% weighted but 54% unweighted: it is near-deterministic in its action on these states (the most frequent action takes 87% of samples on average), so little weight falls on classes whose wording varies. Low weighted shares therefore do not imply that the text stopped varying, and the evidence is heterogeneous across tasks. The decision plane has no realisation term at any point of training. 
+
+## L. Frozen Countdown-after Protocol 
+
+The protocol was written before any of its runs started ( paper/reviews/protocol_r17.md ). Four arms share the runner, menus, rollout grouping, advantages, PPO, optimiser and 25.6k training episodes (100 iterations of 32 × 8): the LDM ;the hybrid (rationale of at most 64 tokens, then a constrained label with the LDM ’s regulariser; end-of-turn masked, and a malformed answer cue ends the rationale with its trigger token scored); answer-only and 30-word-rationale token policies. For each arm the learning rate was selected on the validation split (256 held-out training problems) from {2, 5, 10 } × 10 −5
+
+with seed 0 (ties to the smaller rate), giving 10 −4 for the LDM , hybrid and answer-only arms and 2 × 10 −5 for the rationale arm; seeds 1–3 were then run at the selected rate, and, in a second pre-registered stage, seeds 4–7 (eight seeds per arm). The same stage added a fifth arm, the LDM without the label regulariser (learning rate selected the same way: 10 −4), whose contrast with the unregularised token arms isolates the plane from the regulariser; one of its eight seeds (seed 6) failed with repeated out-of-memory errors on a shared GPU, leaving seven. Only final checkpoints are reported (evaluated greedily), with strict success (an unparseable output fails the episode). The untouched split holds 2,048 problems from the source pool that are in neither training nor test data ( scripts/make_fresh_cd.py ); it was first evaluated by these runs. By multiset of inputs and target, the original test split shares 32 of its 1,024 problems with training (a property of the original random split); the untouched and second sealed splits share none with training, test or each other (hashes and overlaps: 
+
+results/countdown_split_manifest.txt ). 21 RLiD: Reinforcement Learning in the Decision Plane                                                                                            
+
+> Table 21. Frozen protocol on Countdown-after (Qwen2.5-1.5B): strict success (%), mean ±s.d. over eight seeds (seven for the unregularised LDM ); paired-by-seed differences with bootstrap 95% intervals and paired-t p -values; seconds per training iteration (rollout + update) with each run alone on one H100 (iterations 3–6 from the final checkpoint). Arm test untouched contrast test untouched
+> LDM 44 .4±5.242 .2±5.3
+> hybrid 44 .2±5.541 .9±4.8LDM −hybrid +0 .2 [ −4.5,+4 .6] ,p=0 .93 +0 .3 [ −4.3,+4 .4] ,p=0 .91
+> answer only 32 .0±2.230 .3±2.2LDM −answer +12 .4 [+9 .4,+15 .2] ,p< 0.001 +11 .8 [+9 .2,+14 .2] ,p< 0.001
+> 30-word rationale 30 .7±2.528 .4±2.0LDM −rationale +13 .7 [+9 .1,+18 .0] ,p< 0.001 +13 .7 [+9 .2,+17 .9] ,p< 0.001
+> LDM , no label reg. 33 .1±2.031 .6±2.3no reg. −answer +1 .1 [ −1.4,+3 .4] ,p=0 .44 +1 .3 [ −1.4,+4 .0] ,p=0 .41
+> no reg. −rationale +2 .7 [+0 .3,+4 .7] ,p=0 .07 +3 .6 [+0 .9,+5 .8] ,p=0 .03
+> LDM −no reg. +11 .8 [+7 .4,+15 .7] ,p=0 .002 +10 .9 [+6 .4,+14 .6] ,p=0 .003
+
+Per seed (seeds 0–7, test): LDM 49.6, 47.9, 47.8, 37.9, 50.4, 43.3, 41.5, 37.3; hybrid 50.9, 46.7, 36.1, 39.9, 47.3, 42.8, 39.4, 50.7; answer only 33.8, 30.5, 34.6, 32.7, 34.1, 28.4, 32.2, 29.8; rationale 30.0, 27.1, 32.8, 32.7, 29.3, 27.7, 33.3, 33.0;  
+
+> LDM
+
+without regulariser 35.4, 32.5, 29.9, 32.1, 33.3, 32.5, –, 35.7. Seconds per iteration: LDM 25.6, hybrid 56.4, answer only 38.2, rationale 55.0. Seed-0 runs at the selected rates (test / untouched): LDM 49.6 / 47.2, hybrid 50.9 / 47.4, answer only 33.8 / 31.7, rationale 30.0 / 26.4 (strict). The hybrid generates 39–58 rationale tokens per decision after training; its rollout takes 41 s per iteration against 11 s for the LDM , while updates cost the same (15 s). Elapsed through the last training iteration on shared H100s, including periodic evaluation (excluding initialisation and final evaluation), the protocol runs took 1.65 ( LDM ), 2.47 (answer only), 2.94 (rationale) and 3.33 (hybrid) GPU-h on average. 
+
+Plain Countdown. Without afterstates the menu lists slot references (“combine slots 1 and 3 with −”), so a single pass must search without lookahead. Neither plane does well at 1.5B (Table 22).                                
+
+> Table 22. Plain Countdown (slot-reference menus): test success (%), mean ±s.d. (seeds); episodes (k) and H100 GPU-h as decision / token. Same-runner rows use 512 test problems at 25.6k episodes. Full-expression GRPO (TRL) is a different interface, and its results use the first 512 test problems, the decision plane’s all 1,024. Backbone token comparator episodes decision token GPU-h Qwen2.5-1.5B answer only / rationale + label (same runner) 25.6 9.4±0.8(2) 2.5 / 10.0 (1) 0.31 / 1.25–1.75 Qwen2.5-1.5B GRPO (TRL), full expression 102.4 / 38.4 14 .0±0.6(2) 14.3 (1) 2.1 / 2.25 Qwen3.5-2B GRPO (TRL), full expression 102.4 / 38.4 47.4 (1) 50.0 (1) 1.7 / 2.51
+
+A second environment. The same frozen comparison of the LDM and the scored hybrid on FrozenLake (Qwen2.5-0.5B, history-free prompts, 60 iterations of 16 × 8 episodes, learning rate selected on validation from {10 −5, 10 −4}, three seeds, final checkpoints) gives 18 .5 ± 2.9 vs. 14 .6 ± 1.0% on the 512 evaluation maps (held out by seed; 226 of 512 boards also occur among training maps) and 17 .7 ± 1.7 vs. 15 .1 ± 1.2% on 1,024 sealed maps whose boards occur in neither training nor evaluation maps (paired intervals [+1 .6, +8 .4] and [+0 .9, +5 .9] ; with three seeds these are the smallest and largest seed differences, so they are fragile), at 0.22 vs. 1.22 GPU-h per run on a shared H100. The budget is short, so absolute success is low; the comparison tests the interface, not convergence. 
+
+Second sealed split and menu permutation. After the first stage of the protocol (seeds 0–3), its 16 final checkpoints were evaluated once on a second sealed split (2,048 further problems, disjoint from training, test and the untouched split), with canonical menus and with one seeded permutation of every menu. Canonical: LDM 44 .5 ± 5.2, hybrid 41 .5 ± 6.8, answer only 32 .4 ± 2.1, rationale 30 .0 ± 1.3%; LDM minus each: +3 .0 [ −1.4, +10 .1] , +12 .0 [+6 .9, +15 .4] , +14 .4 [+8 .4, +18 .6] .Permuted: 44 .8 ± 4.8, 43 .0 ± 6.0, 31 .2 ± 2.2, 30 .5 ± 2.8%; +1 .8 [ −2.9, +8 .8] , +13 .5 [+8 .8, +17 .1] , +14 .3 [+8 .3, +18 .6] .The ordering, and the absence of a detected difference from the hybrid, hold on independent problems and under label reassignment. 
+
+## M. Decision-Level Case Study 
+
+To see what the hybrid’s rationale buys, we rolled out the seed-1 finalists of the LDM and the scored hybrid greedily on the first 256 problems of the second sealed Countdown split, recording every decision’s full label distribution (the hybrid’s conditional on its generated rationale) and, with an exact solver, which successors can still reach the target (ldmrl/case_study.py , results/case_study ). Semantically equivalent reductions are merged. 22 RLiD: Reinforcement Learning in the Decision Plane                       
+
+> Table 23. Decision-level comparison on 256 sealed Countdown-after problems (667 decisions per arm). Viable mass: probability on successors that can still reach the target; chosen viable: share of decisions that keep the problem solvable; H/ log K: normalised semantic entropy, in solved / failed episodes. Arm solved viable mass chosen viable H/ log K(solved / failed) rollout (s)
+> LDM 108 0.374 0.421 0.21 / 0.74 11.8 hybrid 107 0.367 0.421 0.20 / 0.64 77.5
+
+The two policies solve almost the same number of problems, but not the same ones (84 by both, 24 by the LDM only, 23 by the hybrid only, 125 by neither). Their decisions are not detectably different: the same share of choices keeps the problem solvable, with the same probability on viable successors. The rationale therefore does not buy better decisions here; it buys time. 512 of the hybrid’s 667 rationales run to the 64-token budget, and they are longer when the decision is wrong (61 tokens on average) than when it is right (35); in 145 decisions the hybrid answers almost at once (2 tokens), and these are the most reliable (viable mass 0.89). The LDM ’s own distribution is informative about failure: in failed episodes its normalised entropy is 0.74 against 0.21 in solved ones, and its chosen-action probability 0.40 against 0.84, so the decision plane exposes its uncertainty at no extra cost. 
+
+## N. Decision-Plane Policies Distilled into Generative LLMs 
+
+Protocol and supervision. The ALFWorld teacher is the validation-selected Qwen2.5-1.5B LDM of Section 6 (alfG_q15_bcrl/best ), which solves all 134 unseen and 140 seen games in 8.64 steps. It keeps its compiled memory and categorical menu readout during collection. We sample one episode at T =1 for each of 3,297 training games, excluding the 256 games held out for selection. The dump is 99.6% successful and supplies 26,088 states from successful episodes; collection takes 1,397 s (0.39 GPU-h) on one H100. Teacher probabilities are averaged over two shuffled menu orders before sampling. Students are instruction-tuned LLMs with LoRA rank 16 on all language-model linear layers, starting from the base with a fresh adapter or from the teacher’s LDM adapter. The target is the teacher’s executed command in 
+
+<action>command</action> followed by the end-of-turn token; prompt tokens are masked, and the loss sums target-token negative log-likelihoods and averages over decisions. Two epochs give 1,630 optimiser steps at batch size 32, learning rate 5 × 10 −5, 5% warmup and linear decay, AdamW with zero weight decay and gradient clipping at 1 (about 55 minutes on one H100). Evaluation uses final SFT checkpoints, a 50-step episode limit and at most 48 new tokens per action. The prompt is verl-agent’s ALFWorld template (two preceding observation/action pairs and the admissible commands); the memory prompt adds the observation-derived compiled memory that the teacher sees. The student generates each command as ordinary text; the projection lower-cases the text inside the action tags and sends it to the game unchanged.                          
+
+> Table 24. Generative ALFWorld students, Qwen2.5-1.5B (%). Selection: 256 held-out training games; unseen: 134; seen: 140. Three training seeds per row (mean, s.d. in brackets); T=0 .4: three decoding draws of the seed-0 adapter. Prompt (init.) selection unseen seen unseen, T=0 .4
+> Memory ( LDM )100.0 100.0 (0.0) 100.0 (0.0) 100.0
+> Memory (base), seed 0 99.2 100.0 100.0 100.0
+> No memory (base) 96.2 89.3 (3.4) 95.7 90.5 Published GiGPO 86.7 (1.7) 86.7
+
+The three memory-prompt seeds solve every selection, unseen and seen game in 8.4 steps per unseen game (teacher: 8.64), with no malformed or non-admissible output; each T =0 .4 draw of both seed-0 adapters also solves every unseen and seen game. Without memory the three T =0 .4 draws give 89.6, 91.8 and 90.3% (game-bootstrap interval 84.3–93.8), against GiGPO’s 86.7%. For reference, the base model solves 2.2% of unseen games zero-shot. 
+
+Measured end-to-end cost. Table 25 times the complete route as one run on an exclusive H100, from a Qwen3.5-2B LDM 
+
+trained from scratch to the evaluated generative Qwen2.5-1.5B, and compares it with token-level GiGPO of the same LLM in the same runner, with the same memory prompt and LoRA capacity. The route reaches 99.3% unseen (seen 99.3, selection 98.0) after 12.70 GPU-h; token RL reaches 86.6% (selection 88.7) after 17.34 GPU-h and 150 iterations, and 83.6% at 15.8 GPU-h. Published GiGPO’s 362.83 s per iteration on two H100s for 150 iterations amounts to about 30.3 GPU-h. 23 RLiD: Reinforcement Learning in the Decision Plane               
+
+> Table 25. Allocated H100 GPU-hours of the complete route (one exclusive run) and of token-level RL of the same LLM. Stage GPU-h unseen Qwen3.5-2B LDM -RL from scratch, 150 it 9.21 Teacher dump and BC into the 1.5B LDM 0.62 1.5B LDM -RL, 100 it 2.29 Rollouts, 100-step SFT, evaluation 0.59
+> RLiD route, total 12.70 99.3
+> Token-level GiGPO, same LLM and runner, 150 it 17.34 86.6
+
+Cheap conversion. Given a trained 1.5B LDM , collection (1,397 s) and a 100-step SFT run (280 s, 4.7 minutes) cost 0.47 GPU-h and give 100% unseen success. The LDM adapter is an excellent initialisation for action generation: it gives 97.8% unseen after only 25 SFT steps (Table 26). Each budget is a separate run with its own warmup/decay schedule.               
+
+> Table 26. Separate SFT-budget runs: ALFWorld unseen success (%, memory prompt, greedy). Initialisation 25 steps 50 steps 100 steps 200 steps Base 15.7 26.9 67.9 –
+> LDM adapter 97.8 97.8 100.0 100.0
+
+Deployment without an action list. A student whose prompt omits the admissible commands, while the teacher keeps acting on its menu, reaches 99.3% unseen and 100% seen from base initialisation (selection 98.4), and 99.3% / 99.3% when warm-started from the memory-prompt student (non-admissible commands 0.9% of unseen decisions). Three DAgger rounds on this student lower non-admissible commands on selection games from 6.2% to 1.5% and raise selection success from 98.8% to 99.2%. 
+
+Across model families and sizes. With the same 26,088 teacher states and the memory prompt, Granite-3.3-2B-Instruct solves every selection, unseen and seen game with no non-admissible output; SmolLM2-1.7B-Instruct reaches 96.1 / 96.3 / 99.3% and Qwen2.5-0.5B-Instruct 98.4 / 98.5 / 100% (selection / unseen / seen). Granite’s loss applies its ÷8 logit scaling. 
+
+Which decision-plane teacher? Distilling directly from the final Qwen3.5-2B LDM (98.5% greedy) with the memory prompt gives 99.3% unseen, 100% seen and 98.8% selection in 9.25 steps, for about 1.4 GPU-h after the teacher (0.52 collection, 0.92 SFT). Without memory in the student prompt, the memory-trained 1.5B teacher gives 91.8% unseen, well above the 78.4% from a Qwen3.5-2B teacher trained without memory (Table 27).                     
+
+> Table 27. Teacher choice. Students start from Qwen2.5-1.5B base weights; final two-epoch SFT, greedy ALFWorld success (%). Teacher student prompt unseen seen Qwen3.5-2B LDM , with memory memory 99.3 100.0
+> Refined 1.5B LDM , with memory memory 100.0 100.0
+> Qwen3.5-2B LDM , trained without memory no memory 78.4 82.9 Refined 1.5B LDM , with memory no memory 91.8 96.4
+
+The LDM as a verifier. At inference the LDM can also rerank proposals: the generative student samples four commands at T =1 and the LDM picks the admissible one it rates highest. For SmolLM2-1.7B this lifts unseen success from 96.3% to 100% and selection success from 96.1% to 99.6% (Table 28). Paired by game, LDM selection beats taking the first admissible proposal 8–0 on unseen games (exact McNemar p = 0 .0078 ) and 9–1 on selection games ( p = 0 .021 ). It also lifts the menu-free student’s selection success from 98.8% to 100%.            
+
+> Table 28. Choosing one of four sampled proposals, SmolLM2-1.7B student (%). Selector selection unseen None (greedy, one sample) 96.1 96.3 First admissible proposal 96.5 94.0 Most frequent admissible proposal 98.0 97.8
+> LDM ’s highest-probability proposal 99.6 100.0
+
+24 RLiD: Reinforcement Learning in the Decision Plane 
+
+A teacher-preference bonus speeds up token RL. The LDM can also guide token-level RL of the base LLM. Each decision’s GiGPO-normalised advantage receives a bonus u = clip(log p(a) + H(p), −2, 2) , where p is the LDM ’s distribution over the menu commands ( u = −2 for malformed or inadmissible commands), with weight 0.2 annealed to 0 over 40 iterations. After 30 iterations the bonus runs reach 26.6% and 20.7% selection success, against 10.9% and 0.4% for plain GiGPO with the same seeds (Table 29).                        
+
+> Table 29. Greedy selection success (%, 256 games) of token-level RL from the base model, with and without the LDM preference bonus. Run it 10 it 20 it 30 GPU-h at 30 Bonus, seed 0 2.7 9.8 26.6 4.81 Bonus, seed 1 3.1 8.2 20.7 5.11 GiGPO, seed 0 2.7 5.1 10.9 4.16 GiGPO, seed 1 0.8 0.0 0.4 4.15
+
+Why token RL is slow: staying on the list. Token-level RL of the same LLM learns the output format within about four iterations (0.6 GPU-h), then spends most of its budget learning to stay on the admissible list (Table 30). Each off-list command wastes a step, episodes run to the 50-step limit, and GiGPO groups with equal returns carry no signal. In diagnostic rollouts the base model’s outputs are 96% malformed (untagged text, wrong tags or unclosed tags); after 30 iterations the format is learned, but 71% of commands are off the list, mostly repeats of a command that is no longer admissible (54%) and empty actions (29%). The LDM outputs a softmax over listed labels, so every sample is a legal action from the first iteration. With a Qwen3.5-2B backbone, which follows the format and stays mostly on the list, the LDM still reaches 76.1% at iteration 40 in 3.3 GPU-h, against 19.9% for token RL in 7.0 GPU-h.                                   
+
+> Table 30. Token-level RL of Qwen2.5-1.5B from the base model (memory prompt): per-decision rates at T=1 (%). Iteration train success malformed non-admissible episode length 10.0 94.7 91.2 50.0 41.6 0.6 72.4 49.4 10 7.8 0.0 53.4 46.8 30 28.9 0.0 38.8 39.3 70 73.4 0.0 12.0 24.7 150 91.4 0.0 7.4 14.4
+> LDM , any iteration 0.0 0.0
+
+General ability. The distilled students keep the base model’s general ability on the first 500 GSM8K test questions and all 1,172 ARC-Challenge test questions; the no-memory student scores above the base on both (Table 31). GSM8K uses zero-shot chain-of-thought prompting, a boxed numerical answer and at most 512 generated tokens; ARC asks for a letter read from free generation, at most 16 tokens. Both are greedy.              
+
+> Table 31. General-ability checks (%) with the SFT adapter enabled. Policy GSM8K (500) ARC-C (1,172) Base 74.6 75.3 Memory prompt, LDM init. 73.8 75.1 Memory prompt, base init. 73.4 75.6 No memory, base init. 75.8 75.8
+
+Sokoban. The teacher is sokL_q05_s2/best , a Qwen2.5-0.5B LDM (82.8% on the 512 evaluation maps, 35.9% on the 512 OOD maps). We collect 8,000 episodes at T =1 on training seeds, excluding the 256 selection puzzles; the 6,567 successful episodes supply 26,451 states, collected in about three minutes on one H100. Two-epoch SFT takes 1,653 steps and about 12 minutes. The generative students match and exceed the teacher in distribution (Table 32). 25 RLiD: Reinforcement Learning in the Decision Plane             
+
+> Table 32. Sokoban teacher and generative students (%, greedy). Eval and OOD each contain 512 maps. Policy eval OOD
+> LDM teacher 82.8 35.9
+> Generative SFT, base init. 83.2 29.5 Generative SFT, LDM init. 83.4 34.4
+
+Artifacts. Final evaluations, paired outcomes, sampled reads and SFT timings are archived in llmdistill/raw/ ;cross-family students, verifier runs, allocation clocks and token-RL metrics in llmdistill/raw/track2/ ; diagnostic rollouts in llmdistill/raw/why/ . Prompt rendering, projection and collection are implemented in ldmrl/l2l.py ,the SFT loss and schedules in ldmrl/l2l_sft.py , token-level GiGPO in ldmrl/l2l_rl.py and the general checks in ldmrl/l2l_general.py .26
