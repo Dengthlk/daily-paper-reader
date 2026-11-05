@@ -1,0 +1,1011 @@
+Title: Language Model Augmented Decision Transformer for Multi-Task Offline Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2611.04031v1
+
+Published Time: Wed, 04 Nov 2026 01:30:47 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+Preprint 
+
+# LANGUAGE MODEL AUGMENTED DECISION 
+
+# TRANSFORMER FOR MULTI -T ASK OFFLINE 
+
+# REINFORCEMENT LEARNING 
+
+Xinbo Zhao 1, Yuhang Liu 1, Xin Zhang 2, Lei Le 3,
+
+Zhaohan Xi 1, Yu Yang 4, Yingxue Zhang 1
+
+> 1
+
+State University of New York at Binghamton 
+
+> 2
+
+San Diego State University 3LinkedIn 4Lehigh University 
+
+{xzhao9,yliu41,zxi1,yzhang42}@binghamton.edu xzhang19@sdsu.edu some.other.lei@gmail.com yuyang@lehigh.edu 
+
+# ABSTRACT 
+
+Offline multi-task reinforcement learning (MTRL) aims to learn a unified policy from heterogeneous offline datasets that generalizes across tasks. However, ex-isting offline MTRL methods often struggle with two fundamental issues: severe per-task data scarcity and limited cross-task generalization. In this paper, we pro-pose Language-Model Augmented Decision Transformer (LaMA-DT), a unified sequence-modeling framework that leverages a single large language model (LLM) for both trajectory augmentation and multi-task policy learning. LaMA-DT uses natural-language task descriptions to guide task-aligned trajectory augmentation through a set of supervised generation and alignment objectives, and incorporates a scoring-and-filtering mechanism to retain high-quality augmented trajectories. The same LLM is then repurposed as a language-conditioned Decision Trans-former and fine-tuned on a mixture of real and augmented data. Experiments on Meta-World and MuJoCo multi-task benchmarks demonstrate that LaMA-DT consistently outperforms competitive baselines, particularly in low-data regimes, showing that language-guided data augmentation substantially improves cross-task generalization. 
+
+# 1 INTRODUCTION 
+
+Offline reinforcement learning (RL) (Levine et al., 2020) enables agents to learn high-quality decision policies directly from static datasets. To extend offline RL to more realistic applications, it is important to handle multi-task settings, where an agent must solve multiple related tasks that share state and action spaces but differ in goals, rewards, or context. This motivates offline multi-task RL (MTRL) (Yu et al., 2020b), which learns from heterogeneous offline datasets and aims to produce a single policy that can perform well across tasks. In practice, offline MTRL is limited by two tightly coupled challenges. First, per-task data is often scarce: each task may have only a small and fragmented dataset, since collecting trajectories for many tasks is expensive and often infeasible. Second, cross-task generalization is difficult: tasks vary in objectives, dynamics, and observation distributions, leading to substantial distribution shifts that hinder learning a single policy across tasks, especially when limited state–action coverage further amplifies these shifts. Existing offline MTRL methods offer partial solutions, but typically target only one challenge or rely on strong data assumptions. For improving data use across tasks, CDS (Yu et al., 2021) transfers transitions from auxiliary tasks to a target task based on estimated usefulness. While effective when abundant and closely related auxiliary data are available, CDS struggles with cross-task generalization, as it requires training a separate model for each target task and degrades when auxiliary data are scarce or poorly matched. SRTD (Yoo et al., 2022) learns a shared latent skill space and performs data augmentation via imagined rollouts; however, learning a stable and transferable latent representation generally requires sufficient task-specific data. When per-task datasets are limited, the learned latent space becomes unreliable, reducing the effectiveness of the generated rollouts. A separate line of work builds on Decision Transformers (DTs) (Chen et al., 2021) and adapts them to multi-task learning to 1arXiv:2611.04031v1 [cs.CL] 2 Nov 2026 Preprint improve generalization through shared sequence modeling. For example, HarmoDT (Hu et al., 2024) improves parameter sharing by reducing gradient conflicts across tasks, and SoCo-DT (Wang et al., 2025) refines sharing via Fisher-information–guided soft masks. However, these DT-based MTRL methods still typically rely on having enough trajectories per task to learn transferable sequence representations; when each task has limited data, performance can drop sharply due to insufficient coverage and overfitting to narrow task-specific patterns. These gaps naturally raise a question: 
+
+In offline MTRL under low-data regimes (i.e., with scarce task-specific data), how can we expand effective data coverage while achieving robust cross-task generalization? 
+
+A key observation is that, although per-task trajectories are limited, high-level task descriptions are almost always available. Such descriptions convey information such as the task name, goal, object identity, or expertise level, which can be succinctly expressed in natural language. This motivates our approach: use natural language as a task-specification medium to guide trajectory augmentation via large language models (LLMs), thereby improving multi-task policy learning in data-scarce scenarios. However, since LLMs are not pretrained on trajectory data, realizing this idea requires ensuring that augmented trajectories both remain faithful to limited real data while expanding state–action coverage, and stay aligned with task descriptions to prevent cross-task drift. In this paper, we propose Language-Model Augmented Decision Transformer (LaMA-DT) for offline MTRL, which employs a single LLM for both trajectory augmentation and multi-task policy learning. To enable high-quality, task-aligned trajectory generation, the LLM is first fine-tuned across tasks using four carefully designed supervised objectives that jointly capture environmental dynamics and temporal dependencies in sequential decision-making. To further ensure semantic alignment between natural-language task descriptions and generated trajectories, LaMA-DT incorporates two additional task–trajectory alignment objectives. All six objectives are jointly optimized under a dedicated multi-objective fine-tuning strategy tailored for LLM-based trajectory learning. To ensure that only high-quality augmented trajectories are used for policy learning, we introduce a likelihood-based scoring-and-filtering mechanism that evaluates generated trajectories across all objectives and discards low-quality or task-misaligned samples. Finally, the same LLM is repurposed as a DT—a natural choice for sequence modeling—conditioned on natural-language task descriptions and fine-tuned on a mixture of real and high-quality augmented trajectories, resulting in robust cross-task generalization. Key contributions are summarized as follows: • We propose LaMA-DT, an LLM-based offline MTRL framework that unifies trajectory augmen-tation and multi-task policy learning. It addresses data scarcity by leveraging natural-language task descriptions to guide task-aligned trajectory augmentation via a set of objectives that capture task-specific data distributions and enforce semantic alignment. • To enable cross-task generalization in offline MTRL, LaMA-DT introduces an LLM-based policy learning mechanism that combines scored and filtered high-quality augmented trajectories with original data, conditioned on task descriptions, to fine-tune a DT initialized from the same LLM, yielding improved cross-task generalization. • LaMA-DT demonstrates consistent improvements over competitive baselines on Meta-World and MuJoCo multi-task benchmarks, with particularly strong gains in low-data regimes , highlighting that effective data augmentation substantially enhances multi-task learning performance 1.
+
+# 2 PRELIMINARIES 
+
+Offline Multi-Task Reinforcement Learning (MTRL). An RL problem is typically modeled as a Markov decision process (MDP), defined by the tuple (S, A, P, r, γ ), where S is the state space, 
+
+A is the action space, P (s′ | s, a ) is the transition distribution, r(s, a ) is the reward function, and 
+
+γ ∈ [0 , 1) is the discount factor. The goal is to learn a policy π(a | s) that maximizes the expected discounted return: J(π) = Eπ [P∞ 
+
+> t=0
+
+γtr(st, a t)] . In offline RL, the agent must learn solely from a fixed dataset of trajectories D = {τj }Nj=1 collected by an unknown behavior policy, where each trajectory τj = ( s0, a 0, r 0, . . . , s T , a T , r T ). Offline MTRL extends the offline RL setting to a collection of tasks T = {T i}Mi=1 , where each task Ti corresponds to its own MDP (S, A, P Ti , r Ti , γ )
+
+and is associated with an offline dataset Di = {τ ij }. Tasks may differ in their reward functions and transition dynamics, but share a common state and action space. The objective is to learn a single  
+
+> 1Code available at https://anonymous.4open.science/r/o33zlamadt-6587 .
+
+2Preprint 
+
+Figure 1: LaMA-DT consists of three components: (i) Multi-Objective Fine-Tuning. We adapt the LLM to generate meaningful, task-specific trajectories from limited offline data and natural-language task descriptions by training objective-specific LoRA adapters together with a shared LoRA adapter, enabling both trajectory generation and task–trajectory alignment. (ii) Data Preparation. Candidate trajectories are generated per task using O 3, scored using aggregated multi-objective likelihoods, and the top-K trajectories are retained and merged with the original offline data. (iii) Multi-Task Policy Learning. We repurpose the LLM and shared LoRA adapter as a prompt-conditioned DT, trained on the combined real and augmented dataset, with task descriptions pi and a provenance token zprov .policy that performs well across this fixed set of tasks. Formally, the optimal policy is defined as: 
+
+π∗ = arg max π 1
+
+> M
+
+PMi=1 Eπ
+
+hP∞ 
+
+> t=0
+
+γtrTi
+
+> t
+
+i
+
+.
+
+Decision Transformer (DT). DT (Chen et al., 2021) formulates offline RL as a return-conditioned sequence modeling problem using a transformer architecture, learning policies directly from offline trajectories by autoregressively predicting actions. In DT, each trajectory is represented as a sequence of tokens ( ˆRt, s t, a t), where ˆRt = PTt′=t rt′ is the return-to-go (RTG) from timestep t. The RTG serves as a conditioning signal, encouraging the model to imitate high-return behaviors present in the dataset. The model is trained to predict the next action a′ 
+
+> t
+
+given the history and current state, with the ground-truth action at as supervision. 
+
+# 3 METHODOLOGY 
+
+In this section, we present Language-Model Augmented Decision Transformer (LaMA-DT) for offline MTRL, which employs a single LLM for both trajectory augmentation and multi-task policy learning. Fig. 1 illustrates the framework overview. 3.1 TASK DESCRIPTIONS IN OFFLINE MTRL A central difficulty in offline MTRL is data scarcity: per-task datasets are often small, making it difficult to learn reliable policies that generalize across tasks. Although trajectory data are scarce, rich task-level metadata are almost always available. Such metadata—including task names, goals, relevant objects, environmental conditions, and typical performance—can be naturally expressed in natural language. This observation motivates the use of natural-language task descriptions to guide an LLM in generating additional, task-aligned trajectories, leveraging its strong sequence-modeling and reasoning capabilities to expand effective data coverage and thus mitigate data scarcity. To operationalize this idea, we construct a standardized natural-language description for each task 3Preprint 
+
+Ti ∈ T using a simple template: “This is the [task_name], and its goal is to [task_goal]. The environment is [environment_description]. and episodes run up to [max_episode_length] steps. The trajectories show [expertise_level] performance.” 
+
+Each placeholder is deterministically filled by metadata extracted from task Ti. Formally, our training data consist of pairs of task descriptions and their associated trajectories,  (pi, Di = {τ ij }) Mi=1 ,
+
+where pi denotes the natural-language description of task Ti.3.2 TASK -A LIGNED TRAJECTORY AUGMENTATION WITH LLM S
+
+3.2.1 TASK -S PECIFIC TRAJECTORY GENERATION 
+
+We design four trajectory-generation objectives (O 1–O 4) to fine-tune the LLM, enabling it to capture environmental dynamics, temporal dependencies in sequential decision-making, and task-specific data distributions, thereby generating plausible trajectories that resemble the available data while effectively expanding state–action coverage. 
+
+Dynamics Learning Objective. We first equip the LLM with an explicit understanding of environ-ment dynamics to ensure physically grounded trajectory generation via O 1:
+
+Objective 1: Dynamics Prediction (O 1). Accurate modeling of dynamics is essential to prevent physically implausible trajectories ( e.g. , a robot arm violating joint limits or a locomotion agent defying gravity). O 1 fine-tunes the LLM to predict the next state s′ given the current state s and action a in a supervised manner, enabling it to capture the transition dynamics. For each task Ti,the LLM receives its task description pi along with the prompt: “Predict the next state given the current state and action (s, a ).” 
+
+Sequential Decision Learning Objectives. Beyond modeling environmental dynamics, we design O2–O 4 to capture temporal dependencies in sequential decision-making across different tasks from complementary perspectives, while also reinforcing the dynamics learned in O 1:
+
+Objective 2: Trajectory Interpolation (O 2). O2 is designed to generate plausible intermedi-ate states, actions, and rewards between two observed points along a trajectory. This objec-tive encourages the LLM to preserve local temporal consistency, ensuring that short-horizon transitions remain coherent within the overall trajectory and thereby reducing error accumu-lation in long-horizon rollouts. In practice, we randomly select two states from a real tra-jectory as the start and end states, and use the ground-truth subtrajectory between them as supervision. For O 2, the LLM is provided with the task description pi for task Ti along with the prompt: “Fill in the missing part of the trajectory given the start state and action (s0, a 0) and the final state sT .” 
+
+Objective 3: Trajectory Forward Generation (O 3). Forward generation is a core capability for trajectory modeling: given an initial state–action pair, the model should be able to generate a plausible rollout over time. O3 aims to capture long-horizon temporal dependencies by encouraging the LLM to maintain consistency throughout the trajectory in the forward direction. Specifically, O 3
+
+fine-tunes the LLM in a supervised manner to generate complete trajectories starting from (s0, a 0),using trajectories from Di as ground-truth supervision. For O 3, the LLM is provided with the task description pi for task Ti along with the prompt: “Generate the whole trajectory until termination given the start state and action (s0, a 0).” 
+
+Objective 4: Trajectory Backward Generation (O 4). Human learning often relies on bidirectional reasoning: we not only predict future consequences from a current state but also reason backward from a desired outcome. A similar capability is valuable for trajectory generation. Relying solely on forward prediction may lead to error accumulation or trajectories that diverge from the intended task goal—especially in multi-task settings where tasks may share similar local dynamics but differ substantially in their global objectives. O 4 is designed to address this issue by fine-tuning the LLM to reconstruct trajectories backward from a given final state with supervision. For O 4, the LLM is provided with the task description pi for task Ti along with the prompt: “Reconstruct the trajectory backwards from the final state sT .” 
+
+4Preprint 3.2.2 TASK –T RAJECTORY ALIGNMENT 
+
+However, O 1–O 4 rely primarily on limited task-specific trajectories as supervision and do not explicitly enforce alignment between generated trajectories and the intended task description pi. As a result, the LLM may learn to generate coherent and physically plausible trajectories driven mainly by data supervision, while failing to respect the specified task descriptions. Such task–trajectory drift is particularly problematic in multi-task settings, where different tasks often share similar state–action distributions yet differ fundamentally in their goals. To address this gap, we introduce two task–trajectory alignment objectives (O 5–O 6) that explicitly couple generated trajectories with their natural-language task descriptions: 
+
+Objective 5: Trajectory Explanation (O 5). O5 trains the LLM to map trajectories to natural-language explanations in a supervised manner, requiring it to interpret behavioral patterns and infer the underlying task intent. By learning to articulate what a trajectory accomplishes, the LLM develops a semantic understanding of task goals, allowing it to distinguish trajectories based on purpose rather than merely imitating plausible motion patterns. Given a specific trajectory τ and an explanatory prompt ( i.e. , “ Explain the following trajectory in natural language. ”), the model is trained to produce a description summarizing the task goal and the executed behavior. 
+
+Objective 6: Description-Based Rollout (O 6). O6 trains the LLM to generate trajectories directly from natural-language task descriptions, enabling conditional planning across diverse tasks based on semantic understanding. Given a task description pi, an initial state s0, and an expected return 
+
+r, the model is trained to produce a trajectory ˜τ that fulfills pi. By explicitly grounding trajectory generation in the semantics of pi, O 6 ensures that the LLM produces task-aligned behaviors—an ability that is critical in multi-task settings where different tasks may share similar initial states or final rewards yet require fundamentally different goals and behaviors. O5 and O 6 form a bidirectional pair that establishes a semantic feedback loop: O 5 maps trajectories to task descriptions ( τ → pi), while O 6 performs the inverse mapping from task descriptions to trajectories ( pi → τ ). When interleaved with O 1–O 4, these alignment objectives prevent the model from drifting toward goal-agnostic generation and ensure that augmented trajectories are not only physically plausible but also semantically consistent with their intended task descriptions. 3.2.3 MULTI -O BJECTIVE LLM F INE -T UNING .To mitigate gradient interference among the heterogeneous supervision objectives O 1–O 6, we in-troduce an objective-aware fine-tuning strategy utilizing LoRA (Hu et al., 2022). Specifically, each objective O j (j = 1 , . . . , 6) is associated with an objective-specific LoRA adapter θOj
+
+> LoRA
+
+, while the base LLM parameters θbase remain frozen (as shown in Fig. 1). During training, each objective updates only its corresponding adapter, effectively isolating task-specific gradients and stabilizing multi-objective optimization. However, isolating objectives via separate adapters does not explicitly promote knowledge sharing across objectives. To facilitate cross-objective knowledge transfer, we introduce an additional shared LoRA adapter θsh LoRA , which is updated jointly by all objectives. Con-cretely, when optimizing objective O j , we activate both the objective-specific adapter θOj 
+
+> LoRA
+
+and the shared adapter θsh LoRA , and minimize: LOj
+
+
+
+θbase + θOj 
+
+> LoRA
+
++ θsh LoRA 
+
+
+
+, j ∈ { 1, . . . , 6}. In this design, the objective-specific adapters capture specialized capabilities required by objective, while the shared adapter aggregates transferable knowledge across objectives. 3.3 MULTI -T ASK POLICY LEARNING WITH LAMA-DT 3.3.1 DATA PREPARATION FOR LAMA-DT. After fine-tuning the LLM with O 1–O 6, we perform task-wise trajectory augmentation using the forward generation objective O 3. For each task Ti, we sample initial state–action pairs (s0, a 0) from the real offline dataset Di and generate N candidate trajectories: {˜τ k}Nk=1 ∼ pO3 (τ | pi, (s0, a 0)) .
+
+Augmented Trajectory Scoring and Filtering. Not all generated trajectories are equally reliable or task-consistent. To filter out low-quality or misaligned generations, we score each candidate trajectory ˜τ using all six objectives (O 1–O 6) via likelihood-based evaluation without parameter updates, reusing the previously trained objective-specific LoRA adapters ( θO1
+
+> LoRA
+
+-θO6
+
+> LoRA
+
+). Concretely, 5Preprint for O 1, we measure transition consistency as 
+
+SO1 (˜ τ ) = 1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+log pO1 (st+1 | pi, s t, a t). (1) For O 2, we sample a subtrajectory from ˜τ by selecting a start index u and fixing the terminal state sT ,and score the likelihood of reconstructing the intermediate segment as: 
+
+SO2 (˜ τ ) = 1
+
+|˜τu:T − 1| 
+
+> T−1
+
+X
+
+> t=u+1
+
+log pO2 (st, a t, r t | C 2(t)) , (2) where ˜τu:T := {(st, a t, r t)}T −1 
+
+> t=u
+
+denotes the intermediate portion of ˜τ , and the conditioning context is C2(t) = ( pi, s T , ˜τu:t).The rollout-based objectives—forward generation (O 3), backward generation (O 4), and description-based rollout (O 6)—share the same autoregressive likelihood form: 
+
+SOj (˜ τ ) = 1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+log pOj (st+1 , a t+1 , r t+1 | C j , ˜τ≤t), (3) where the conditioning context Cj differs across objectives: O 3 conditions on the task description and initial state–action pair (pi, s 0, a 0); O 4 conditions on the task description and terminal state sT ; and O6 conditions on the task description pi together with (s0, r ).For O 5, we evaluate alignment by scoring the task description under the trajectory-to-text model, 
+
+SO5 (˜ τ ) = 1
+
+|pi|
+
+> |pi|
+
+X
+
+> ℓ=1
+
+log pO5 (pi,ℓ | ˜τ , p i,<ℓ ). (4) All scores are length-normalized. We aggregate the six scores with the mean S(˜ τ ) ≜ 16
+
+P6 
+
+> j=1
+
+SOj (˜ τ ).
+
+For each task, we retain the top-K candidates with the highest overall scores and add them to the augmented dataset: Daug  
+
+> i
+
+= Top-K
+
+
+
+{˜τ k}Nk=1 ; S(·)
+
+
+
+, and train the final policy on the combined dataset Di ∪ D aug  
+
+> i
+
+.3.3.2 POLICY LEARNING WITH LAMA-DT 
+
+LaMA-DT Initialization. After data preparation, we fine-tune LaMA-DT by repurposing the same LLM as a language-conditioned DT and attaching a policy-specific LoRA adapter θπ
+
+> LoRA
+
+. The policy adapter is initialized from the shared adapter learned during trajectory augmentation: θπ 
+
+> LoRA
+
+← θsh LoRA .
+
+This initialization explicitly transfers shared knowledge acquired from O 1–O 6 into the policy learning stage, ensuring that the augmentation objectives directly benefit multi-task policy learning. 
+
+LaMA-DT Policy Learning. Using the prepared dataset Di ∪ D aug  
+
+> i
+
+, each trajectory τ —real or augmented—is serialized into a sequence of triples τ = {( ˆRt, s t, a t)}Tt=0 , where ˆRt = PTt′=t rt′
+
+denotes the return-to-go. Each trajectory is prepended with two forms of conditioning information: (i) a provenance token zprov ∈ { real , augmented } indicating whether the trajectory is real or augmented, and (ii) the natural-language task description pi. The provenance token explicitly informs the LLM of the data source, enabling LaMA-DT to perform source-aware behavior cloning. This allows the policy to benefit from the diversity of augmented trajectories while remaining anchored to the empirical distribution of real data. We finally optimize LaMA-DT using Equation 5. The loss minimizes the mean squared error between ground-truth and predicted actions: 
+
+LLaMA-DT ≜ E Ti∼T  
+
+> τ∼D i∪D aug
+> i
+
+" TX
+
+> t=1
+
+∥at − π(τ0: t−1, pi, z prov )∥22
+
+#
+
+. (5) 
+
+Testing and Generalization. At test time, given a task description pi, we set zprov = real 
+
+and follow the standard DT rollout procedure. Starting from the initial observation, the model 6Preprint 
+
+Figure 2: Performance of LaMA-DT with different augmentation ratios r = |D aug  
+
+> i
+
+|/|D i| on Meta-World ML30 and MuJoCo Cheetah-dir, across low and standard data regimes, and under sub-optimal and near-optimal data qualities. autoregressively predicts actions conditioned on the history ( ˆR≤t, s ≤t, a <t ) and executes them in the environment. Notably, LaMA-DT can be readily adapted to unseen tasks via few-shot learning: a small set of task-specific trajectories from the new task is used to quickly adapt the objective-specific LoRA adapters for data augmentation, after which scoring-and-filtering and policy learning are performed to obtain an adapted policy. The detailed algorithm for LaMA-DT is in Alg 1. 
+
+# 4 EXPERIMENTS 
+
+Our experiments are designed to answer the questions: (Q1) How does LaMA-DT compare with strong offline MTRL baselines on benchmarks? (Q2) In low-data regimes, does LaMA-DT retain advantages over data-hungry multi-task DT variants? (Q3) Does LaMA-DT exhibit consistent perfor-mance gains across offline datasets of varying quality? (Q4) How does the amount of augmented data influence performance in both standard- and low-data regimes? (Q5) Are the individual components of LaMA-DT critical? (Q6) Are the augmented data in LaMA-DT high-quality? 
+
+Experimental Setup. We evaluate LaMA-DT on two widely used offline MTRL benchmarks: MuJoCo (Todorov et al., 2012) and Meta-World (Yu et al., 2020b). For MuJoCo locomotion, we follow prior prompt-based Decision Transformer protocols (Xu et al., 2022) and report results on Cheetah-dir, Cheetah-vel, and Ant-dir. For Meta-World, we use the ML5 and ML30 task suites with shared Sawyer robot dynamics, and evaluate performance using the average success rate across tasks. Offline datasets are collected using SAC (Haarnoja et al., 2018). We consider two dataset settings: (i) a near-optimal setting consisting primarily of expert trajectories, and (ii) a sub-optimal 
+
+setting comprising 50% expert and 50% non-expert trajectories. For low data regimes, we uniformly subsample the per-task training data to {1%, 5%, 10%} of the full dataset. All results are averaged over 3 seeds, and each task is evaluated for 50 episodes. 
+
+Baselines. We compare LaMA-DT against representative offline MTRL baselines: (i) CDS (Yu et al., 2021), which applies a conservative transition-sharing strategy across tasks; (ii) MTBC (Hu et al., 2024), a multi-task behavior cloning approach using network scaling and task-ID–conditioned actors; (iii) MTIQL (Kostrikov et al., 2021a), which extends IQL to the multi-task setting with task-conditioned actors and critics; (iv) MTDIFF (He et al., 2023), a diffusion-based generative planner for multi-task RL; (v) MTDT (Chen et al., 2021), a multi-task DT conditioned on task IDs; (vi) Prompt-DT (Xu et al., 2022), which leverages trajectory prompts and return-to-go conditioning on DT; and (vii) HarmoDT (Hu et al., 2024), a prompt-based DT with task-specific masking. 
+
+Main Results (Q1). Table 1 summarizes average performance on Meta-World (ML5/ML30) and MuJoCo locomotion tasks (Cheetah-vel, Cheetah-dir, Ant-dir) under standard data regimes. LaMA-DT consistently outperforms all baselines across benchmarks, achieving an average improvement of 5.5% on Meta-World and 6.8% on MuJoCo relative to the strongest baseline. On Meta-World, gains are most pronounced on ML30, a highly heterogeneous task suite prone to negative transfer, where LaMA-DT improves over the best baseline by 6.4%. On MuJoCo, LaMA-DT performs strongly on both direction- and velocity-conditioned control, achieving the largest improvements on Cheetah-vel 7Preprint Table 1: The average returns of LaMA-DT vs. baselines on Meta-World (Sub-Optimal) and MuJoCo (Near-Optimal) datasets under standard data regime.                                                 
+
+> Task CDS MTBC MTIQL MTDIFF MTDT Prompt-DT HarmoDT LaMA-DT MW  ML5 50.7 ±3.3 46.2 ±2.8 61.1 ±4.5 76.0 ±2.8 74.5 ±4.4 76.8 ±3.0 78.9 ±3.8 83.4 ±2.9
+> ML30 32.9 ±2.5 34.5 ±1.7 43.3 ±2.2 57.5 ±1.5 55.2 ±2.1 58.7 ±1.3 63.4 ±1.6 69.8 ±1.7
+> MuJoCo
+> Cheetah-vel -134.5 ±15.8 -148.4 ±11.2 -142.0 ±14.4 -186.2 ±8.2 -170.1 ±17.9 -127.6 ±10.9 -86.6 ±7.7 -73.5 ±12.5
+> Cheetah-dir 428.9 ±17.5 429.7 ±6.6 454.1 ±21.3 536.8 ±10.7 678.5 ±24.3 705.6 ±8.3 926.3 ±10.4 937.8 ±9.6
+> Ant-dir 131.0 ±10.6 153.8 ±15.9 120.6 ±9.9 248.0 ±16.2 235.7 ±15.4 302.5 ±17.1 315.6 ±5.5 328.5 ±8.4
+
+Table 2: Performance under low-data regimes (1%, 5%, and 10%) across different data qualities (sub-optimal vs. near-optimal).                        
+
+> Method ML30 Cheetah-dir Sub-Optimal Near-Optimal Sub-Optimal Near-Optimal 1% 5% 10% 1% 5% 10% 1% 5% 10% 1% 5% 10%
+> MTDT 10.9 ±3.0 19.2 ±2.4 25.6 ±2.3 12.5 ±2.0 24.1 ±2.3 35.6 ±1.9 113.4 ±20.2 274.5 ±18.0 386.3 ±21.9 145.2 ±23.1 320.5 ±19.6 435.6 ±20.4 Prompt-DT 12.8 ±1.4 24.3 ±0.9 36.8 ±1.1 15.3 ±1.5 28.5 ±0.7 41.2 ±0.8 191.3 ±17.1 378.9 ±18.3 507.4 ±15.3 256.3 ±16.2 474.0 ±12.8 544.7 ±15.7 HarmoDT 12.1 ±1.6 27.0 ±1.4 42.6 ±1.5 22.4 ±1.1 36.1 ±0.9 46.8 ±0.9 185.2 ±12.3 452.2 ±17.5 526.8 ±13.9 260.7 ±11.2 540.3 ±9.8 592.0 ±10.3
+> LaMA-DT 15.7 ±1.7 39.1 ±1.5 51.8 ±1.7 38.4 ±1.2 52.6 ±0.9 61.5 ±1.0 225.9 ±12.7 521.5 ±14.0 654.4 ±9.2 450.6 ±15.1 720.8 ±9.4 803.9 ±8.9
+
+(15.1%) and Ant-dir (4.1%), while remaining competitive on Cheetah-dir. These results indicate that even under standard data regimes, the proposed data augmentation strategy in LaMA-DT continues to provide consistent performance gains. 
+
+Performance in Low-Data Regimes (Q2). In Table 2, across all benchmarks and data fractions, LaMA-DT consistently outperforms DT-based baselines, demonstrating substantial advantages in low-data regimes. It achieves consistent gains on both ML30 and Cheetah-dir across all data levels (1%, 5%, and 10%), with performance improving steadily as more data become available. For example, on ML30 with suboptimal offline data, LaMA-DT improves from 15.7 at 1% data to 51.8 at 10%, significantly outperforming Prompt-DT (by 22.7% at 1% and 40.8% at 10%) and HarmoDT (by 29.8% at 1% and 21.6% at 10%), indicating superior data efficiency. A similar trend is observed on Cheetah-dir: under near-optimal data, it outperforms HarmoDT by 47.3% and Prompt-DT by 58.5% on average across the three data fractions. Notably, even in the extreme 1% regime, LaMA-DT maintains a clear margin over all baselines, highlighting its robustness under severe data scarcity. 
+
+Robustness to Data Quality (Q3). Table 2 shows that LaMA-DT consistently maintains a clear performance advantage over competing methods under both sub-optimal and near-optimal datasets. Notably, LaMA-DT substantially outperforms DT-based baselines in the sub-optimal setting, demon-strating strong robustness to imperfect offline data. As data quality improves, LaMA-DT exhibits larger absolute performance gains than competing approaches: on Meta-World ML30 at the 5% data level, performance increases from 39.1 (sub-optimal) to 52.6 (near-optimal), a gain that is significantly larger than those achieved by Prompt-DT or HarmoDT. These results indicate that LaMA-DT can handle low-quality data effectively, and scale favorably with improved data quality, suggesting the augmented data is of high quality and successfully mitigates the data imperfection issues. 
+
+Effect of Augmentation Ratio (Q4). We examine how the augmentation ratio r = |D aug  
+
+> i
+
+|/|D i|
+
+affects LaMA-DT performance under different data quantities (low-data: 1%, 5%, 10%; standard-data: 50%, 80%, 100%) and data qualities (sub-optimal vs. near-optimal). In low-data regimes (Fig. 2(a,c)), increasing r substantially improves performance, confirming that trajectory augmentation effectively mitigates data scarcity. However, the gains are non-monotonic: overly large ratios ( e.g. , r = 1 .5) often lead to saturation or degradation, suggesting that excessive augmented data may introduce distribution shift and error accumulation. In standard-data regimes (Fig. 2(b,d)), the optimal ratio shifts to smaller values (typically r ≈ 0.5), as abundant real data already provides strong supervision. Across all subfigures, LaMA-DT trained on near-optimal data (solid lines) exhibit more stable improvements than those trained on sub-optimal data (dashed lines), indicating that augmentation cannot fully compensate for low-quality data and may amplify suboptimal patterns when overused. 
+
+Ablation Studies (Q5). As shown in Table 3, removing any component 8Preprint Table 3: Ablation studies on LaMA-DT. 
+
+Task w/o O 1 w/o O 2 w/o O 3 w/o O 4 w/o O 5 w/o O 6
+
+ML30 61.7 ±1.3 60.5 ±2.1 56.4 ±2.8 66.3 ±1.6 63.8 ±2.0 65.0 ±2.3 Cheetah-dir 842.3 ±14.3 862.4 ±10.2 765.9 ±11.7 910.2 ±16.8 902.6 ±15.4 922.5 ±26.3 Ant-dir 259.0 ±7.0 281.3 ±8.5 247.3 ±9.6 310.8 ±12.3 313.9 ±10.4 322.4 ±16.2 
+
+## Task w/o O 5&O 6 w/o O 2-O 4 w/o θsh LoRA w/o Filtering LaMA-DT 
+
+## ML30 57.8 ±2.0 50.2 ±2.7 63.1 ±1.4 62.1 ±3.4 69.8 ±1.7 
+
+## Cheetah-dir 835.1 ±13.5 636.9 ±22.1 878.0 ±8.4 883.1 ±15.9 937.8 ±9.6 
+
+## Ant-dir 274.7 ±8.9 216.6 ±8.7 313.2 ±9.8 285.8 ±12.6 328.5 ±8.4 
+
+Table 4: Quality of augmented data on Cheetah-dir. We compare against real expert data (reference) and MTDIFF (He et al., 2023) as a generator baseline. Lower values are better for Dyn. MSE, State KL, and L2 Dist., while higher values are better for Valid Coverage. Criteria details are in Appendix E.6.                     
+
+> Source Dyn. MSE ↓State KL vs. real ↓L2 Dist. from Dataset Valid Coverage ↑
+> Real expert (reference) 0.0000 0.00 —100% MTDIFF (He et al., 2023) 0.0107 0.51 0.4552 102% LaMA-DT (unfiltered) 0.0089 0.42 0.4831 99%
+> LaMA-DT (filtered) 0.0031 0.18 0.4376 109%
+
+results in performance degradation. Among single-objective ablations, O 3 contributes the most, confirming the importance of long-horizon trajectory structure. More importantly, group ablations reveal strong synergy: jointly removing the Sequential Decision Learning objectives (w/o O 2, O 3,and O 4) results in the largest performance drop across all benchmarks (50.2 vs. 69.8 on ML30; 636.9 vs. 937.8 on Cheetah-dir), substantially greater than any single-objective ablation. This highlights the effectiveness of trajectory-level supervision as a unified group. Similarly, removing both task-level objectives (w/o O 5&O 6) causes a sharper drop than either alone, showing their complementary role in mitigating task drift. 
+
+Figure 3: t-SNE projection of Cheetah-dir states: unfiltered (left) vs. filtered (right). Gray dots are real states from offline data, red dots are augmented states overlapping the real manifold (in-distribution), red crosses are augmented states lying outside the dataset for exploration, and the dashed contour is the 90% real-data envelope. 9Preprint 
+
+Augmentation Quality (Q6). We assess augmentation quality on Cheetah-dir using four criteria reported in Tab. 4: Dyn. MSE for dynamics fidelity; State KL for distributional alignment with real data; L2 Dist. (to real states) for training-set proximity; and Valid Coverage, which measures the fraction of physically valid generated states relative to real states (values above 100% indicate out-of-distribution yet effective exploratory states validated by the environment dynamics). Against MTDIFF (He et al., 2023), our filtered augmentations achieve ∼3.5× lower Dyn. MSE and ∼2.8×
+
+lower State KL, indicating stronger physical faithfulness and tighter distributional alignment. Cru-cially, the filter in LaMA-DT does not simply prune novel states: comparing unfiltered to filtered, it lowers Dyn. MSE ( 0.0089 → 0.0031 ), halves State KL ( 0.42 → 0.18 ), and raises Valid Coverage from 99% to 109% , indicating selectively removing off-manifold rollouts while retaining 9% of dynamics-validated novel states beyond the offline data. Fig. 3 corroborates this: the unfiltered panel scatters exploration crosses far outside the 90% real-data envelope, while the filtered panel keeps the in-distribution cloud tightly overlapping the real clusters and an exploration set that hugs the envelope from just outside. These quality gains translate to clear downstream policy improvements over the unfiltered variant ( +54 .7 on Cheetah-dir) shown in Table 3. 
+
+# 5 CONCLUSION 
+
+We presented LaMA-DT, an LLM-based offline MTRL framework designed to address data scarcity and cross-task generalization. LaMA-DT leverages specialized fine-tuning objectives to enable a sin-gle LLM to generate high-fidelity, task-aligned trajectories for augmentation. The same LLM is then repurposed as a DT and fine-tuned on both augmented and real trajectories. Experiments demonstrate that LaMA-DT consistently outperforms state-of-the-art offline MTRL baselines, highlighting the effectiveness of LLM-driven trajectory augmentation and policy learning. REPRODUCIBILITY STATEMENT 
+
+We provide pseudocode for the three stages of LaMA-DT in Appendix B, benchmark and dataset details in Appendix C, baseline descriptions in Appendix D, and implementation settings, hyperpa-rameters, and evaluation protocols in Appendix E. An anonymized code repository is available at 
+
+https://anonymous.4open.science/r/o33zlamadt-6587 .
+
+# REFERENCES 
+
+Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Misha Laskin, Pieter Abbeel, Aravind Srinivas, and Igor Mordatch. Decision transformer: Reinforcement learning via sequence modeling. Advances in neural information processing systems , 34:15084–15097, 2021. Zhao Chen, Jiquan Ngiam, Yanping Huang, Thang Luong, Henrik Kretzschmar, Yuning Chai, and Dragomir Anguelov. Just pick a sign: Optimizing deep multitask models with gradient sign dropout. Advances in Neural Information Processing Systems , 33:2039–2050, 2020. Damien Ernst, Pierre Geurts, and Louis Wehenkel. Tree-based batch mode reinforcement learning. J. Mach. Learn. Res. , 6:503–556, dec 2005. ISSN 1532-4435. Benjamin Eysenbach, Xinyang Geng, Sergey Levine, and Ruslan Salakhutdinov. Rewriting history with inverse RL: hindsight inference for policy improvement. CoRR , abs/2002.11089, 2020. URL 
+
+https://arxiv.org/abs/2002.11089 .Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In Proceedings of the 34th International Conference on Machine Learning -Volume 70 , pp. 1126–1135, 2017. Scott Fujimoto, David Meger, and Doina Precup. Off-policy deep reinforcement learning without exploration. CoRR , abs/1812.02900, 2018. URL http://arxiv.org/abs/1812.02900 .Hiroki Furuta, Yutaka Matsuo, and Shixiang Shane Gu. Generalized decision transformer for offline hindsight information matching. ArXiv , abs/2111.10364, 2021. URL https://api. semanticscholar.org/CorpusID:244463196 .10 Preprint Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor. In International conference on machine learning , pp. 1861–1870. Pmlr, 2018. Haoran He, Chenjia Bai, Kang Xu, Zhuoran Yang, Weinan Zhang, Dong Wang, Bin Zhao, and Xue-long Li. Diffusion model is an effective planner and data synthesizer for multi-task reinforcement learning. Advances in neural information processing systems , 36:64896–64917, 2023. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. In ICLR . OpenReview.net, 2022. Shengchao Hu, Ziqing Fan, Li Shen, Ya Zhang, Yanfeng Wang, and Dacheng Tao. Harmodt: Harmony multi-task decision transformer for offline reinforcement learning. In International Conference on Machine Learning , 2024. Natasha Jaques, Asma Ghandeharioun, Judy Hanwen Shen, Craig Ferguson, Àgata Lapedriza, Noah Jones, Shixiang Gu, and Rosalind W. Picard. Way off-policy batch deep reinforcement learning of implicit human preferences in dialog. CoRR , abs/1907.00456, 2019. URL http: //arxiv.org/abs/1907.00456 .Dmitry Kalashnikov, Alex Irpan, Peter Pastor, Julian Ibarz, Alexander Herzog, Eric Jang, Deirdre Quillen, Ethan Holly, Mrinal Kalakrishnan, Vincent Vanhoucke, and Sergey Levine. Qt-opt: Scal-able deep reinforcement learning for vision-based robotic manipulation. CoRR , abs/1806.10293, 2018. URL http://arxiv.org/abs/1806.10293 .Dmitry Kalashnikov, Jacob Varley, Yevgen Chebotar, Benjamin Swanson, Rico Jonschkowski, Chelsea Finn, Sergey Levine, and Karol Hausman. Mt-opt: Continuous multi-task robotic rein-forcement learning at scale. CoRR , abs/2104.08212, 2021. URL https://arxiv.org/abs/ 2104.08212 .Rahul Kidambi, Aravind Rajeswaran, Praneeth Netrapalli, and Thorsten Joachims. Morel: Model-based offline reinforcement learning. In Proceedings of the 34th International Conference on Neural Information Processing Systems , NIPS’20, Red Hook, NY, USA, 2020. Curran Associates Inc. ISBN 9781713829546. Yilun Kong, Guozheng Ma, Qi Zhao, Haoyu Wang, Li Shen, Xueqian Wang, and Dacheng Tao. Mastering massive multi-task reinforcement learning via mixture-of-expert decision transformer. In Proceedings of the 42nd International Conference on Machine Learning (ICML) , 2025. Ilya Kostrikov, Ashvin Nair, and Sergey Levine. Offline reinforcement learning with implicit q-learning. CoRR , abs/2110.06169, 2021a. URL https://arxiv.org/abs/2110.06169 .Ilya Kostrikov, Jonathan Tompson, Rob Fergus, and Ofir Nachum. Offline reinforcement learning with fisher divergence critic regularization. CoRR , abs/2103.08050, 2021b. URL https:// arxiv.org/abs/2103.08050 .Aviral Kumar, Justin Fu, George Tucker, and Sergey Levine. Stabilizing off-policy q-learning via bootstrapping error reduction. CoRR , abs/1906.00949, 2019. URL http://arxiv.org/abs/ 1906.00949 .Aviral Kumar, Aurick Zhou, George Tucker, and Sergey Levine. Conservative q-learning for offline reinforcement learning. In Proceedings of the 34th International Conference on Neural Information Processing Systems , NIPS’20, Red Hook, NY, USA, 2020. Curran Associates Inc. ISBN 9781713829546. Sascha Lange, Thomas Gabel, and Martin Riedmiller. Batch reinforcement learning. In Reinforcement learning: State-of-the-art , pp. 45–73. Springer, 2012. Sergey Levine, Aviral Kumar, G. Tucker, and Justin Fu. Offline reinforcement learning: Tutorial, review, and perspectives on open problems. ArXiv , abs/2005.01643, 2020. URL https://api. semanticscholar.org/CorpusID:218486979 .11 Preprint Bo Liu, Xingchao Liu, Xiaojie Jin, Peter Stone, and Qiang Liu. Conflict-averse gradient descent for multi-task learning. Advances in neural information processing systems , 34:18878–18890, 2021. Eric Mitchell, Rafael Rafailov, Xue Bin Peng, Sergey Levine, and Chelsea Finn. Offline meta-reinforcement learning with advantage weighting. In International Conference on Machine Learning , pp. 7780–7791. PMLR, 2021. Xue Bin Peng, Aviral Kumar, Grace Zhang, and Sergey Levine. Advantage-weighted regression: Simple and scalable off-policy reinforcement learning. CoRR , abs/1910.00177, 2019. URL 
+
+http://arxiv.org/abs/1910.00177 .Rafael Rafailov, Tianhe Yu, Aravind Rajeswaran, and Chelsea Finn. Offline reinforcement learning from images with latent space models. CoRR , abs/2012.11547, 2020. URL https://arxiv. org/abs/2012.11547 .Ruizhe Shi, Yuyao Liu, Yanjie Ze, Simon S. Du, and Huazhe Xu. Unleashing the power of pre-trained language models for offline reinforcement learning. In The Twelfth International Conference on Learning Representations (ICLR) , 2024. Noah Y. Siegel, Jost Tobias Springenberg, Felix Berkenkamp, Abbas Abdolmaleki, Michael Neunert, Thomas Lampe, Roland Hafner, Nicolas Heess, and Martin A. Riedmiller. Keep doing what worked: Behavioral modelling priors for offline reinforcement learning. CoRR , abs/2002.08396, 2020. URL https://arxiv.org/abs/2002.08396 .Emanuel Todorov, Tom Erez, and Yuval Tassa. Mujoco: A physics engine for model-based control. 
+
+IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5026–5033, 2012. Lu Wang, Wei Zhang, Xiaofeng He, and Hongyuan Zha. Supervised reinforcement learning with recurrent neural network for dynamic treatment recommendation. CoRR , abs/1807.01473, 2018. URL http://arxiv.org/abs/1807.01473 .Shudong Wang, Xinfei Wang, Chenhao Zhang, Shanchen Pang, Haiyuan Gui, Wenhao Ji, and Xiaojian Liao. Soft conflict-resolution decision transformer for offline multi-task reinforcement learning. arXiv preprint arXiv:2511.13133 , 2025. Zhi Wang, Li Zhang, Wenhao Wu, Yuanheng Zhu, Dongbin Zhao, and Chunlin Chen. Meta-dt: offline meta-rl as conditional sequence modeling with world model disentanglement. In Proceedings of the 38th International Conference on Neural Information Processing Systems , NIPS ’24, Red Hook, NY, USA, 2024. Curran Associates Inc. ISBN 9798331314385. Yifan Wu, George Tucker, and Ofir Nachum. Behavior regularized offline reinforcement learning. 
+
+CoRR , abs/1911.11361, 2019. URL http://arxiv.org/abs/1911.11361 .Mengdi Xu, Yikang Shen, Shun Zhang, Yuchen Lu, Ding Zhao, Joshua Tenenbaum, and Chuang Gan. Prompting decision transformer for few-shot policy generalization. In Proceedings of the 39th International Conference on Machine Learning , pp. 24631–24645. PMLR, 2022. Zhongwen Xu, Hado van Hasselt, and David Silver. Meta-gradient reinforcement learning. In 
+
+Proceedings of the 32nd International Conference on Neural Information Processing Systems ,NIPS’18, pp. 2402–2413, Red Hook, NY, USA, 2018. Curran Associates Inc. Ruihan Yang, Huazhe Xu, Yi Wu, and Xiaolong Wang. Multi-task reinforcement learning with soft modularization. Advances in Neural Information Processing Systems , 33:4767–4777, 2020. Yu Yang and Pan Xu. Pre-trained language models improve the few-shot prompt ability of decision transformer. Transactions on Machine Learning Research , 2025. ISSN 2835-8856. URL https: //openreview.net/forum?id=k520i3XEMK .Minjong Yoo, SangWoo Cho, and Honguk Woo. Skills regularized task decomposition for multi-task offline reinforcement learning. In Advances in Neural Information Processing Systems , volume 35, 2022. 12 Preprint Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and Chelsea Finn. Gradient surgery for multi-task learning. Advances in neural information processing systems , 33: 5824–5836, 2020a. Tianhe Yu, Deirdre Quillen, Zhanpeng He, Ryan Julian, Karol Hausman, Chelsea Finn, and Sergey Levine. Meta-world: A benchmark and evaluation for multi-task and meta reinforcement learning. In Conference on robot learning , pp. 1094–1100. PMLR, 2020b. Tianhe Yu, Garrett Thomas, Lantao Yu, Stefano Ermon, James Y Zou, Sergey Levine, Chelsea Finn, and Tengyu Ma. Mopo: Model-based offline policy optimization. In Advances in Neural Information Processing Systems , volume 33, pp. 14129–14142. Curran Associates, Inc., 2020c. Tianhe Yu, Aviral Kumar, Yevgen Chebotar, Karol Hausman, Sergey Levine, and Chelsea Finn. Conservative data sharing for multi-task offline reinforcement learning. Advances in Neural Information Processing Systems , 34:11501–11516, 2021. Tianhe Yu, Aviral Kumar, Yevgen Chebotar, Karol Hausman, Chelsea Finn, and Sergey Levine. How to leverage unlabeled data in offline reinforcement learning. CoRR , abs/2202.01741, 2022. URL 
+
+https://arxiv.org/abs/2202.01741 .Shilin Zhang, Zican Hu, Wenhao Wu, Xinyi Xie, Jianxiang Tang, Chunlin Chen, Daoyi Dong, Yu Cheng, Zhenhong Sun, and Zhi Wang. Text-to-decision agent: Offline meta-reinforcement learning from natural language supervision. In Advances in Neural Information Processing Systems (NeurIPS) , 2025. Hongling Zheng, Li Shen, Yong Luo, Tongliang Liu, Jialie Shen, and Dacheng Tao. Decomposed prompt decision transformer for efficient unseen task generalization. In Proceedings of the 38th International Conference on Neural Information Processing Systems , NIPS ’24, Red Hook, NY, USA, 2024. Curran Associates Inc. ISBN 9798331314385. 13 Preprint 
+
+# A RELATED WORK 
+
+Offline RL. Offline reinforcement learning learns policies from fixed datasets without additional environment interaction (Levine et al., 2020; Ernst et al., 2005; Lange et al., 2012), and has shown promise in robotics (Kalashnikov et al., 2018; Rafailov et al., 2020), NLP (Jaques et al., 2019), and healthcare (Wang et al., 2018). A central challenge is distribution shift between the learned policy and the behavior policy, which can lead to erroneous value backups and unstable learning (Fujimoto et al., 2018; Levine et al., 2020). To address this, prior work constrains the policy to stay close to the behavior distribution (Kumar et al., 2019; Fujimoto et al., 2018; Wu et al., 2019; Jaques et al., 2019; Peng et al., 2019; Siegel et al., 2020) or regularizes the learned value/Q functions (Kumar et al., 2020; Kostrikov et al., 2021b), while model-based approaches build conservative dynamics/reward models to reduce out-of-distribution errors (Kidambi et al., 2020; Yu et al., 2020c). In addition, Decision Transformer (Chen et al., 2021) casts offline RL as conditional sequence modeling. 
+
+Multi-task RL and offline MTRL. Multi-task RL studies learning a shared policy across tasks in RL settings. A key obstacle is negative transfer caused by conflicting gradients across tasks, motivating gradient-surgery or conflict-aware optimization methods (Yu et al., 2020a; Chen et al., 2020; Liu et al., 2021). Multi-task offline RL aims to learn a shared policy from offline datasets collected from a set of tasks. A common formulation is to train a task-conditioned policy under a unified objective, but such shared training often suffers from negative transfer caused by conflicting gradients across tasks and heterogeneous data sources. To mitigate this issue, prior work has explored selective sharing and conflict-aware optimization mechanisms. HarmoDT (Hu et al., 2024) addresses this challenge from a parameter-selection perspective by learning task-specific binary masks over shared parameters, enabling conflict-aware parameter sharing in multi-task offline Decision Transformer training. Complementary to gradient conflict handling, data sharing methods selectively reuse transitions across tasks while remaining conservative under distribution shift, such as CDS (Yu et al., 2021) and related value-based sharing approaches (Eysenbach et al., 2020; Kalashnikov et al., 2021; Yu et al., 2022). More recently, M3DT (Kong et al., 2025) introduces a Mixture-of-Experts Decision Transformer to scale offline MTRL to massive task suites by decoupling task load across expert subsets. However, M3DT targets task scalability under full per-task datasets , an axis orthogonal to our focus on per-task data scarcity : LaMA-DT addresses scarcity through language-guided trajectory augmentation rather than through architectural expansion. In contrast to these baselines, LaMA-DT aligns text and behavior, and then uses the resulting objectives to score and filter generated trajectories before decision-transformer policy learning, leading to more robust multi-task offline RL. 
+
+Offline Meta-RL. Offline meta-RL aims to learn policies that generalize to unseen tasks from fixed offline datasets, without any online interaction. A large body of prior work follows the temporal-difference (TD) paradigm, using either optimization-based meta-learning to find fast-adaptable initializations (Finn et al., 2017; Mitchell et al., 2021; Xu et al., 2018). However, TD-based offline meta-RL can be prone to instability under off-policy bootstrapping (Levine et al., 2020), motivating alternative approaches that avoid value backups. Along this line, decision-transformer-style methods treat offline meta-RL as conditional sequence modeling over trajectories (Chen et al., 2021). Prompt-based approaches such as Prompt-DT (Xu et al., 2022) and DPDT (Zheng et al., 2024) adapt to new tasks using soft or hand-crafted prompts, while GDT (Furuta et al., 2021) leverages hindsight rewards as an adaptation signal. Meta-DT (Wang et al., 2024) further introduces a meta-policy to select infor-mative trajectories for adaptation. Two contemporaneous approaches further inject language signals into this paradigm: LPDT (Yang & Xu, 2025) initializes Prompt-DT with a pre-trained language model and adds prompt regularization to improve few-shot adaptation, while T2DA (Zhang et al., 2025) learns CLIP-style contrastive alignment between task descriptions and trajectory embeddings to enable zero-shot transfer. Both methods leverage language to ground task semantics, but they differ from LaMA-DT in two important ways: (i) neither performs trajectory-level data augmentation —LPDT relies on LM initialization while T2DA relies on contrastive alignment—and (ii) both are evaluated primarily under the meta-RL zero/few-shot transfer protocol, whereas LaMA-DT addresses the multi-task offline setting under varying per-task data fractions. We accordingly compare against multi-task offline RL baselines that share our evaluation protocol, and view direct comparison with LPDT and T2DA on their meta-RL setups as a complementary direction. Our work builds on the sequence-modeling perspective, but explicitly leverages natural language task descriptions to ground task semantics in behavioral data, also enabling generalization ability in offline meta-RL settings. 14 Preprint 
+
+LLM-based offline RL. A complementary line of work directly leverages pre-trained language models for offline RL. LaMo (Shi et al., 2024) initializes the DT backbone with a frozen pre-trained language model and fine-tunes via LoRA on a small fraction of parameters, demonstrating substantial gains in single-task offline RL—especially under sparse rewards and limited data. LaMA-DT extends this direction along two axes: (i) we operate in the multi-task offline setting rather than per-task training, requiring explicit mechanisms to disambiguate similar state-action distributions across tasks; and (ii) we reuse the same LM not only as the policy backbone but also as a trajectory generator 
+
+that produces task-aligned augmented data via six supervised objectives, addressing the data scarcity bottleneck that initialization alone cannot resolve. 
+
+# B DETAILED TRAINING ALGORITHM 
+
+We give the full procedure of LaMA-DT in two complementary forms. Algorithm 1 provides a compact high-level overview of the three stages, and Algorithms 2–4 restate each stage with the full set of algorithmic details (sampling, adapter activation, loss instantiation), following the same notation as Sec. 3.2–Sec. 3.3. We use θbase for the frozen LLM weights, θOj 
+
+> LoRA
+
+for the objective-specific LoRA adapter of objective O j , θsh LoRA for the shared LoRA adapter, and θπ 
+
+> LoRA
+
+for the policy LoRA used at Stage III. We write fθ (·) for a forward pass with the active LoRA set θ added on top of θbase .
+
+Algorithm 1 LaMA-DT Training (Compact Overview)  
+
+> 1:
+
+Input: {(pi, Di)}Mi=1 ; frozen base LLM params θbase . 
+
+> 2:
+
+Output: Unified multi-task policy πθ . 
+
+> 3:
+
+// Stage I: Multi-objective LLM fine-tuning (O 1–O 6) 
+
+> 4:
+
+Initialize objective adapters {θOj
+
+> LoRA
+
+}6 
+
+> j=1
+
+and shared adapter θsh LoRA ; freeze θbase . 
+
+> 5:
+
+while not converged do  
+
+> 6:
+
+Sample task i and a batch B ⊂ D i; sample O j . 
+
+> 7:
+
+Update θOj 
+
+> LoRA
+
+and θsh LoRA with the loss of O j . 
+
+> 8:
+
+end while  
+
+> 9:
+
+// Stage II: Data preparation (O 3 generation + O 1–O 6 scoring)  
+
+> 10:
+
+for each task i = 1 to M do  
+
+> 11:
+
+Initialize Daug  
+
+> i
+
+← ∅ . 
+
+> 12:
+
+for each sampled (s0, a 0) ∼ D i do  
+
+> 13:
+
+Generate {˜τ k}Nk=1 using O 3. 
+
+> 14:
+
+Score each ˜τ k by S(˜ τ k) = 16
+
+P6 
+
+> j=1
+
+SOj (˜ τ k). 
+
+> 15:
+
+Add the top-K candidates (˜ τ , pi, z prov = augmented ) to Daug  
+
+> i
+
+. 
+
+> 16:
+
+end for  
+
+> 17:
+
+end for  
+
+> 18:
+
+// Stage III: Policy learning (LaMA-DT)  
+
+> 19:
+
+Initialize policy adapter θπ 
+
+> LoRA
+
+← θsh LoRA ; freeze θbase . 
+
+> 20:
+
+Train LaMA-DT on {D i ∪ D aug  
+
+> i
+
+} using Eq. 5.  
+
+> 21:
+
+return πθ .
+
+Trajectory serialization. For each task Ti, every trajectory τ = {(st, a t, r t)}Tt=0 is mapped into the LLM hidden space via three numeric MLPs (one each for s, a, the per-step return-to-go 
+
+ˆRt = P 
+
+> t′≥t
+
+rt′ ). The natural-language task description pi is tokenized and embedded by the frozen LLM tokenizer; for Stage III an extra provenance marker zprov ∈ { real , augmented } is appended to the text prefix. The full input is 
+
+[ Emb (pi, z prov ) ∥ ˆR0, s 0, a 0, ˆR1, s 1, a 1, . . . ]
+
+and is processed by fθ as a single sequence; the numeric heads read out the corresponding per-step continuous predictions. 15 Preprint B.1 STAGE I: M ULTI -O BJECTIVE LORA F INE -T UNING 
+
+Algorithm 2 Stage I: Multi-Objective LoRA Fine-Tuning 
+
+1: Input: task pool {(pi, Di)}Mi=1 ; frozen θbase ; iteration budget TI; window length L.
+
+2: Initialize objective adapters {θOj
+
+> LoRA
+
+}6 
+
+> j=1
+
+and shared adapter θsh LoRA .
+
+3: for step = 1 , . . . , T I do 
+
+4: Sample task i ∼ Uniform( {1, . . . , M }) and trajectory τ ∼ D i.
+
+5: Sample window of length L from τ and an objective j ∼ Uniform( {1, . . . , 6}).
+
+6: Construct (xj , y j ) from (pi, τ window ) as in Sec. 3.2.1–3.2.2. 
+
+7: Activate the active set θj = θbase + θOj 
+
+> LoRA
+
++ θsh LoRA .
+
+8: Compute the loss LOj
+
+ fθj (xj ), y j
+
+ (MSE for j ∈ { 1, 2, 3, 4, 6}; CE for j = 5 ). 
+
+9: Update only θOj 
+
+> LoRA
+
+and θsh LoRA by AdamW; θbase stays frozen. 
+
+10: end for 
+
+11: Output: adapters {θOj
+
+> LoRA
+
+}6 
+
+> j=1
+
+and shared adapter θsh LoRA .B.2 STAGE II: A UGMENTED TRAJECTORY GENERATION , S CORING , AND FILTERING 
+
+Algorithm 3 Stage II: Augmented Trajectory Generation, Scoring, and Filtering 
+
+1: Input: adapters from Stage I; {D i}Mi=1 ; #candidates N , top-K, sampling temperature T .
+
+2: Initialize Daug  
+
+> i
+
+← ∅ for all i.
+
+3: for each task i = 1 , . . . , M do 
+
+4: for each sampled (s0, a 0) ∈ D i do 
+
+5: Activate θbase + θO3 
+
+> LoRA
+
++ θsh LoRA and autoregressively roll out N candidate trajectories at temperature T :
+
+{˜τ k}Nk=1 ∼ pO3 (τ | pi, (s0, a 0)) .
+
+6: for k = 1 , . . . , N do 
+
+7: for j = 1 , . . . , 6 do 
+
+8: Activate θbase + θOj 
+
+> LoRA
+
+and compute the length-normalized teacher-forcing log-likelihood SOj (˜ τ k) from Sec. 3.3. 
+
+9: end for 
+
+10: Aggregate score S(˜ τ k) ≜ 16
+
+P6 
+
+> j=1
+
+SOj (˜ τ k).
+
+11: end for 
+
+12: Add the top-K candidates by S, each tagged with zprov = augmented , to Daug  
+
+> i
+
+.
+
+13: end for 
+
+14: end for 
+
+15: Output: augmented per-task datasets {D aug  
+
+> i
+
+}Mi=1 .
+
+Stage II scoring as a budget-cheap reranker. Generation calls θO3 
+
+> LoRA
+
+once per candidate; scoring then loops over the six objective adapters, but each scoring pass is forward-only, length-normalized, and shares the same input encoding. Because filtering keeps top-K candidates per (s0, a 0) rather than per task, the augmentation budget grows linearly with the number of seed pairs and is independent of 
+
+M .16 Preprint B.3 STAGE III: M ULTI -T ASK POLICY LEARNING 
+
+Algorithm 4 Stage III: Multi-Task Policy Learning 
+
+1: Input: {D i ∪ D aug  
+
+> i
+
+}Mi=1 ; shared adapter θsh LoRA from Stage I; iteration budget TIII .
+
+2: Initialize the policy adapter from the shared adapter: θπ 
+
+> LoRA
+
+← θsh LoRA ; freeze θbase .
+
+3: for step = 1 , . . . , T III do 
+
+4: Sample task i (uniform over tasks; optional balanced re-weighting); sample τ ∼ D i ∪ D aug 
+
+> i
+
+with augmentation ratio r.
+
+5: Sample a window of length L from τ and form the DT-style input with pi and zprov ∈{real , augmented }.
+
+6: Predict ˆat = fθbase +θπ 
+
+> LoRA
+
+(τ0: t−1, pi, z prov ) for every action position. 
+
+7: Update θπ 
+
+> LoRA
+
+(and the numeric heads) by AdamW on LLaMA-DT in Eq. 5; θbase stays frozen. 
+
+8: end for 
+
+9: Deployment: given pi, set zprov = real and roll out autoregressively; update ˆRt+1 = ˆRt − rt.
+
+10: Output: unified multi-task policy πθbase +θπ 
+
+> LoRA
+
+.B.4 PER -O BJECTIVE LOSS INSTANTIATION 
+
+Stage I uses a Gaussian log-likelihood (equivalently, length-normalized MSE) for the five numeric objectives and a token-level cross-entropy for the text-output objective O 5:
+
+LOj (θj ) = 1
+
+|yj | 
+
+> |yj|
+
+X
+
+> t=1
+
+yj,t − μj,t (xj ; θj ) 22 j ∈ { 1, 2, 3, 4, 6}, (6) 
+
+LO5 (θ5) = − 1
+
+|y5|
+
+> |y5|
+
+X
+
+> t=1
+
+log pθ5 (y5,t | x5, y 5,<t ) . (7) The same (xj , y j ) construction is reused at scoring time (Algorithm 3, line 9), so the resulting SOj (˜ τ )
+
+are interpretable as conditional log-likelihoods evaluated on the candidate. B.5 FEW -S HOT ADAPTATION TO UNSEEN TASKS 
+
+For unseen-task generalization we treat the small support set Dfew  
+
+> i
+
+as a one-task version of the Stage I data, and run a three-step adaptation procedure that exactly mirrors the standard Stage I/II/III pipeline. 
+
+(i) Lightweight objective adaptation. Starting from the Stage I adapters, we run a short adapt phase that updates the objective-specific adapters {θOj
+
+> LoRA
+
+}6 
+
+> j=1
+
+together with the shared adapter θsh LoRA on 
+
+Dfew  
+
+> i
+
+, while keeping the LLM backbone θbase frozen. Each objective head therefore better reflects the dynamics, rewards, and semantics of the new task i.
+
+(ii) Multi-objective generation and filtering. We then use the adapted O 3 adapter to generate synthetic rollouts. For each initial state–action pair (s0, a 0) sampled from Dfew  
+
+> i
+
+, we draw N candidate trajectories {˜τ (m)}Nm=1 by autoregressively rolling out the policy conditioned on the task description. Each candidate is scored under all six adapted objectives (O 1–O 6) and ranked by the aggregate score 
+
+S(˜ τ (m)); we retain the top-K candidates per seed pair to form a high-quality synthetic set Dsyn  
+
+> i
+
+.
+
+(iii) Policy learning on the union. Finally, we run Stage III on the union Dfew  
+
+> i
+
+∪ D syn  
+
+> i
+
+, exactly as in Algorithm 4: we initialize the policy adapter θπ 
+
+> LoRA
+
+← θsh LoRA (using the just-adapted shared adapter), and update θπ 
+
+> LoRA
+
+on this union with θbase frozen. This yields an adapted policy for task i that has never interacted with the environment online; we evaluate it directly under the standard 50-episode protocol. 17 Preprint 
+
+# C ENVIRONMENT DETAILS 
+
+C.1 META -W ORLD 
+
+The Meta-World benchmark (Yu et al., 2020b) is a comprehensive suite of robotic manipulation tasks designed to evaluate generalization and multi-task learning in continuous control. It involves a Sawyer robotic arm performing 50 distinct manipulation tasks (MT50), each characterized by unique object geometries, joint configurations, and goal dynamics. The robot operates in a 4-dimensional fine-grained continuous action space, controlling the 3D end-effector position and gripper openness. Following recent advances in multi-task RL (Yang et al., 2020; Hu et al., 2024), we employ the random-goal variant (MT50-rand), where goal positions are randomized per episode to promote adaptability and discourage overfitting to fixed targets. In our experiments, we focus on a subset of 30 tasks (ML30) to balance computational efficiency with comprehensive evaluation across diverse manipulation skills. The primary evaluation metric is the average success rate across tasks, reflecting the robot’s capacity to generalize under varied and unseen goal configurations. For offline data collection, we adopt the Soft Actor-Critic (SAC) algorithm (Haarnoja et al., 2018) to train individual policies for each task until convergence. For every task, we record 1M transitions during training, resulting in a comprehensive offline dataset composed of both successful and failed attempts. Based on the convergence stage, we curate two datasets matching the main-text definitions: • Near-Optimal (NO): the complete 1M transitions per task collected from the converged SAC policy, dominated by expert behavior. • Sub-Optimal (SO): a 1M-transition mixture of (i) 0.5M expert transitions sampled from the converged SAC policy and (ii) 0.5M non-expert transitions collected from a mid-performance SAC policy, yielding a 50% expert / 50% non-expert composition consistent with the main text. These datasets jointly provide a rich distribution of state–action pairs spanning skill acquisition stages, supporting both imitation and reinforcement learning settings under low-data constraints. C.2 MUJOCO
+
+We further evaluate on MuJoCo continuous-control benchmarks (Todorov et al., 2012) that require generalization across goal-conditioned tasks, including Cheetah-dir, Cheetah-vel, and Ant-dir. 
+
+Dataset construction. For MuJoCo tasks, we follow the standard offline data generation protocol in prior offline RL work (Mitchell et al., 2021), where trajectories are collected by training a policy with SAC (Haarnoja et al., 2018) and applying action penalties to discourage excessively large control inputs. We consider two dataset expertise levels matching the main-text definitions: • Near-Optimal (NO): trajectories generated by a converged expert SAC/TD3 policy, domi-nated by expert behavior. • Sub-Optimal (SO): a mixture of (i) 50% trajectories sampled from the NO dataset and (ii) 50% trajectories collected from mid-performance SAC policies, resulting in a 50% expert / 50% non-expert composition with comparable data volume. These two regimes allow us to systematically evaluate robustness to trajectory quality while keeping the overall data protocol consistent. 
+
+Task families. We evaluate across three MuJoCo benchmarks: • Cheetah-dir: a HalfCheetah agent is conditioned on a discrete direction variable indicating whether it should run forward or backward, with a reward encouraging movement along the specified direction. In the multi-task offline RL setting, training and evaluation are performed on the two direction tasks. In the meta offline RL setting, the agent is trained on one direction and evaluated on the held-out opposite direction. • Cheetah-vel: the agent is conditioned on a target forward velocity and receives a velocity-tracking reward that penalizes deviation from the specified speed. In the multi-task offline 
+
+18 Preprint 
+
+RL setting, the agent is trained and evaluated on all 40 velocity tasks. In the meta offline RL setting, training is conducted on 35 target velocities and evaluation is performed on the remaining 5 unseen velocities. • Ant-dir: the Ant agent is conditioned on a target movement direction in the 2D plane and rewarded for moving toward that direction. In the multi-task offline RL setting, all 50 direction tasks are used for both training and evaluation. In the meta offline RL setting, the agent is trained on 45 directions and evaluated on 5 held-out unseen directions. Overall, these MuJoCo benchmarks complement Meta-World by emphasizing locomotion control and goal-conditioned dynamics, enabling a comprehensive evaluation of LaMA-DT across heterogeneous offline control domains under both NO and SO dataset expertise. 
+
+# D BASELINES 
+
+We compare LaMA-DT against representative multi-task offline RL baselines spanning value-based, behavior-cloning, generative, and Decision-Transformer paradigms. Across all baselines, we use the same task splits and dataset preprocessing as in our main experiments, and we follow the original papers’ recommended architectures and hyperparameters whenever available. 
+
+CDS (Conservative Data Sharing) (Yu et al., 2021). CDS is a representative data sharing baseline for multi-task offline RL. Its key idea is to selectively share transitions across tasks while remaining conservative under distribution shift. In our implementation, we train a single task-conditioned actor 
+
+πθ (a | s, i ) that takes the state s and a task identifier i as input, and outputs the action. 
+
+MTBC (Multi-Task Behavior Cloning). We extend behavior cloning to multi-task offline policy learning by using a task-ID conditioned actor that learns a single policy across all tasks, minimizing the MSE for continuous actions. 
+
+MTIQL (Multi-Task Implicit Q-Learning). IQL (Kostrikov et al., 2021a) learns the value function via expectile regression and trains the actor via advantage-weighted regression, which makes it effective for offline settings without behavior policy constraints as strict as CQL-style methods. MTIQL extends IQL to multi-task learning by using a task-ID conditioned actor and multi-head critic networks. 
+
+MTDIFF (He et al., 2023). MTDIFF is a diffusion-based approach for multi-task RL that uses conditional generative modeling for planning and data synthesis. We use MTDIFF-P as our baseline. 
+
+MTDT (Multi-Task Decision Transformer) (Chen et al., 2021). MTDT extends Decision Trans-former to multi-task data by conditioning the Transformer policy on a task identifier embedding. Trajectories are serialized into token sequences and the model is trained with an autoregressive action prediction objective. At evaluation, MTDT is provided with the task ID and desired return-to-go to generate task-specific actions. 
+
+Prompt-DT (PDT) (Xu et al., 2022). Prompt-DT conditions action generation on trajectory prompts rather than explicit task IDs. A small set of prompt trajectories is prepended to the input sequence, serving as in-context demonstrations of task behavior. The model then predicts actions for the query trajectory conditioned on both the prompt tokens and return-to-go. 
+
+HarmoDT (Hu et al., 2024). HarmoDT is a prompt-based Decision Transformer baseline for multi-task offline RL that mitigates gradient conflicts by learning task-specific parameter masks ,enabling conflict-aware sharing across tasks. We use HarmoDT-F as the HarmoDT baseline. 
+
+Low-data setting. To evaluate data efficiency, we construct low-data regimes by subsampling each task’s offline dataset to a fixed percentage of the original size (e.g., 1%, 5%, 10%). Crucially, we preserve trajectory boundaries during subsampling: instead of randomly shuffling individual transitions across episodes, we sample complete trajectories from the original dataset. This ensures that all sequence-modeling baselines receive consistent temporal structure, and that our six objectives 19 Preprint can be trained properly. While the subsampling percentage is defined with respect to the number of transitions , the actual sampling unit remains a full trajectory (i.e., we include all transitions within each selected episode). For each task, we randomly sample trajectories without replacement until the target percentage is reached, maintaining the same trajectory-level statistics as the full dataset, only scaled down in volume. 
+
+# E IMPLEMENTATION DETAILS AND HYPER -PARAMETERS 
+
+We document the implementation that produced the headline results in Tab. 1–Tab. 2. Wherever an implementation choice could deviate from the description in Sec. 3.2–Sec. 3.3, we follow the main paper. Anything below should therefore be read as concrete realizations of the abstractions in the method, not as additional design. E.1 BACKBONE , L ORA, AND NUMERIC TOKENIZATION 
+
+Backbone. The frozen LLM is Llama-3.2-1B with 16 transformer blocks, hidden size 2048 ,
+
+32 attention heads, and SiLU activations in the feedforward blocks. All base parameters have 
+
+requires_grad=False throughout. 
+
+LoRA placement. Each LoRA adapter is attached only to the attention output projection ( o_proj )and the MLP down-projection ( down_proj ) of every transformer block, with rank r = 16 , scaling 
+
+α = 32 (effective α/r = 2 ), and dropout 0.05 for Cheetah-dir / Cheetah-vel / Ant-dir, 0.10 for Meta-World ML30. This placement keeps the trainable footprint small while still injecting capacity into both the attention and MLP paths. 2
+
+Numeric tokenization. Continuous states, actions, and per-step return-to-go are mapped into the LLM hidden space by three independent one-layer MLPs: 
+
+state _mlp (s) = tanh( Wss + bs),
+
+action _mlp (a) = tanh( Waa + ba),
+
+return _mlp ( ˆR) = tanh( Wr ˆR + br ).
+
+each producing a 2048 -dim token. Continuous predictions are read out by symmetric one-layer linear heads ( state_head , action_head , reward_head ) without an output non-linearity. 
+
+Sequence layout. A training input is [ Emb (pi, z prov ); ˆR0, s 0, a 0; ˆR1, s 1, a 1; . . . ] with a context window of L = 20 time steps (i.e., 60 numeric positions plus the text prefix). Trajectories shorter than L are right-padded by repeating the last state and zero-padding the action and return tokens. State and return-to-go are normalized per task using statistics computed on the real offline split. E.2 STAGE I S ETUP (M ULTI -O BJECTIVE LORA F INE -T UNING )At every step, one objective j ∼ Uniform( {1, . . . , 6}) and one task i ∼ Uniform( {1, . . . , M })
+
+are drawn; the corresponding (xj , y j ) is constructed from a randomly sliced window. Only θOj
+
+> LoRA
+
+and θsh LoRA are updated. We use AdamW (learning rate 1 × 10 −4, weight decay 0.01 ), gradient accumulation over four micro-batches, gradient clipping at ∥∇∥ 2 ≤ 1.0, and a linear warmup (1,000 steps for MuJoCo, 2,000 for Meta-World) followed by a cosine decay. The total number of optimization steps is 50 ,000 for the MuJoCo configurations and 100 ,000 for Meta-World ML30. Stage I uses bf16 mixed precision with gradient checkpointing, and is run under DDP across two NVIDIA A6000 GPUs. E.3 STAGE II S ETUP (A UGMENTATION GENERATION AND FILTERING )We sample one initial (s0, a 0) per real trajectory and generate N = 4 candidate rollouts under the O3 adapter at sampling temperature T = 0 .4 (chosen by the ablation in Tab. 7). Long horizons     
+
+> 2The method only requires that θOj
+> LoRA and θsh LoRA are objective-specific / shared adapters; the choice of which two projections to attach LoRA to is an implementation detail and does not change Sec. 3.2.3.
+
+20 Preprint are produced via chunked rollouts of length 50 that re-anchor on intermediate teacher-forced states; this preserves the seed and final state and reduces wall-clock time by roughly 3× relative to fully autoregressive generation. Each candidate is then scored under all six objectives by reactivating the relevant LoRA and running a single forward teacher-forcing pass; per-objective scores are length-normalized and combined by an unweighted mean as in Sec. 3.3. We retain the top-1 candidate per seed pair (i.e., K = 1 ), tag it with zprov = augmented , and write the resulting per-task augmented set to disk. E.4 STAGE III S ETUP (M ULTI -T ASK POLICY LEARNING )The policy adapter θπ 
+
+> LoRA
+
+is initialized from θsh LoRA ; the numeric heads are initialized from scratch. Each batch mixes real and augmented trajectories at the augmentation ratio r = |D aug  
+
+> i
+
+|/|D i| (default 
+
+r = 0 .5, swept in Fig. 2). For Meta-World ML30 we additionally enable balanced sampling (a 
+
+WeightedRandomSampler that gives every task equal frequency in expectation) to compensate for unequal per-task trajectory counts. The loss is the action MSE in Eq. 5; reward and state heads are not supervised at this stage. Optimization uses AdamW with learning rate 5 × 10 −5 (MuJoCo) or 
+
+1 × 10 −4 (Meta-World ML30), weight decay 0.01 (MuJoCo) or 1 × 10 −4 (Meta-World), warmup over 
+
+2,000 –3,000 steps, and a cosine decay over the full schedule of 100 ,000 (MuJoCo) and (Meta-World) steps. Gradient clipping is ∥∇∥ 2 ≤ 1.0 for MuJoCo and the tighter ∥∇∥ 2 ≤ 0.25 for Meta-World ML30, which we found necessary for stable late-stage optimization on the heterogeneous task suite. The training batch size is 32 .E.5 EVALUATION PROTOCOL 
+
+Final policies are evaluated for 50 episodes per task, averaged over three random seeds for Tab. 1 and Tab. 2. The provenance token is fixed to real at deployment. The return-to-go is initialized to the target value listed in Tab. 5 and decremented by the actual environment reward at each step. We report average normalized return for MuJoCo and per-task average success rate for Meta-World, following the conventions of prior prompt-based DT work (Xu et al., 2022; Hu et al., 2024). Table 5: Per-environment evaluation settings used to obtain Tab. 1 and Tab. 2.                     
+
+> Cheetah-dir Cheetah-vel Ant-dir Meta-World ML30
+> Episodes / task 50 50 50 50 RTG target ( forward task) 760 per-task ref. velocity per-task ref. dir. 4,500 RTG normalization yes yes yes yes Provenance at test time real real real real
+
+E.6 AUGMENTATION QUALITY METRICS : D EFINITIONS AND COMPUTATION 
+
+We define the four columns of Tab. 4. Each trajectory is flattened into one-step transitions 
+
+(st, a t, s t+1 ), and we work in z-score-normalized state space, with per-dimension mean and standard deviation estimated on Dreal and applied to both sets. 
+
+Dyn. MSE (one-step dynamics fidelity, ↓). For every augmented transition we reset the MuJoCo simulator to st, apply at, and read off the true next state f ⋆(st, a t). Dyn. MSE is the per-dimension squared error between the augmented next state and f ⋆(st, a t) in normalized space, averaged over all transitions in Daug . Real data is generated by f ⋆ itself, so its residual is floating-point noise (rounded to 0.0000 ). 
+
+State KL vs. real ( ↓). We estimate KL( Paug ∥ Preal ) between the empirical state distributions using a non-parametric k-NN estimator with k = 5 and a KDTree per set, which avoids density assumptions in high-dimensional state space. Real-vs-real is 0 by construction. 
+
+L2 Dist. from Dataset. The average ℓ2 distance from each augmented state to its nearest real state in normalized space (computed via a k-d tree). This is a proximity rather than distributional measure: both memorization (too small) and off-manifold drift (too large) are undesirable, so it is reported 21 Preprint without a directional arrow and is meaningful only against a baseline (here MTDIFF). Real-vs-real is omitted because every real state is its own nearest neighbor. 
+
+Valid Coverage ( ↑). We project all z-scored states onto the top-2 PCA directions fitted on Dreal 
+
+and discretize the resulting plane into a uniform 40 ×40 grid over the real bounding box. A transition is valid if its per-dimension Dyn. MSE falls within 5× the median Dyn. MSE on a held-out slice of Dreal (admitting genuine simulator residuals while rejecting physics violations). Valid Coverage is the percentage of real-occupied grid cells matched by at least one valid augmented transition, where additional cells outside the real region but containing valid transitions push the score above 
+
+100% . Thus < 100% leaves part of the real region uncovered; 100% means full in-region coverage; 
+
+> 100% indicates full real coverage plus dynamics-validated novelty (e.g., the filtered 109% reflects 
+
+9% validated novelty beyond the real envelope). E.7 HYPER -PARAMETER SUMMARY 
+
+Table 6 consolidates the per-stage settings actually used to obtain the headline numbers. Where two values appear (e.g., “ 0.05 / 0.10 ”), they correspond to MuJoCo / Meta-World respectively. E.8 EXAMPLE TASK DESCRIPTIONS 
+
+Below we provide example natural-language task descriptions pi used in our experiments, following the unified template introduced in Sec. 3.2. • Cheetah-dir: “This is the Cheetah-dir task, and its goal is to run forward along the x-axis at high speed. The environment is the MuJoCo HalfCheetah-v2, a planar 9-DoF robot. Episodes run up to 1,000 steps. The trajectories show expert-level performance.” • Cheetah-vel: “This is the Cheetah-vel task, and its goal is to maintain a target running velocity of 2 m/s. The environment is the MuJoCo HalfCheetah-v2, a planar 9-DoF robot. Episodes run up to 1,000 steps. The trajectories show expert-level performance.” • Ant-dir: “This is the Ant-dir task, and its goal is to move toward roughly 90 degrees. The environment is the MuJoCo Ant-v2, an 8-joint quadruped ant robot. Episodes run up to 1,000 steps. The trajectories show expert-level performance.” • Meta-World MT50 (drawer-open): “This is the drawer-open task, and its goal is to use a 7-DoF Sawyer robotic arm to grasp the handle of a closed drawer and pull it open to a target displacement of more than 0.2 meters. The environment is a simulated tabletop workspace where a drawer is placed at a randomized initial position, and episodes run up to 150 steps. The trajectories show expert-level performance.” 
+
+# F ADDITIONAL EXPERIMENTAL RESULTS 
+
+F.1 TRAINING DYNAMICS 
+
+Figure 4 shows the training curves of LaMA-DT and strong baselines across Cheetah-dir, Cheetah-vel, and Ant-dir. LaMA-DT consistently achieves the highest final performance in all three environments. More notably, LaMA-DT exhibits faster convergence in the early training phase compared to Prompt-DT and HarmoDT. This accelerated early-stage learning can be attributed to the pretrained shared LoRA adapter θsh LoRA from Stage I, which has already learned task-agnostic representations of dynam-ics, rewards, and semantic patterns across the multi-objective objectives (O 1–O 6). By initializing the policy adapter θπ 
+
+> LoRA
+
+from these shared LoRA weights rather than from random initialization, LaMA-DT starts from a more favorable point in parameter space, enabling faster adaptation to the specific decision-making task. 22 Preprint Table 6: Hyper-parameters of LaMA-DT in our experiments. All values reflect the configuration that produced Tab. 1. 
+
+Parameter Value 
+
+Backbone & tokenization 
+
+Base LLM backbone Llama 3.2 1B (frozen) Number of layers / attention heads 16 / 32 Hidden size 2048 Activation (FFN) SiLU Numeric MLPs (state / action / return) 1 layer, Tanh, → 2048 
+
+Numeric heads (state / action / reward) 1 layer, linear Context window L 20 time steps 
+
+LoRA configuration (all stages) 
+
+LoRA target modules o_proj , down_proj 
+
+Rank r 16 Scaling α 32 Dropout (MuJoCo / Meta-World) 0.05 / 0.10 
+
+Stage I — multi-objective fine-tuning 
+
+Total optimization steps (MuJoCo / Meta-World) 50 ,000 / 100 ,000 
+
+Optimizer AdamW, lr 1 × 10 −4, wd 0.01 
+
+Warmup / decay linear 1,000 –2,000 / cosine Gradient accumulation / clipping 4 / ∥∇∥ 2 ≤ 1.0
+
+Per-step objective sampling Uniform( {1, . . . , 6})
+
+Mixed precision / grad checkpointing bf16 / on DDP 2 GPUs (Stage I only) 
+
+Stage II — augmentation & filtering 
+
+Candidates per seed (s0, a 0), N 4Top-K retained per seed 1Sampling temperature T 0.4 Generation chunk length 50 steps (chunked autoregressive) Score aggregation unweighted mean of SO1 , . . . , S O6
+
+Stage III — policy learning 
+
+Total optimization steps (MuJoCo / Meta-World) 100 ,000 / 200 ,000 
+
+Optimizer AdamW Learning rate (MuJoCo / Meta-World) 5 × 10 −5 / 1 × 10 −4
+
+Weight decay (MuJoCo / Meta-World) 0.01 / 1 × 10 −4
+
+Warmup / decay 2,000 –3,000 / cosine Gradient clipping (MuJoCo / Meta-World) ∥∇∥ 2 ≤ 1.0 / ∥∇∥ 2 ≤ 0.25 
+
+Batch size 32 Augmentation ratio r 0.5 (default; swept in Fig. 2) Loss action MSE (Eq. 5) Policy adapter init θπ 
+
+> LoRA
+
+← θsh LoRA 
+
+Evaluation 
+
+Episodes per task 50 Random seeds 3Provenance token at test real 
+
+RTG initialization per-task target (Tab. 5) 
+
+23 Preprint 
+
+Figure 4: Training curves of LaMA-DT and the baselines in Tab. 1. F.2 SENSITIVITY TO GENERATION TEMPERATURE 
+
+To study how stochasticity affects trajectory augmentation quality, we vary the sampling temper-ature T when generating candidate trajectories while keeping the augmentation budget ( N, K ), scoring/filtering, and downstream policy training protocol fixed. Table 7 reports performance on Meta-World ML30 (success rate) and MuJoCo Cheetah-dir (normalized return). Table 7: Sensitivity to generation temperature T in trajectory augmentation. We report Meta-World ML30 success rate (%) and MuJoCo Cheetah-dir normalized return. Results are averaged over 3 seeds.            
+
+> Temperature TML30 Cheetah-dir
+> 0.0 63.0 ±1.1 896.8 ±10.8 0.2 67.3 ±1.3 917.3 ±16.7
+> 0.4 (default) 69.8 ±1.7 937.8 ±9.6
+> 0.8 59.6 ±2.2 874.9 ±15.0
+
+Overall, we observe a clear trade-off between diversity and fidelity . Deterministic decoding ( T =0 )yields conservative rollouts that are easier to score but lack coverage, resulting in the lowest scores on both benchmarks. A mild temperature ( T =0 .2–0.4) improves augmentation diversity while preserving task/dynamics consistency, with T =0 .4 achieving the best result on both ML30 and Cheetah-dir; these numbers also match the headline values in Tab. 1. Overly stochastic sampling (T =0 .8) degrades both benchmarks, suggesting that high-temperature generations introduce off-manifold transitions that cannot be fully corrected by reranking. We therefore use T =0 .4 as the default in all other experiments. F.3 EFFECT OF DATASET EXPERTISE 
+
+We further evaluate all methods under two dataset expertise levels in the standard data regime, Near-Optimal (NO) and Sub-Optimal (SO), on ML30 (success rate) and Cheetah-dir (normalized return). As summarized in Table 8, performance decreases from NO to SO for all baselines, confirming that learning solely from lower-quality trajectories is intrinsically harder even when the overall data volume is kept fixed. However, LaMA-DT consistently outperforms prior methods in both expertise regimes and exhibits a smaller NO →SO performance drop: on ML30, LaMA-DT improves over HarmoDT by +5 .9 and +6 .4 points in NO and SO, respectively, while on Cheetah-dir it achieves both the highest absolute return and the most stable degradation. Compared to the low-data regime results, where our gains are primarily attributed to better data efficiency under scarce demonstrations, these findings show that LaMA-DT also brings substantial benefits in the standard-data setting by more effectively exploiting heterogeneous-quality trajectories and mitigating the impact of sub-optimal supervision. 24 Preprint Table 8: Performance across different dataset expertise under standard data regime : Near-Optimal (NO) vs. Sub-Optimal (SO). We report success rate for ML30 and normalized return for Cheetah-dir.                      
+
+> Method ML30 Cheetah-dir NO SO NO SO
+> MTDT 70.9 ±1.6 55.2 ±2.1 678.5 ±24.3 598.1 ±22.9 PDT 72.1 ±0.9 58.7 ±1.3 705.6 ±8.3 636.7 ±11.2 HarmoDT 82.7 ±1.2 63.4 ±1.6 926.3 ±10.4 872.4 ±13.8
+> LaMA-DT 88.6 ±1.5 69.8 ±1.7 937.8 ±9.6 912.3 ±14.9
+
+F.4 EFFECT OF LLM B ACKBONE 
+
+To disentangle whether LaMA-DT’s gains stem from model capacity or from pre-training quality , we instantiate the same three-stage pipeline (Stage I objectives, Stage II generation/filter, Stage III DT learning) with four backbones of different sizes and pre-training corpora: GPT-2 (124M), Qwen2.5-0.5B (494M), Qwen2.5-1.5B (1.5B), and Llama 3.2 1B (1.24B). All other hyper-parameters (LoRA rank, learning rate, candidates, augmentation ratio, normalization) are kept identical, and we evaluate on Cheetah-dir. Table 9: LaMA-DT performance with different LLM backbones on Cheetah-dir (50 episodes/task), averaged over the two task directions.           
+
+> Backbone Params Average Return
+> GPT-2 124M 386.2 Qwen2.5-0.5B 494M 888.0 Qwen2.5-1.5B 1.5B 917.0
+> Llama 3.2 1B (default) 1.24B 937.8
+
+Three observations follow. (i) Pre-training quality dominates raw size. GPT-2 (124M) collapses on the forward task, producing a low average ( 386 .2) because its older pre-training corpus does not provide the language priors required for our O 5/O6 alignment objectives, whereas Qwen2.5-0.5B (less than half the size of Llama) already reaches 888 .0 (94 .7% of Llama’s score). (ii) Capacity helps but with diminishing returns. Moving from Qwen2.5-0.5B →1.5B →Llama 3.2 1B yields +29 .0
+
+and +20 .8 on average, much smaller than the +501 .8 gap from GPT-2 →Qwen2.5-0.5B at similar size, indicating gains are not explained by parameter count alone. (iii) Method gains are separable from backbone gains. Within the Llama backbone, our augmentation pipeline still adds +12 over a no-augmentation control, and the multi-objective filter adds another +54 .7 (Tab. 4); these are method-specific rather than capacity-specific. Together, the backbone sweep provides a controlled answer to “is LaMA-DT just a bigger model?”: a well-pretrained sub-billion backbone already realizes most of the gains, and the rest comes from the proposed objectives, generation, and filtering rather than scale. F.5 ROBUSTNESS TO TASK -D ESCRIPTION VARIATIONS 
+
+A natural concern is whether LaMA-DT’s gains depend on specific template phrasing or, more fundamentally, on the discriminative semantic content the descriptions carry. To disentangle these, we evaluate six variants on ML30 and Cheetah-dir, keeping the rest of the pipeline identical. Table 10 reveals a clear pattern: performance scales monotonically with the amount of informative content preserved. 25 Preprint Table 10: Robustness to task-description variations. ML30: average success rate (%); Cheetah-dir: average normalized return.                 
+
+> Description variant ML30 (succ. %) Cheetah-dir (return)
+> Full template (default) 69.8 937.8
+> Minimal (task name only) 55.5 892.2 Drop-expertise field 63.0 920.3 Noisy (typos + grammar errors) 49.6 801.7 Shortened paraphrase 67.9 912.0 Learnable task-ID embedding 61.0 913.4 No description (shared text) 40.4 746.9
+
+Information-preserving variants stay close to the default. Shortened paraphrase , which com-presses the description while retaining all task semantics, drops only 1.9 pts on ML30 ( 69 .8 → 67 .9)and 25 .8 on Cheetah-dir, indicating that LaMA-DT does not depend on a particular wording or length. 
+
+Information-degrading variants cause progressively larger drops. Removing the expertise field (−6.8 pts on ML30), reducing the description to a task name ( Minimal , −14 .3 pts), and injecting typos/grammatical errors ( Noisy , −20 .2 pts) all hurt performance, with Noisy approaching the floor set by No description . This shows that the LLM backbone is sensitive not to surface formatting per se, but to whether the description remains parsable as coherent task semantics—noise and over-compression both destroy that signal. 
+
+Learnable task-ID embeddings underperform language. Replacing natural language with a randomly initialized, end-to-end trained per-task vector reaches 61 .0 on ML30 and 913 .4 on Cheetah-dir, clearly below the full template ( 69 .8 / 937 .8). Combined with the unseen-task results in Table 11, where LaMA-DT outperforms Prompt-DT by +8 .8 pts on ML30, this confirms that natural language carries information that an opaque ID embedding cannot recover—both for distinguishing seen tasks during training and for generalizing to new ones at test time. 
+
+Removing discriminative content collapses performance. The No description variant replaces every per-task description with a single shared placeholder, eliminating all inter-task discriminative information. This drops ML30 by 29 .4 pts ( 69 .8 → 40 .4) and Cheetah-dir by 190 .9 (937 .8 → 746 .9), confirming that LaMA-DT’s gains are driven by what the descriptions communicate rather than by the mere presence of language tokens. Without per-task semantic disambiguation, augmentation degenerates into goal-agnostic generation. In summary, LaMA-DT is robust to surface compression and rewording, but degrades smoothly as descriptions lose discriminative content. The implication for practitioners is straightforward: any natural-language summary that clearly distinguishes one task from another suffices, but minimal task names or ungrammatical text carry too little signal for the LLM to ground generation effectively. F.6 GENERALIZATION TO UNSEEN TASKS 
+
+We evaluate few-shot adaptation to unseen tasks using the procedure described in Sec. B.5 and com-pare LaMA-DT with MTDT and Prompt-DT on four benchmarks: ML30, Cheetah-vel, Cheetah-dir, and Ant-dir. The results in Table 11 show that LaMA-DT consistently achieves superior performance across all unseen-task settings. In particular, LaMA-DT attains an average reward of 216 .0 across all benchmarks, substantially outperforming Prompt-DT ( 173 .5), corresponding to a relative improve-ment of approximately 25% . These results indicate that combining natural-language task descriptions with a small amount of task-specific data enables reliable data augmentation and supports fast policy adaptation to unseen tasks. 26 Preprint Table 11: Unseen-task generalization. Meta-World success rate (%); MuJoCo normalized return (%). Comparison against baselines capable of prompt-conditioning.                      
+
+> Meta-World MuJoCo Method ML30 (un) C-vel C-dir Ant-dir Average
+> MTDT 35.9 ±4.1 -184.2 ±8.1 429.4 ±19.5 155.2 ±9.5 109.1 PDT 43.5 ±2.7 -140.2 ±10.9 577.2 ±8.5 213.6 ±20.4 173.5
+> LaMA-DT 52.3 ±3.2 -94.1 ±7.6 668.0 ±16.1 237.5 ±7.6 216.0
+
+F.7 LOW -D ATA COMPONENT ANALYSIS AND COMPUTATIONAL COST 
+
+Low-data component analysis. Table 12 isolates two components at 5% of the sub-optimal training data. Removing augmentation while retaining the shared-LoRA policy initialization reduces perfor-mance by 161.9 on Cheetah-dir and 9.3 percentage points on ML30. Retaining the augmented data but randomly initializing the policy adapter results in smaller decreases of 6.6 and 2.1, respectively. Thus, the augmentation pipeline accounts for most of the measured gain in this low-data setting, while shared-adapter initialization provides an additional benefit. This comparison evaluates augmentation as a whole; it does not separately identify the effects of increased data volume and task-conditioned generation. Table 12: Component analysis with 5% sub-optimal training data. Cheetah-dir reports normalized return; ML30 reports success rate (%). In the first ablation, shared-LoRA initialization is retained. In the second, augmented data are retained.         
+
+> Method Cheetah-dir ML30 Full LaMA-DT 521.5 39.1 w/o augmentation 359.6 29.8 w/o shared-LoRA initialization 514.9 37.0
+
+Adapter count and computational cost. LaMA-DT uses six objective-specific LoRA adapters and one shared adapter in Stage I, followed by one policy adapter in Stage III. These eight adapters are shared across tasks in the main experiments; we do not fine-tune a separate adapter for each task. The 1.24B-parameter language-model backbone remains frozen. Approximately 25.8M parameters are trainable in Stage I and 3.79M in policy learning. On an NVIDIA A6000 with the Llama-3.2-1B backbone, generating four candidate trajectories for one seed pair takes 2.66 s. Scoring those four candidates under all six objectives takes 1.51 s, or approximately 36% of the combined generation-and-scoring time. Generation and scoring are performed offline; at deployment, the policy requires neither step and takes approximately 17 ms per action under the same hardware setup. 27

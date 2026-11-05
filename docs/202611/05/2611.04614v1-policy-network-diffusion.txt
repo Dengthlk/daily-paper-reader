@@ -1,0 +1,467 @@
+Title: Policy Network Diffusion
+
+URL Source: https://arxiv.org/pdf/2611.04614v1
+
+Published Time: Wed, 04 Nov 2026 02:38:18 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Policy Network Diffusion 
+
+## Jiate Liu * Deheng Ye ∗
+
+Abstract 
+
+Diffusion models have shown remarkable progress in AI-generated content, including images and videos. In this paper, we explore whether diffusion models can generate the parameters of policy networks in reinforcement learning (RL), and whether the generated policies exhibit generalization capabilities. To achieve this, we propose Diffusion-based Conditional Policy Network Parameter Generation (DPPG), which consists of a Transformer-based autoencoder and a task-conditioned diffusion model. The autoencoder achieves a high compression rate by patchifying network parameters, while the task-conditioned diffusion model generates corresponding parameters conditioned on different environments. Our experiments demonstrate that, with a single unified DPPG model, we can synthesize high-quality policies across a diverse set of tasks from different environment domains, including Classic Control, Atari games, and MuJoCo. Additionally, our method can generate networks with a larger number of parameters compared to previous approaches. Furthermore, we find that in previously unseen environments, DPPG can generate parameters that achieve faster convergence and reach competitive performance, showcasing the potential future applications of parameter generation via diffusion. 
+
+Preface. When this work was originally conducted at Tencent in 2025, parameter generation via diffusion was largely viewed as a niche meta-learning curiosity. The field was dominated by supervised learning benchmarks, and the idea of synthesizing reinforcement learning policy networks directly from random noise received limited attention. However, the recent breakthrough that frontier models can directly edit the weights of open-source LLMs—effectively treating weight modification as a generative task—has triggered a sudden reevaluation of this paradigm. What was once dismissed as a toy problem is now recognized as a foundational capability: if we can generate or edit weights directly, we unlock a fundamentally new way to adapt, customize, and compose models without expensive from-scratch training. This paper stands as one of the earliest systematic explorations of diffusion-based parameter generation for decision-making policies, predating the current wave of interest by nearly two years. We hope this revival serves as a reminder that seemingly premature ideas often arrive years before their time. 
+
+# 1 Introduction 
+
+Originating from non-equilibrium thermodynamics [Jarzynski, 1997], diffusion processes were introduced for denoising in unsupervised learning [Sohl-Dickstein et al., 2015] and soon refined to denoising diffusion probabilistic models (DDPM) [Ho et al., 2020, Song et al., 2021]. Different from traditional generative methods such as variational autoencoders [Kingma and Welling, 2014, Higgins et al., 2017] and generative adversarial networks [Goodfellow et al., 2014], diffusion models adopt a training paradigm consisting of a forward process and a reverse process. The superior generation quality of diffusion models has significantly advanced the progress of AI-generated content (AIGC), with unprecedented generation quality for images and videos [Rombach et al., 2022, Ramesh et al., 2022, Ho et al., 2022]. The successful applications of diffusion models in image and video synthesis inspire research on adapting diffusion models to generate other types of content. One such attempt is to synthesize model parameters using diffusion processes [Wang et al., 2024]. By directly fitting the optimized model parameter distribution, we can utilize diffusion models to sample network parameters for desired task requirements, known as a learning-to-learn paradigm [Hospedales et al., 2022, Finn et al., 2017]. Parameter generation using diffusion models typically shows promising results compared with prior approaches using hyper-networks [Ha et al., 2017] and variational autoencoders [Peebles et al., 2022]. These works commonly focus on generating neural network parameters for ad hoc domains such as image classification [Wang et al., 2024, Soro et al., 2024], tabular data prediction [Soro et al., 2024, Yuan et al., 2024], and implicit neural fields [Erkoç et al., 2023]. 
+
+> *Work done at Tencent in 2025.
+
+1arXiv:2611.04614v1 [cs.LG] 3 Nov 2026 Nevertheless, existing work mainly considers generating parameters for neural networks in limited supervised learning tasks. In this paper, we explore whether this paradigm can be extended to more complex reinforcement learning tasks. Supervised learning tasks often yield relatively similar network checkpoints with a stable training process, whereas reinforcement learning tasks present more challenging conditions with diverse network structures and parameter distributions. For instance, there may be multiple optimal policies that solve a task in different ways, leading to a more diverse distribution for diffusion models to fit. Moreover, the differences in observation spaces and action spaces across reinforcement learning tasks also require more flexible and adaptive parameter generation methods. Based on these requirements, we propose Diffusion-based Conditional Policy Network Parameter Generation (DPPG), a fully Transformer-based model that generates policy parameters for multiple reinforcement learning tasks. DPPG consists of an autoencoder and a latent diffusion model. The autoencoder is designed to compress policy parameters into a latent representation; we find that a high compression rate can be achieved by patchifying the parameters and feeding them into a Transformer model. The latent representation is then fed into the diffusion model to generate new policy parameters. We implement a task-conditioned latent diffusion model to realize effective parameter generation from simple prompts. We evaluate DPPG on a variety of reinforcement learning tasks including Classic Control suites, Atari games, and MuJoCo locomotion tasks. Our experiments show that DPPG can generate high-quality policy parameters for different reinforcement learning tasks within one pre-trained model. Notably, in up to 20 Atari, 5 Classic Control, and 5 MuJoCo tasks, the policy generated by a unified DPPG model can achieve performance comparable to the original policy trained from scratch in each task. Moreover, we find that DPPG exhibits a certain degree of generalization: it is able to generate parameters in unseen environments that converge faster and achieve higher performance. To summarize, our contributions are as follows: • We are the first to propose generating policy parameters for decision-making tasks directly via diffusion models. • We propose DPPG, which innovatively integrates an autoencoder and a diffusion model with fully condition-based Transformer-based modules. This architecture enables the generation of large-scale parameter policy networks and allows training a unified model across multiple tasks. • We show that one pre-trained DPPG model can generate policy parameters for various tasks with performance equal to or even exceeding that of policies trained with RL from scratch. • We observe that DPPG shows decent generalization capabilities: it can generate parameters in previously unseen environments that converge faster and achieve higher performance. 
+
+# 2 Related Work 
+
+Multi-task RL and Meta-RL. Although reinforcement learning algorithms are commonly developed to train policies in a single environment, recent research has shown that multi-task reinforcement learning can significantly improve learning efficiency by simultaneously training across various tasks [Mnih et al., 2015, Sodhani et al., 2021, Huang et al., 2022, Zhang et al., 2022]. Typically, multi-task reinforcement learning is achieved by sharing the policy network across different tasks; however, the network structure cannot be shared when facing different observation spaces and action spaces. To handle this, recent works usually add different output heads after a pre-trained representation extractor, or factorize the policy into conditional components so that a single backbone can serve many agents [Ye and Lu, 2022]. Meta-Reinforcement Learning (Meta-RL) represents an evolution within the field, focusing on algorithms that can efficiently adapt to new tasks with minimal data [Finn et al., 2017, Beck et al., 2023a,b, Ye et al., 2023], thereby addressing the limitations of traditional RL in terms of data efficiency and policy generality. Transformer-based policy backbones have further unified model design across tasks [Li et al., 2023], while self-play and population-based training remain key drivers of robust multi-agent behavior [Wu et al., 2021, Zhang et al., 2024]. Unlike these approaches, which still rely on RL training methods, we attempt to use a diffusion model to directly generate the parameters of the policy network. These generated parameters exhibit performance in different environments comparable to the original policy. Complex game-control systems complement this line of work: Ye et al. study large-scale reinforcement learning for MOBA action control [Ye et al., 2020b] and combine curriculum self-play with policy distillation to train across a large pool of heroes [Ye et al., 2020a]; supervised distillation alone can also reach human-level MOBA play [Ye et al., 2022]. Beyond MOBAs, hierarchical RL has been applied to open-world games such as Minecraft [Lin et al., 2021], and real-game datasets now support offline RL benchmarking on commercial titles [Wei et al., 2022, Qu et al., 22024]. A parallel line of work treats playable games themselves as a generative target [Yang et al., 2024]. More recently, LLM-based agents have shifted the focus toward multi-agent orchestration [Li et al., 2024, Yu et al., 2024] and world-model alignment [Zhou et al., 2024]. These works motivate scalable and transferable policy learning, whereas our focus is on generating the policy parameters themselves. 
+
+Diffusion models. The research of diffusion models prevails with the introduction of denoising diffusion probabilistic models (DDPM) [Ho et al., 2020]. Diffusion models are trained with a forward process and a reverse process: the forward process adds noise to the original sample, and the reverse process removes the noise to recover the original sample. Diffusion models have shown remarkable progress in generating high-quality images and videos [Rombach et al., 2022, Ramesh et al., 2022, Ho et al., 2022]. Since directly performing diffusion processes in the original input space is typically time-inefficient, recent works propose diffusing the latent representation of the input data, which can be more efficient and effective in practice [Peebles and Xie, 2023, Song et al., 2021, Bao et al., 2022]. In this paper, we adopt the latent diffusion model to generate structural policy parameters for reinforcement learning tasks, which can significantly reduce the compute and memory required compared with directly diffusing original parameters. 
+
+Parameter generation. Parameter generation is a step forward from the field of automated machine learning (AutoML) [Doke and Gaikwad, 2021], which considers automating the end-to-end process of training machine learning models. Prior works deploy hypernetworks [Ha et al., 2017, Brock et al., 2018] or variational autoencoders [Peebles et al., 2022] to generate network parameters. With the introduction of diffusion models, recent approaches significantly improve the quality of generated parameters with prompt-based and diverse synthesis results [Wang et al., 2024, Soro et al., 2024, Yuan et al., 2024, Erkoç et al., 2023]. However, these works on parameter generation mainly focus on generating parameters for supervised learning tasks such as image classification and tabular data prediction. In parallel, the RL community has developed complementary tools for obtaining good policy parameters without training a separate network from scratch: policy adaptation methods such as ADAPTER-RL [Ye et al., 2023] reuse a trained backbone and adjust it to new tasks, while robust offline-to-online techniques [Gao et al., 2022, He et al., 2025], discrete actor-critic improvements [Zhou et al., 2022], variance-reduction tricks in policy optimization [Lin et al., 2023, Wu et al., 2021], and feedback-driven RL [Liu et al., 2023] all aim at the same goal of producing effective policy parameters more cheaply. In this paper, we extend the parameter generation paradigm to reinforcement learning tasks, where the generated parameters are used to initialize the policy network for different tasks. We show that DPPG can generate high-quality policy parameters for multiple reinforcement learning tasks with only one pre-trained model. 
+
+# 3 Approach 
+
+## 3.1 Preliminaries 
+
+Diffusion models, drawing inspiration from the principles of thermodynamic diffusion, operate as sequential models with hidden variables. The training methodology for these models is bifurcated into two distinct phases: the introduction of noise in a forward manner and the subsequent reverse noise reduction. In the initial phase, Gaussian noise is incrementally introduced to the original sample, whereas the latter phase embarks from a state of random noise, employing a Markov chain to facilitate the training of a Gaussian transformation. 
+
+Forward Process. Given an initial sample x0 ∼ q(x), the forward process incrementally infuses Gaussian noise through T iterative steps, culminating in a series of intermediate representations ( x1, x2, . . . , xT ). The formal description of this progression is articulated as follows: 
+
+q (xt | xt−1) = N
+
+
+
+xt; p1 − βtxt−1, β tI
+
+
+
+(1)              
+
+> q(xt|xt−1) = N
+> 
+> xt;p1−βtxt−1, β tI
+> 
+> q(x1: T|x0) =
+> TY
+> t=1
+> q(xt|xt−1)
+> (2)
+
+Here, q signifies the process of adding noise in the forward direction, while N stands for the Gaussian noise parameterized by βt. The symbol I denotes the identity matrix. 3Reverse Process. The reverse denoising process acts as the counterpart to the forward process, systematically eliminating noise from xt by incrementally training a denoising neural network over T steps to yield the original sample. The iterative equation governing the reverse denoising process is presented as follows: 
+
+pθ (xt−1 | xt) = N (xt−1; μθ (xt, t ) , Σθ (xt, t )) (3) 
+
+pθ (x0: T ) = p (xT )
+
+> T
+
+Y
+
+> t=1
+
+pθ (xt−1 | xt) (4) where p denotes the reverse process, while μθ (xt, t ) and Σθ (xt, t ) represent the Gaussian mean and variance, respec-tively, as estimated by the denoising network with parameters θ. The optimization of the denoising network within the reverse process is achieved through minimizing the standard negative log-likelihood: 
+
+Ldm = DKL (q (xt−1 | xt, x 0) ∥pθ (xt−1 | xt)) (5) where DKL (·∥· ) signifies the Kullback-Leibler (KL) divergence, a measure commonly employed to quantify the discrepancy between two probability distributions. 
+
+## 3.2 Overall Framework 
+
+Figure 1 presents the overall structure of our proposed framework, which is divided into four key components. First, we employ reinforcement learning to train policy models for various environments, resulting in a collection of optimized policy network parameters. Second, since directly generating the entire network’s parameters is challenging, we train an autoencoder to compress the parameters. Third, we utilize the latent representation of these compressed parameters to train a diffusion model. Fourth, during inference, the final policy network’s parameters are reconstructed from random noise. Detailed explanations of these phases are provided in the following subsections.  
+
+> Figure 1: An overview of the proposed framework. (a) Prepare the parameters of policy networks trained in various reinforcement learning environments. (b) Train a Transformer-based autoencoder to compress the parameters. (c) Train a diffusion model to generate the compressed latent representations. (d) Reconstruct the final policy network parameters from random noise during inference.
+
+43.3 Preparation of Policy Networks 
+
+To begin, we trained a corresponding policy network for each common reinforcement learning environment, including but not limited to Classic Control, Atari, and MuJoCo. Due to the differences in observation space, action space, and the complexity of the environments, the structure and size of these policy networks vary significantly. For instance, networks for the Classic Control environment primarily consist of MLP layers with thousands of parameters. In contrast, networks designed for the MuJoCo environment are composed of MLP layers with tens of thousands of parameters. The Atari environment, being a video game setting, is considerably more complex, featuring networks with millions of parameters that include both CNN and MLP layers. Notably, our method is insensitive to the model’s structure and size; it is capable of generating network parameters for any architecture. Upon completing the training of policy networks for each reinforcement learning environment, we proceed to fine-tune each environment’s policy for n × K steps. During this fine-tuning process, a checkpoint is saved every n
+
+steps, resulting in a total of K checkpoints. These checkpoints’ parameters are then utilized as our training data. In our experiments, we typically set n × K equal to the number of steps taken to initially converge the policy network, ensuring the diversity of the input data. For each environment, we finally obtain a parameter dataset Θ = {θ1, θ 2, ..., θ K } to train the autoencoder. 
+
+## 3.4 Train the Parameter Autoencoder 
+
+Patchify. Following this, we flatten all parameters into 1-dimensional vectors V = {v1, v 2, ..., v K } and segment these vectors into patches, each containing p parameters, arranged in an order from shallow to deep layers, as illustrated in Figure 1(b). Here, p represents the patch size. Subsequently, a patch embedding layer is utilized to transform the patchified parameters into tokens that can be fed into a Transformer model. This patchification approach ensures our method’s capability to handle input parameters of any size and structure. 
+
+Transformer-based Autoencoder. Then, we feed the transformed patch tokens into a Transformer-based autoencoder, which maintains encoder and decoder structures identical to those of a standard Transformer. To further enhance the reconstruction capability of the autoencoder, we encode the environment index as a label and treat it as an additional token input to the Transformer encoder. Moreover, to bolster the robustness and generalization capacity of the autoencoder, we follow the work of Wang et al. [2024] and implement random noise augmentation on both the input parameters and the latent representations. In alignment with conventional autoencoder training practices, we aim to minimize the mean squared error (MSE) loss between V and V ′ as follows: 
+
+LMSE = 1
+
+K
+
+> K
+
+X
+
+> 1
+
+∥vk − v′
+
+> k
+
+∥2 (6) where v′ 
+
+> k
+
+is the k-th reconstructed parameter. Ultimately, we obtain the latent representation z of the vector v, where the size of z is [patch_num , d _model ]. Here, patch_num refers to the number of patches after patchifying v, and d_model represents the dimension of each patch after compression. 
+
+## 3.5 Train the Diffusion Model 
+
+Due to the challenges associated with directly generating the full set of parameters, we follow the approach outlined in Rombach et al. [2022] and utilize the latent representation z, obtained from the autoencoder, to train a diffusion model. This model is conditioned on the environment index i and the current timestep t, as illustrated in Figure 1(c). In our experiments, we flatten z and then re-patchify it, typically selecting a divisor of d_model as the patch size to avoid disrupting the structure of z. Ultimately, we optimize the following latent diffusion model objective: 
+
+LLDM = Ez,ε ∼N (0 ,1) ,i,t 
+
+|| ε − εψ (zt, i, t )|| 22
+
+ (7) where ε represents the added Gaussian noise, and εψ (zt, i, t ) denotes the denoising network parameterized by ψ. Here, we opt for the Diffusion Transformer [Peebles and Xie, 2023] as the denoising network, which we adapt to suit the diffusion of one-dimensional data, while striving to maintain as much of its original setting as possible. 53.6 Generate Target Parameters 
+
+As illustrated in Figure 1(d), new parameters are generated conditionally through the reverse diffusion process as follows: 
+
+zt = 1
+
+√at
+
+(zt − βt
+
+√1 − ˜at
+
+εψ (zt, i, t )) + σξ (8) where ξ ∼ N (0 , I ). After generating a latent representation ¯z for environment Ei, we utilize the AE decoder to reconstruct the vector ¯v, i.e., ¯v = Decoder (¯ z). Finally, we unflatten ¯v to obtain the final target parameters ¯θ.
+
+# 4 Experiments 
+
+Testing Environments. We selected Atari games [Bellemare et al., 2013], Classic Control [Brockman et al., 2016], and MuJoCo [Todorov et al., 2012] as our test environments due to their widespread acceptance in the reinforcement learning community as benchmarks for evaluating our method. 
+
+Setting. For each sub-environment, we initially train an agent using Proximal Policy Optimization (PPO) [Schulman et al., 2017] until convergence. Subsequently, we fine-tune this model to obtain parameters from 200 checkpoints, which serve as our training dataset. The architecture of our autoencoder consists of a three-layer Transformer encoder and a three-layer Transformer decoder. 
+
+RL Zoo. We utilize the "RL Baselines3 Zoo" project as the source for our experiment’s initial hyperparameters. This project is designed to facilitate the training, evaluation, and fine-tuning of reinforcement learning agents across a wide array of environments. It builds upon the Stable Baselines3 library, which is a set of reliable implementations of state-of-the-art RL algorithms in PyTorch. The RL Baselines3 Zoo extends this by providing a curated collection of pre-trained models and hyperparameters that have been rigorously optimized for performance across various tasks. 
+
+Baselines. We selected the returns of the original Proximal Policy Optimization (PPO) [Schulman et al., 2017] algorithm and pdiff [Wang et al., 2024] in the respective environments as our baseline. 
+
+## 4.1 Performance in Single Environments 
+
+Table 1 shows the performance in single environments. This means that we trained the DPPG network within individual environments and conducted tests within those same environments. For Classic Control and MuJoCo tasks, we directly generate the parameters for the entire network. For Atari tasks, given the larger size of the network, we generate parameters for the action layer. The situation of generating parameters for large networks will be discussed in Section 4.3. The results indicate that DPPG can generate superior parameters across 20 Atari tasks, 5 Classic Control tasks, and 5 MuJoCo tasks. In the vast majority of these environments, the parameters generated by our method outperform those trained by the original PPO algorithms. This suggests that our approach is capable of learning the parameter distribution of the initial policy network and generating improved parameters from random noise. Additionally, the performance generated by our method is generally better than that of pdiff, and the variance in returns is smaller, which demonstrates the stability of our approach. Notably, pdiff encountered an Out of Memory (OOM) issue when generating parameters for a network in the Humanoid environment, which consists of 166,673 parameters, while our method did not. This indicates that our method can generate larger parameters using less GPU memory. Detailed discussions on this will also be presented in Section 4.3. 
+
+## 4.2 Performance Across the Entire Environments 
+
+Table 2 shows the performance across the entire environments. In this setup, we trained a unified DPPG across all environments and generate parameters for the corresponding environment from random noise and the environment’s label. Since pdiff can only be trained in a single environment and generate parameters for that specific environment, we only compare its performance with the original RL model. It can be observed that, although the multi-task learning aspect may result in some tasks not performing as well as in the single environment setting, in most tasks, DPPG is still capable of generating parameters that yield higher returns than those of the original RL model. 6Table 1: Performance in Single Environments. We train DPPG within a single environment and test within the same setting. "Parameter Number" refers to the size of the network parameters. "Original" denotes the returns of the baseline RL model. For each environment, we generate 200 sets of network parameters and report the mean and variance of their returns. Environment Parameter number Original pdiff DPPG (Ours) Atari Alien 9234 674 .78 ±48 .17 856 .55 ±238 .60 735 .0±50 .69 
+
+Amidar 5130 761 .22 ±12 .34 583 .51 ±220 .35 772 .68 ±14 .94 
+
+Assault 3591 5562 .01 ±739 .71 153 .93 ±401 .77 6500 .79 ±638 .09 
+
+Asteroids 7182 1160 .70 ±99 .18 865 .62 ±307 .34 1185 .55 ±97 .08 
+
+BattleZone 9234 23556 .0±1743 .23 23635 .0±4832 .83 28113 .0±2029 .09 
+
+BeamRider 4617 4183 .13 ±455 .50 4177 .47 ±828 .9 4364 .60 ±517 .49 
+
+Boxing 9234 97 .41 ±1.41 78 .49 ±38 .00 97 .60 ±1.61 
+
+Breakout 2052 478 .99 ±53 .59 322 .05 ±77 .95 394 .61 ±7.33 
+
+CrazyClimber 4617 136518 .3±5195 .24 92272 .5±25370 .07 129752 .55 ±6395 .88 
+
+Enduro 4617 911 .96 ±53 .20 765 .33 ±201 .31 904 .85 ±62 .86 
+
+Freeway 1539 32 .88 ±0.13 32 .88 ±0.14 32 .90 ±0.13 
+
+Jamesbond 9234 1282 .35 ±463 .58 1142 .1±668 .88 1311 .95 ±489 .22 
+
+Kangaroo 9234 1800 ±0 1630 .5±390 .11 1800 ±0
+
+MsPacman 4617 2018 .1±271 .45 2175 .6±338 .37 2309 .83 ±157 .64 
+
+Pong 3078 20 .41 ±0.23 18 .19 ±6.99 20 .45 ±0.26 
+
+Qbert 3078 14819 .37 ±838 .42 14742 .5±2514 .34 15092 .87 ±819 .51 
+
+RoadRunner 9234 27458 .85 ±2137 .92 25228 .5±4499 .96 28372 .0±2670 .89 
+
+Robotank 9234 25 .43 ±2.47 18 .86 ±2.74 26 .05 ±2.26 
+
+Seaquest 9234 1796 .13 ±9.83 1704 .9±281 .24 1802 .99 ±11 .15 
+
+SpaceInvaders 3078 884 .80 ±133 .86 849 .05 ±237 .46 976 .64 ±174 .12 
+
+Classic-Control CartPole 4610 500 ±0 500 ±0 500 ±0
+
+Acrobot 4803 −67 .55 ±4.42 −100 .30 ±93 .48 −67 .39 ±3.64 
+
+MountainCar 4547 −116 .56 ±7.65 −121 .97 ±19 .46 −114 .53 ±6.57 
+
+MountainCarContinuous 4417 46 .32 ±71 .37 60 .34 ±61 .82 93 .02 ±1.80 
+
+Pendulum 4481 −171 .18 ±37 .15 −380 .98 ±475 .25 −152 .13 ±35 .51 
+
+MuJoCo Ant 6472 996 .03 ±715 .68 660 .47 ±902 .87 1067 .14 ±413 .51 
+
+HalfCheetah 71942 5079 .27 ±1314 .46 2576 .34 ±1129 .98 5920 .20 ±65 .78 
+
+Hopper 69635 961 .03 ±117 .21 840 .5±101 .48 1005 .59 ±0.62 
+
+Humanoid 166673 705 .68 ±157 .74 OOM 874 .59 ±73 .24 
+
+Walker2d 5702 2703 .18 ±706 .58 1711 .36 ±1246 .77 3124 .33 ±295 .78 
+
+## 4.3 Performance on Large Parameters 
+
+The capacity to generate a large number of parameters is also a crucial metric. Previous work [Wang et al., 2024, Soro et al., 2024, Yuan et al., 2024, Erkoç et al., 2023] has predominantly tested on networks with relatively small parameter sizes. Table 3 presents the performance results on large parameter networks using Atari’s 20 games as the testing environment. These environments have network parameter sizes of approximately 1.69 million. Due to the Out-Of-Memory (OOM) issue with pdiff at this parameter scale, we only compare the performance with the original RL model. Thanks to our Transformer-based autoencoder’s ability to achieve extremely high compression rates, DPPG is capable of generating competitive parameters even in high-parameter environments. Figure 2 illustrates the relationship between the required GPU memory and the number of parameters generated for DPPG and pdiff, with a batch size of 200. It is clear that under the same GPU memory constraints, DPPG can generate a network with approximately 100 times the number of parameters compared to pdiff. 7Table 2: Performance Across the Entire Environments. We trained a unified DPPG model across all environments and conducted tests within their respective settings. "Parameter Number" refers to the size of the network parameters. "Original" denotes the returns of the baseline RL model. For each environment, we generate 200 sets of network parameters and report the mean and variance of their returns. Environment Parameter number Original DPPG (Ours) Atari Alien 9234 674 .78 ±48 .17 727 .14 ±41 .18 
+
+Amidar 5130 761 .22 ±12 .34 761 .79 ±13 .27 
+
+Assault 3591 5562 .01 ±739 .71 5140 .74 ±654 .34 
+
+Asteroids 7182 1160 .70 ±99 .18 1208 .31 ±105 .47 
+
+BattleZone 9234 23556 .0±1743 .23 21253 .5±2143 .00 
+
+BeamRider 4617 4183 .13 ±455 .50 4511 .57 ±414 .10 
+
+Boxing 9234 97 .41 ±1.41 96 .58 ±1.50 
+
+Breakout 2052 478 .99 ±53 .59 376 .38 ±53 .59 
+
+CrazyClimber 4617 136518 .3±5195 .24 75424 .55 ±679 .24 
+
+Enduro 4617 911 .96 ±53 .20 894 .49 ±47 .57 
+
+Freeway 1539 32 .88 ±0.13 32 .67 ±0.19 
+
+Jamesbond 9234 1282 .35 ±463 .58 1275 .25 ±403 .93 
+
+Kangaroo 9234 1800 ±0 1800 ±0
+
+MsPacman 4617 2018 .1±271 .45 1483 .27 ±65 .14 
+
+Pong 3078 20 .41 ±0.23 20 .42 ±0.19 
+
+Qbert 3078 14819 .37 ±838 .42 14683 .02 ±838 .77 
+
+RoadRunner 9234 27458 .85 ±2137 .92 28018 .0±1778 .81 
+
+Robotank 9234 25 .43 ±2.47 24 .77 ±2.18 
+
+Seaquest 9234 1796 .13 ±9.83 1800 .43 ±7.24 
+
+SpaceInvaders 3078 884 .80 ±133 .86 941 .86 ±116 .01 
+
+Classic-Control CartPole 4610 500 ±0 500 ±0
+
+Acrobot 4803 −67 .55 ±4.42 −66 .9±3.12 
+
+MountainCar 4547 −116 .56 ±7.65 −122 .46 ±6.96 
+
+MountainCarContinuous 4417 46 .32 ±71 .37 91 .69 ±0.67 
+
+Pendulum 4481 −171 .18 ±37 .15 −170 .95 ±29 .39 
+
+MuJoCo Ant 6472 996 .03 ±715 .68 504 .54 ±140 .64 
+
+HalfCheetah 71942 5079 .27 ±1314 .46 1949 .26 ±69 .53 
+
+Hopper 69635 961 .03 ±117 .21 1009 .37 ±0.29 
+
+Humanoid 166673 705 .68 ±157 .74 436 .35 ±37 .54 
+
+Walker2d 5702 2703 .18 ±706 .58 3030 .85 ±265 .42 
+
+8Table 3: Performance on Large Parameters. "Parameter Number" refers to the size of the network parameters. "Original" denotes the returns of the baseline RL model. For each environment, we generate 200 sets of network parameters and report the mean and variance of their returns. Environment Parameter number Original DPPG (Ours) Atari Alien 1693362 763 .28 ±82 .81 799 .75 ±98 .65 
+
+Amidar 1684641 724 .78 ±19 .60 763 .36 ±20 .66 
+
+Assault 1683102 5270 .33 ±696 .26 5688 .04 ±514 .72 
+
+Asteroids 1686693 1198 .2±112 .04 1189 .4±83 .49 
+
+BattleZone 1693362 19131 .5±1968 .21 20725 .0±2310 .16 
+
+BeamRider 1688745 4437 .67 ±606 .95 4548 .55 ±477 .68 
+
+Boxing 1693362 97 .58 ±1.15 97 .47 ±0.99 
+
+Breakout 1681563 406 .22 ±42 .99 381 .51 ±19 .73 
+
+CrazyClimber 1688745 119060 .5±8300 .94 120772 .5±5890 .09 
+
+Enduro 1688745 915 .46 ±58 .55 849 .10 ±43 .76 
+
+Freeway 1681050 32 .74 ±0.12 32 .36 ±0.27 
+
+Jamesbond 1693362 1247 .0±403 .93 1356 .0±499 .48 
+
+Kangaroo 1693362 1800 ±0 1800 ±0
+
+MsPacman 1688745 1936 .48 ±241 .39 2604 .95 ±225 .12 
+
+Pong 1687206 20 .39 ±0.26 20 .71 ±0.11 
+
+Qbert 1687206 15513 .83 ±1234 .25 14459 .37 ±1197 .40 
+
+RoadRunner 1693362 27978 .7±1902 .90 28561 .0±2349 .40 
+
+Robotank 1693362 24 .81 ±2.39 25 .00 ±1.91 
+
+Seaquest 1693362 1799 .9±7.73 1812 .9±31 .51 
+
+SpaceInvaders 1687206 751 .06 ±128 .54 878 .95 ±156 .53 0 5000 10000 15000 20000 25000 30000 Memory Usage (MB) 10 3
+
+> 10 4
+> 10 5
+> 10 6
+> 10 7
+> Number of Parameters
+> P-diff PDN
+
+Figure 2: Under the same GPU memory, DPPG can generate a network with approximately 100 times the number of parameters as pdiff. 
+
+94.4 Generalization Capabilities 
+
+In the previous experiments, we utilized a diffusion model to generate parameters for seen environments. However, generalization is also a crucial capability. In this section, we aim to explore the generalization capabilities of DPPG. To achieve this goal, inspired by the approach in Soro et al. [2024] where images are used as conditions for generating parameters in CV tasks, we use the trajectories of expert gameplay as new conditions. Specifically, we collected a series of expert trajectories from 20 Atari games using the pre-trained PPO models. These trajectories were then used as data to train a trajectory VAE, which compresses them into a latent space. We replaced the label embedder in Figure 1 with this trajectory VAE as the new condition and retrained our DPPG model. Finally, we tested the performance in unseen Atari games. The results are shown in Table 4 and Figure 3. Due to limitations in the quantity and distribution of the data, it is challenging for DPPG to directly generate high-quality policies. Therefore, we evaluated the generalization capabilities by using the parameters generated by DPPG as initialization and, after fine-tuning, comparing these with random initialization and the default orthogonal initialization of PPO from the RL Zoo as baselines. As observed, although DPPG did not show an advantage when used directly as initial parameters, after fine-tuning, DPPG achieved better performance across all environments and significantly accelerated RL training. This indicates that DPPG can learn the differences in strategies between different environments from the trajectories of similar Atari games and generate reasonable parameters that are closer to the optimal policy. In the future, we will explore how to directly generate high-quality policy network parameters without the need for any fine-tuning. 
+
+Table 4: Performance on Unseen Environments. We report two sets of results: (a) performance without fine-tuning; (b) performance after fine-tuning. 
+
+Environment Initialization Fine-tuning Random Init Orthogonal Init DPPG Random Init Orthogonal Init DPPG AirRaid 0 297 .5 26 .5 0 6080 11150 
+
+Defender 550 1165 1953 1180 30080 31190 
+
+DoubleDunk −4.0 −4.2 −3.15 -2.8 -2.4 −0.4
+
+Gopher 48 0 59 1300 924 1520 
+
+Phoenix 58 612 74 .4 3934 4888 6524 
+
+StarGunner 240 150 290 600 21020 49220 
+
+UpNDown 739 1520 405 143790 203340 289620 
+
+WizardOfWor 250 430 117 2420 2900 5600 0 1 2 3 4 5 
+
+> Timesteps 1e6 010000 20000 30000 40000
+> Training Episodic Reward Training Episodic Reward
+> Random Init Orthogonal Init DPPG
+
+(a) Defender. 0 1 2 3 4 5  
+
+> Timesteps 1e6 010000 20000 30000 40000 50000
+> Training Episodic Reward Training Episodic Reward
+> Random Init Orthogonal Init DPPG
+
+(b) StarGunner. 0 1 2 3 4 5  
+
+> Timesteps 1e6 050000 100000 150000 200000 250000 300000
+> Training Episodic Reward Training Episodic Reward
+> Random Init Orthogonal Init DPPG
+
+(c) UpNDown. 0 1 2 3 4 5  
+
+> Timesteps 1e6 01000 2000 3000 4000 5000 6000 7000
+> Training Episodic Reward Training Episodic Reward
+> Random Init Orthogonal Init DPPG
+
+(d) WizardOfWor. 
+
+Figure 3: Episode reward curve over fine-tuning steps in unseen environments, using generated parameters as initialization. 
+
+## 4.5 Ablation Study 
+
+Impact of different autoencoder patch sizes. The patch size of the autoencoder decides how many patches the original parameters should be divided into and processed to a fixed size of latent representations. In this experiment, we evaluate the policy performance under different autoencoder patch sizes. Table 5 shows the effect of different autoencoder patch sizes on generation performance. We use the performance score as our metric, defined as the ratio 10 of the performance of the generated parameters to the performance of the original RL model. It is observed that across different environments, there is a trend of improved generation performance with increasing patch size. To further investigate this phenomenon, we also experimented with different patch sizes in high-parameter environments. Surprisingly, we find that our autoencoder can maintain a high compression rate when transforming the input parameter patch sequence into latent representations. Further analysis of the large-parameter results for Assault and SpaceInvaders is provided in the Appendix (Figure 5). 
+
+Table 5: Average scores with different autoencoder patch sizes 
+
+Environment 128 256 512 1024 2048 MountainCar 0.98 1.03 1.01 1.02 1.02 
+
+Ant 0.75 0.85 1.10 1.5 1.5
+
+Assault 1.09 1.04 1.13 1.15 1.17 
+
+Impact of different K. Figure 4 illustrates the impact of varying K on the results, where K represents the size of the initial training data. The performance score is defined as the ratio of the performance of the generated parameters to the performance of the original RL model. It is evident that as K increases, the generated results become more stable. This aligns with the principle of diffusion models: modeling the initial distribution accurately becomes more challenging with smaller training data. 0 200 400 600 800 1000 k0.85 0.90 0.95 1.00 1.05 Performance Score 
+
+> MountainCar Assault
+
+Figure 4: Impact of different K. K denotes the size of the training data. Increasing K leads to more stable generation outcomes. 
+
+# 5 Conclusion 
+
+In this paper, we proposed Diffusion-based Conditional Policy Network Parameter Generation (DPPG), which consists of a Transformer-based autoencoder and a task-conditioned latent diffusion model. Our experiments show that, with one unified DPPG model, we can synthesize policies in a diverse set of tasks from different environment domains including Classic Control, Atari, and MuJoCo. Additionally, DPPG demonstrates the capability to generate large-parameter policies and exhibits a certain degree of generalization ability. Although DPPG is capable of generating parameters for unseen environments, the quality of the generated parameters is still constrained by the quantity and distribution of the data. In the future, we will explore methods to directly generate parameters for unseen environments without the need for fine-tuning. Additionally, training a diffusion model capable of generating large-parameter sets remains computationally expensive. We will investigate more efficient designs to address this challenge. 11 References 
+
+Fan Bao, Chongxuan Li, Jun Zhu, and Bo Zhang. Analytic-dpm: an analytic estimate of the optimal reverse variance in diffusion probabilistic models. In The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 . OpenReview.net, 2022. URL https://openreview.net/forum?id= 0xiJLKH-ufZ .Jacob Beck, Matthew Thomas Jackson, Risto Vuorio, and Shimon Whiteson. Hypernetworks in meta-reinforcement learning. In Conference on Robot Learning , pages 1478–1487. PMLR, 2023a. Jacob Beck, Risto Vuorio, Evan Zheran Liu, Zheng Xiong, Luisa Zintgraf, Chelsea Finn, and Shimon Whiteson. A survey of meta-reinforcement learning. arXiv preprint arXiv:2301.08028 , 2023b. Marc G Bellemare, Yavar Naddaf, Joel Veness, and Michael Bowling. The arcade learning environment: An evaluation platform for general agents. Journal of Artificial Intelligence Research , 47:253–279, 2013. Andrew Brock, Theodore Lim, James M. Ritchie, and Nick Weston. SMASH: one-shot model architecture search through hypernetworks. In 6th International Conference on Learning Representations, ICLR 2018, Vancouver, BC, Canada, April 30 - May 3, 2018, Conference Track Proceedings . OpenReview.net, 2018. URL https: //openreview.net/forum?id=rydeCEhs-.Greg Brockman, Vicki Cheung, Ludwig Pettersson, Jonas Schneider, John Schulman, Jie Tang, and Wojciech Zaremba. Openai gym. arXiv preprint arXiv:1606.01540 , 2016. Ashwini Doke and Madhava Gaikwad. Survey on automated machine learning (automl) and meta learning. In 12th International Conference on Computing Communication and Networking Technologies, ICCCNT 2021, Kharagpur, India, July 6-8, 2021 , pages 1–5. IEEE, 2021. doi: 10.1109/ICCCNT51525.2021.9579526. URL https://doi. org/10.1109/ICCCNT51525.2021.9579526 .Ziya Erkoç, Fangchang Ma, Qi Shan, Matthias Nießner, and Angela Dai. Hyperdiffusion: Generating implicit neural fields with weight-space diffusion. In IEEE/CVF International Conference on Computer Vision, ICCV 2023, Paris, France, October 1-6, 2023 , pages 14254–14264. IEEE, 2023. doi: 10.1109/ICCV51070.2023.01315. URL 
+
+https://doi.org/10.1109/ICCV51070.2023.01315 .Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In Doina Precup and Yee Whye Teh, editors, Proceedings of the 34th International Conference on Machine Learning, ICML 2017, Sydney, NSW, Australia, 6-11 August 2017 , volume 70 of Proceedings of Machine Learning Research ,pages 1126–1135. PMLR, 2017. URL http://proceedings.mlr.press/v70/finn17a.html .Chengqian Gao, Ke Xu, Liu Liu, Deheng Ye, Peilin Zhao, and Zhiqiang Xu. Robust offline reinforcement learning with gradient penalty and constraint relaxation. arXiv preprint arXiv:2210.10469 , 2022. Ian J. Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron C. Courville, and Yoshua Bengio. Generative adversarial nets. In Zoubin Ghahramani, Max Welling, Corinna Cortes, Neil D. Lawrence, and Kilian Q. Weinberger, editors, Advances in Neural Information Processing Systems 27: Annual Conference on Neural Information Processing Systems 2014, December 8-13 2014, Montreal, Que-bec, Canada , pages 2672–2680, 2014. URL https://proceedings.neurips.cc/paper/2014/hash/ 5ca3e9b122f61f8f06494c97b1afccf3-Abstract.html .David Ha, Andrew M. Dai, and Quoc V. Le. Hypernetworks. In 5th International Conference on Learning Representa-tions, ICLR 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings . OpenReview.net, 2017. URL 
+
+https://openreview.net/forum?id=rkpACe1lx .Longxiang He, Deheng Ye, Junbo Tan, Xueqian Wang, and Li Shen. Robust policy expansion for offline-to-online RL under diverse data corruption. arXiv preprint arXiv:2509.24748 , 2025. Irina Higgins, Loïc Matthey, Arka Pal, Christopher P. Burgess, Xavier Glorot, Matthew M. Botvinick, Shakir Mohamed, and Alexander Lerchner. beta-vae: Learning basic visual concepts with a constrained variational framework. In 5th International Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings . OpenReview.net, 2017. URL https://openreview.net/forum?id=Sy2fzU9gl .12 Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell, Maria-Florina Balcan, and Hsuan-Tien Lin, editors, Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020. URL https://proceedings.neurips.cc/paper/2020/hash/ 4c5bcfec8584af0d967f1ab10179ca4b-Abstract.html .Jonathan Ho, William Chan, Chitwan Saharia, Jay Whang, Ruiqi Gao, Alexey A. Gritsenko, Diederik P. Kingma, Ben Poole, Mohammad Norouzi, David J. Fleet, and Tim Salimans. Imagen video: High definition video generation with diffusion models. CoRR , abs/2210.02303, 2022. doi: 10.48550/ARXIV.2210.02303. URL https://doi.org/ 10.48550/arXiv.2210.02303 .Timothy M. Hospedales, Antreas Antoniou, Paul Micaelli, and Amos J. Storkey. Meta-learning in neural networks: A survey. IEEE Trans. Pattern Anal. Mach. Intell. , 44(9):5149–5169, 2022. doi: 10.1109/TPAMI.2021.3079209. URL 
+
+https://doi.org/10.1109/TPAMI.2021.3079209 .Hanchi Huang, Deheng Ye, Li Shen, and Wei Liu. Curriculum-based asymmetric multi-task reinforcement learning. 
+
+arXiv preprint arXiv:2211.03352 , 2022. Christopher Jarzynski. Equilibrium free-energy differences from nonequilibrium measurements: A master-equation approach. Physical Review E , 56(5):5018, 1997. Diederik P. Kingma and Max Welling. Auto-encoding variational bayes. In Yoshua Bengio and Yann LeCun, editors, 
+
+2nd International Conference on Learning Representations, ICLR 2014, Banff, AB, Canada, April 14-16, 2014, Conference Track Proceedings , 2014. URL http://arxiv.org/abs/1312.6114 .Junyou Li, Qin Zhang, Yangbin Yu, Qiang Fu, and Deheng Ye. More agents is all you need. In International Conference on Machine Learning (ICML) , 2024. Wenzhe Li, Hao Luo, Zichuan Lin, Chongjie Zhang, Zongqing Lu, and Deheng Ye. A survey on transformers in reinforcement learning. arXiv preprint arXiv:2301.03044 , 2023. Zichuan Lin, Junyou Li, Jianing Shi, Deheng Ye, Qiang Fu, and Wei Yang. JueWu-MC: Playing Minecraft with sample-efficient hierarchical reinforcement learning. In Annual Conference on Neural Information Processing Systems (NeurIPS) , 2021. Zichuan Lin, Xiapeng Wu, Mingfei Sun, Deheng Ye, Qiang Fu, and Wei Yang. Sample dropout: A simple yet effective variance reduction technique in deep policy optimization. arXiv preprint arXiv:2302.02299 , 2023. Jiate Liu, Yiqin Zhu, Kaiwen Xiao, Qiang Fu, Xiao Han, Wei Yang, and Deheng Ye. RLTF: Reinforcement learning from unit test feedback. arXiv preprint arXiv:2307.04349 , 2023. Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A. Rusu, Joel Veness, Marc G. Bellemare, Alex Graves, Martin A. Riedmiller, Andreas Fidjeland, Georg Ostrovski, Stig Petersen, Charles Beattie, Amir Sadik, Ioannis Antonoglou, Helen King, Dharshan Kumaran, Daan Wierstra, Shane Legg, and Demis Hassabis. Human-level control through deep reinforcement learning. Nat. , 518(7540):529–533, 2015. doi: 10.1038/NATURE14236. URL 
+
+https://doi.org/10.1038/nature14236 .William Peebles and Saining Xie. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 4195–4205, 2023. William S. Peebles, Ilija Radosavovic, Tim Brooks, Alexei A. Efros, and Jitendra Malik. Learning to learn with generative models of neural network checkpoints. CoRR , abs/2209.12892, 2022. doi: 10.48550/ARXIV.2209.12892. URL https://doi.org/10.48550/arXiv.2209.12892 .Yun Qu, Boyuan Wang, Jianzhun Shao, Yuhang Jiang, Chen Chen, Zhenbin Ye, et al. Hokoff: Real game dataset from honor of kings and its offline reinforcement learning benchmarks. arXiv preprint arXiv:2408.10556 , 2024. Aditya Ramesh, Prafulla Dhariwal, Alex Nichol, Casey Chu, and Mark Chen. Hierarchical text-conditional image generation with CLIP latents. CoRR , abs/2204.06125, 2022. doi: 10.48550/ARXIV.2204.06125. URL https: //doi.org/10.48550/arXiv.2204.06125 .13 Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer. High-resolution image synthesis with latent diffusion models. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2022, New Orleans, LA, USA, June 18-24, 2022 , pages 10674–10685. IEEE, 2022. doi: 10.1109/CVPR52688. 2022.01042. URL https://doi.org/10.1109/CVPR52688.2022.01042 .John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. Shagun Sodhani, Amy Zhang, and Joelle Pineau. Multi-task reinforcement learning with context-based representations. In Marina Meila and Tong Zhang, editors, Proceedings of the 38th International Conference on Machine Learning, ICML 2021, 18-24 July 2021, Virtual Event , volume 139 of Proceedings of Machine Learning Research , pages 9767–9779. PMLR, 2021. URL http://proceedings.mlr.press/v139/sodhani21a.html .Jascha Sohl-Dickstein, Eric A. Weiss, Niru Maheswaranathan, and Surya Ganguli. Deep unsupervised learning using nonequilibrium thermodynamics. In Francis R. Bach and David M. Blei, editors, Proceedings of the 32nd International Conference on Machine Learning, ICML 2015, Lille, France, 6-11 July 2015 , volume 37 of JMLR Workshop and Conference Proceedings , pages 2256–2265. JMLR.org, 2015. URL http://proceedings.mlr. press/v37/sohl-dickstein15.html .Jiaming Song, Chenlin Meng, and Stefano Ermon. Denoising diffusion implicit models. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net, 2021. URL 
+
+https://openreview.net/forum?id=St1giarCHLP .Bedionita Soro, Bruno Andreis, Hayeon Lee, Song Chong, Frank Hutter, and Sung Ju Hwang. Diffusion-based neural network weights generation. CoRR , abs/2402.18153, 2024. doi: 10.48550/ARXIV.2402.18153. URL 
+
+https://doi.org/10.48550/arXiv.2402.18153 .Emanuel Todorov, Tom Erez, and Yuval Tassa. Mujoco: A physics engine for model-based control. In 2012 IEEE/RSJ international conference on intelligent robots and systems , pages 5026–5033. IEEE, 2012. Kai Wang, Zhaopan Xu, Yukun Zhou, Zelin Zang, Trevor Darrell, Zhuang Liu, and Yang You. Neural network diffusion. CoRR , abs/2402.13144, 2024. doi: 10.48550/ARXIV.2402.13144. URL https://doi.org/10. 48550/arXiv.2402.13144 .Hua Wei, Jingxiao Chen, Xiyang Ji, Hongyang Qin, Minwen Deng, Siqin Li, Liang Wang, Weinan Zhang, Yong Yu, Lin Liu, Lanxiao Huang, Deheng Ye, Qiang Fu, and Wei Yang. Honor of kings arena: an environment for generalization in competitive reinforcement learning. In Advances in Neural Information Processing Systems , volume 35, pages 11881–11892, 2022. URL https://arxiv.org/abs/2209.08483 .Zifan Wu, Chao Yu, Deheng Ye, Junge Zhang, Haiyin Piao, and Hankz Hankui Zhuo. Coordinated proximal policy optimization. In International Joint Conference on Artificial Intelligence (IJCAI) , 2021. Mingyu Yang, Junyou Li, Zhongbin Fang, Sheng Chen, Yangbin Yu, Qiang Fu, et al. Playable game generation. arXiv preprint arXiv:2412.00887 , 2024. Deheng Ye and Zongqing Lu. More centralized training, still decentralized execution: Multi-agent conditional policy factorization. arXiv preprint arXiv:2209.12681 , 2022. Deheng Ye, Guibin Chen, Wen Zhang, Sheng Chen, Bo Yuan, Bo Liu, Jia Chen, Zhao Liu, Fuhao Qiu, Hongsheng Yu, Yinyuting Yin, Bei Shi, Liang Wang, Tengfei Shi, Qiang Fu, Wei Yang, Lanxiao Huang, and Wei Liu. Towards playing full MOBA games with deep reinforcement learning. In Advances in Neural Information Processing Systems ,volume 33, 2020a. URL https://proceedings.neurips.cc//paper_files/paper/2020/hash/ 06d5ae105ea1bea4d800bc96491876e9-Abstract.html .Deheng Ye, Zhao Liu, Mingfei Sun, Bei Shi, Peilin Zhao, Hao Wu, Hongsheng Yu, Shaojie Yang, Xipeng Wu, Qingwei Guo, Qiaobo Chen, Yinyuting Yin, Hao Zhang, Tengfei Shi, Liang Wang, Qiang Fu, Wei Yang, and Lanxiao Huang. Mastering complex control in MOBA games with deep reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , 2020b. URL https://arxiv.org/abs/1912.09729 .14 Deheng Ye, Guibin Chen, Peilin Zhao, Fuhao Qiu, Bo Yuan, Wen Zhang, Sheng Chen, Mingfei Sun, Xiaoqian Li, Siqin Li, Jing Liang, Zhenjie Lian, Bei Shi, Liang Wang, Tengfei Shi, Qiang Fu, Wei Yang, and Lanxiao Huang. Supervised learning achieves human-level performance in MOBA games: A case study of honor of kings. IEEE Transactions on Neural Networks and Learning Systems (TNNLS) , 33(3):908–918, 2022. Deheng Ye, Guibin Chen, Wen Zhang, Sheng Chen, Bo Yuan, Bo Liu, Jia Chen, Zhao Liu, Fuhao Qiu, Hongsheng Yu, et al. ADAPTER-RL: Adaptation of any agent using reinforcement learning. arXiv preprint arXiv:2311.11537 , 2023. Yangbin Yu, Qin Zhang, Junyou Li, Qiang Fu, and Deheng Ye. Affordable generative agents. arXiv preprint arXiv:2402.02053 , 2024. Yuan Yuan, Chenyang Shao, Jingtao Ding, Depeng Jin, and Yong Li. Spatio-temporal few-shot learning via diffusive neural network generation. In The Twelfth International Conference on Learning Representations , 2024. URL 
+
+https://openreview.net/forum?id=QyFm3D3Tzi .Ruize Zhang, Ruize Zhang, Deheng Ye, Wenbo Ding, and Yaodong Yang. A survey on self-play methods in reinforce-ment learning. arXiv preprint arXiv:2408.01072 , 2024. Tiantian Zhang, Zichuan Lin, Yuxing Wang, Deheng Ye, Qiang Fu, and Wei Yang. Dynamics-adaptive continual reinforcement learning via progressive contextualization. arXiv preprint arXiv:2209.00347 , 2022. Haibin Zhou, Tong Wei, Zichuan Lin, Junyou Li, Junliang Xing, Yuanchun Shi, and Deheng Ye. Revisiting discrete soft actor-critic. arXiv preprint arXiv:2209.10081 , 2022. Siyu Zhou, Tianyi Zhou, Yijun Yang, Guodong Long, Deheng Ye, and Jing Jiang. WALL-E: World alignment by rule learning improves world model-based LLM agents. In Annual Conference on Neural Information Processing Systems (NeurIPS) , 2024. 15 Appendix 
+
+## Impact of different autoencoder patch sizes on large parameters 
+
+In this section, we continue discussing the effect of different autoencoder patch sizes on generation performance in large parameter settings. As shown in Figure 5, we illustrate the AE performance score and DDPM performance score in the Assault and SpaceInvaders environments. Both models were trained with 20,000 iterations for the autoencoder and 80,000 iterations for the diffusion model. The AE performance score represents the ratio of the returns of parameters reconstructed by the autoencoder to the returns of the original parameters, while the DDPM performance score represents the ratio of the returns of parameters generated by the diffusion model to the returns of the original parameters. In large parameter settings, we experimented with larger patch sizes. Surprisingly, we found that our autoencoder could maintain a high compression rate when transforming the input parameter patch sequence into latent representations, compressing over 1,000,000 dimensions to 32 dimensions, while still achieving an AE performance score greater than 1. Additionally, we observed that as the autoencoder patch size increased, the DDPM performance score also improved. This indicates that a higher compression rate of the autoencoder facilitates better learning by the diffusion model. Therefore, we recommend selecting a higher autoencoder patch size, as long as the AE score remains consistently greater than 1, to enhance the learning efficiency of the diffusion model. 200000 400000 600000 800000 1000000 patch size 0.0 0.2 0.4 0.6 0.8 1.0 Performance Score 
+
+> Assault_AE_score Assault_DDPM_score
+
+(a) Assault. 200000 400000 600000 800000 1000000 patch size 0.2 0.4 0.6 0.8 1.0 1.2 1.4 Performance Score  
+
+> SpaceInvaders_AE_score SpaceInvaders_DDPM_score
+
+(b) SpaceInvaders. 
+
+Figure 5: Impact of different autoencoder patch sizes on generation performance in large parameter settings. Both the autoencoder and the diffusion model were trained for 20,000 and 80,000 iterations, respectively. 
+
+## Impact of different diffusion model patch sizes 
+
+We also experimented with different patch sizes for the diffusion model to evaluate their impact on generation performance, as shown in Table 6. Unlike the autoencoder patch size, we found that the patch size of the diffusion model has minimal effect on generation performance. Various settings consistently resulted in satisfactory parameter generation. 16 Table 6: Average scores with different diffusion model patch sizes 
+
+Environment 2 4 8 16 32 MountainCar 1.01 1.03 0.99 1.02 1.04 
+
+Ant 1.33 1.27 1.5 1.5 1.27 
+
+Assault 1.07 0.99 1.06 1.17 1.08 
+
+## Training Recipe 
+
+Table 7 presents the hyperparameters of DPPG in both small parameter and large parameter settings. We recommend adjusting the autoencoder patch size and the training iterations of the diffusion model according to the specific requirements of different tasks. 
+
+Table 7: Training settings comparison for small and large parameters. 
+
+Training Setting Small Parameters Large Parameters 
+
+K 200 200 batch size 200 200 
+
+Autoencoder 
+
+optimizer AdamW AdamW learning rate 3e-4 3e-4 training iterations 20,000 20,000 optimizer momentum betas=(0.9, 0.999) betas=(0.9, 0.999) weight decay 2e-6 2e-6 
+
+ξv , noise added on the input parameters 0.001 0.001 
+
+ξz , noise added on the latent representations 0.1 0.1 patch size 2048 524288 
+
+dmodel 32 32 depth (Transformer blocks) 3 3dim feedforward 256 256 
+
+Diffusion Model 
+
+optimizer AdamW AdamW learning rate 3e-4 3e-4 training iterations 40,000 80,000 optimizer momentum betas=(0.9, 0.999) betas=(0.9, 0.999) weight decay 2e-6 2e-6 EMA β 0.9999 0.9999 betas start 1e-4 1e-4 betas end 2e-2 2e-2 betas schedule linear linear 
+
+T , maximum time steps in training 1000 1000 patch size 16 16 depth (Transformer blocks) 2 2hidden size 32 32 
+
+17

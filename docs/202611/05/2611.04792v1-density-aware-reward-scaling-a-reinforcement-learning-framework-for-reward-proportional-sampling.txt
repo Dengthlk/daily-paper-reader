@@ -1,0 +1,2196 @@
+Density-Aware Reward Scaling: A Reinforcement Learning Framework for
+Reward-Proportional Sampling
+Ria Shekhawat∗, Abhijeet Sinha∗, Yingtao Zhu, Dianbo Liu
+National University of Singapore
+Abstract
+Reinforcement learning objectives that maximize expected
+return can concentrate probability mass on a small subset
+of high-reward outcomes, limiting diversity when multiple
+distinct solutions are desirable. We introduce Density-Aware
+Reward Scaling (DARS), a simple reward-processing mecha-
+nism that promotes reward-proportional sampling in continu-
+ous outcome spaces while retaining standard policy-gradient
+training. DARS estimates the local density of outcomes within
+each on-policy rollout group and inversely scales rewards by
+this density. The method requires no learned density model,
+auxiliary objective, critic, or modification to the underlying
+policy-gradient objective. In a controlled multimodal navi-
+gation task, DARS-GRPO avoids the single-mode collapse
+exhibited by GRPO and closely recovers the target mode allo-
+cation. Applied to text-to-image prompt adaptation, DARS-
+GRPO consistently improves image and prompt diversity
+across datasets, Policy LMs, and reward settings while main-
+taining good semantic alignment. These results show that
+density-aware reward scaling provides a lightweight way to
+improve coverage of diverse high-reward outcomes within ex-
+isting reinforcement-learning pipelines.
+1
+Introduction
+Reinforcement learning is typically formulated to maximize
+expected return, which can drive outcome-level probability
+mass toward a small subset of high-reward outcomes (GX-
+Chen et al. 2025). While desirable for conventional control
+problems, this behavior is limiting in domains where multiple
+distinct outcomes are simultaneously valuable. In generative
+modeling, scientific discovery, and structured prediction, the
+objective is often not merely to identify a high-reward solu-
+tion, but to learn a policy that maintains broad coverage over
+the high-reward outcome space.
+Several approaches have been proposed to promote
+such diversity. Entropy-regularized RL encourages stochas-
+tic action selection, but action-level stochasticity does not
+in general specify a desired distribution over terminal
+outcomes (Haarnoja et al. 2018). Generative Flow Net-
+works (GFlowNets) instead target reward-proportional sam-
+pling, providing a principled framework for generating di-
+verse high-reward samples (Bengio et al. 2023). Applying
+∗Equal Contribution
+GFlowNet-style objectives to autoregressive pretrained mod-
+els generally requires formulating generation through flow-
+or trajectory-based objectives rather than retaining an un-
+changed policy-gradient training pipeline (Yun et al. 2025).
+Inverse Probability Scaling (IPS) offers another route by in-
+versely scaling reward according to terminal-outcome vis-
+itation probability (Sinha, Elango, and Liu 2026). In con-
+tinuous or high-dimensional outcome spaces, however, ex-
+act repeated outcomes may be rare or may not provide a
+meaningful notion of semantic equivalence. We introduce
+Density-Aware Reward Scaling (DARS), a simple framework
+for encouraging a policy that has reward-proportional behav-
+ior within standard policy-gradient reinforcement learning.
+DARS is motivated by the limitations of IPS and replaces dis-
+crete visitation frequency with an estimate of local outcome
+density in continuous outcome spaces. For each on-policy
+rollout group, outcomes that lie in densely populated regions
+receive proportionally reduced rewards, while high-reward
+outcomes in underrepresented regions receive greater rela-
+tive rewards. This density scaling is applied before advantage
+estimation and requires no modification to the underlying
+policy-gradient objective. Importantly, DARS introduces no
+learned density model, critic, auxiliary loss, or specialized
+policy architecture; instead it simply modifies reward pro-
+cessing within the existing RL pipeline.
+Our central contribution is a simple mechanism for miti-
+gating outcome collapse and promoting coverage of diverse,
+high-reward regions within standard policy-gradient training.
+We validate DARS through controlled synthetic experiments
+that establish its ability to approximate reward-proportional
+sampling, followed by text-to-image prompt adaptation ex-
+periments demonstrating improved diversity while preserv-
+ing generation quality, and kernel-width ablations that pro-
+vide mechanistic evidence for its density-aware reward scal-
+ing.
+2
+Related Work
+Mode collapse in RL and loss of diversity: Mode col-
+lapse is widely associated with generative models that rep-
+resent only a small subset of a multimodal data distribution.
+An analogous failure occurs in reinforcement learning at
+the level of terminal outcomes: even when multiple trajec-
+tories or solutions receive similar rewards, expected-return
+optimization concentrates the learned policy on a narrow
+arXiv:2611.04792v1  [cs.LG]  3 Nov 2026
+
+
+subset of them, reducing the diversity of generated solu-
+tions in language and image generation (Kirk et al. 2024;
+Chen et al. 2026). Existing approaches mitigate this be-
+havior through entropy regularization, KL constraints, re-
+ward shaping, or diversity-aware objectives (Schulman et al.
+2017; Liu et al. 2026), yet they do not directly control the
+distribution of terminal outcomes. Recent work instead at-
+tributes outcome collapse to expected-return optimization
+itself, where an outcome’s aggregate learning signal is am-
+plified by its current sampling probability, creating a rich-get-
+richer feedback loop (Sinha, Elango, and Liu 2026). Reward-
+proportional methods address this issue by sampling out-
+comes in proportion to their rewards: GFlowNets achieve this
+through specialized flow-conservation objectives and have
+been extended to multi-objective optimization, continuous
+state spaces, prompt adaptation, and language-model reason-
+ing (Bengio et al. 2021, 2023; Jain et al. 2023; Lahlou et al.
+2023; Zhu et al. 2026), while IPS instead rescales rewards us-
+ing inverse visitation probabilities estimated from empirical
+outcome frequencies (Sinha, Elango, and Liu 2026). How-
+ever, empirical visitation frequencies become ineffective in
+continuous outcome spaces, where exact outcome repetitions
+are exceedingly rare. Concurrent work (Chen et al. 2026),
+also adjusts GRPO rewards using within-group semantic re-
+dundancy for mathematical reasoning in LLMs. In contrast,
+we study density-aware reward scaling as a mechanism for
+reward-proportional sampling in continuous outcome spaces
+and directly evaluate recovery of the target reward distribu-
+tion.
+Prompt Adaptation and Image Generation: Loss of
+output diversity has become increasingly visible in rein-
+forcement learning from human feedback and other forms
+of large-language-model post-training (Ouyang et al. 2022;
+Kirk et al. 2024; Chen et al. 2026). Reward optimization can
+favor a narrow set of response styles or semantic patterns even
+when many responses are valid. In practice, this behavior
+is often moderated with KL regularization, reward mixing,
+early stopping, or stochastic decoding. Prompt-optimization
+methods learn rewrites that improve text-to-image quality or
+alignment (Hao et al. 2023), while PAG learns diverse ef-
+fective prompts with a GFlowNet formulation over prompt-
+generation trajectories (Yun et al. 2025). CADS acts at dif-
+fusion inference time by annealing the conditioning signal
+during sampling.
+3
+Density-Aware Reward Scaling (DARS)
+IPS shows that reward-proportional samplingcan beachieved
+by inversely scaling rewards according to outcome probabil-
+ities under the current policy (Sinha, Elango, and Liu 2026),
+but estimating these probabilities through exact visitation
+frequencies does not extend naturally to continuous outcome
+spaces, where repeated outcomes are unlikely. DARS instead
+represents outcomes in a continuous feature space where
+distances capture meaningful similarity between outcomes.
+This representation allows visitation to be defined over local
+regions rather than exact outcome identities. DARS estimates
+the local density of each sampled outcome within its on-
+policy rollout group and inversely scales its reward by this
+density, reducing reinforcement of densely sampled regions
+while relatively favoring underrepresented high-reward re-
+gions.
+3.1
+Density
+Let O denote the outcome space and let ϕ : O →Rn be
+a representation map that embeds outcomes into a feature
+space. For an outcome oi ∈O, let yi = ϕ(oi) ∈Rn denote
+its representation. Given an on-policy rollout group contain-
+ing G such yi and their corresponding rewards Ri ≥0,
+DARS computes the relative local density of each outcome
+only with respect to the outcomes in the same rollout group.
+For a nonnegative kernel Kh, this estimate is
+ρi =
+G
+X
+j=1
+Kh(yi, yj),
+(1)
+where h controls how strongly nearby outcomes contribute
+to the local density. One choice is the Gaussian kernel,
+Kh(yi, yj) = exp
+
+−∥yi −yj∥2
+2
+2h2
+
+,
+(2)
+which assigns greater weight to nearby outcomes and
+smoothly decreases the contribution of outcomes as their
+distance increases. The kernel width h determines the scale
+of the resulting visitation neighborhoods. As the Gaussian
+kernel includes each outcome itself with Kh(yi, yi) = 1, the
+local density estimate satisfies ρi ≥1.
+DARS then applies inverse local-density reward scaling
+to down-weight frequently visited outcomes and encourage
+exploration of less populated regions of the outcome space,
+yielding the scaled reward eRi.
+eRi = Ri
+ρi
+,
+(3)
+3.2
+Integration with GRPO
+DARS modifies only the reward-processing stage of the
+GRPO pipeline. GRPO uses a clipped policy-ratio objective,
+and estimates advantages from groups of sampled outputs
+(Shao et al. 2024). It replaces each task reward Ri with the
+density-scaled reward eRi from Equation (3), after which the
+group-relative advantage is computed as
+Ai =
+eRi −eR
+s e
+R
+,
+(4)
+where eR and s e
+R are the within-group mean and standard
+deviation of the scaled rewards. The resulting advantages are
+passed to the standard GRPO objective without further modi-
+fication. For each conditioning input, DARS-GRPO samples
+an on-policy rollout group and evaluates its task rewards. It
+then computes the within-group local-density scores, scales
+and normalizes the rewards to obtain group-relative advan-
+tages, and applies the standard GRPO policy update without
+further modification. Thus, DARS requires no change to the
+GRPO policy ratio, clipped surrogate objective, policy ar-
+chitecture, or optimization procedure; its sole intervention
+is density-aware reward scaling before advantage normaliza-
+tion.
+
+
+3.3
+Behavior
+At either kernel width extremes, as h →0, ρi ≈1 and the
+rewards remain unchanged; as h →∞, ρi ≈G and group-
+relative advantage normalization cancels the shared reward
+scale. Intermediate bandwidths instead produce non-uniform
+reward scaling across the given rollout group, thereby mod-
+ifying the resulting policy-gradient signal.
+For d-dimensional outcome representations, pairwise ker-
+nel evaluation costs O(G2d) time and O(G2) memory.
+DARS introduces no learned density model, critic, or auxil-
+iary optimization objective.
+4
+Navigation Task: Controlled
+Distribution-Recovery Experiment
+This experiment tests whether DARS can make a policy-
+gradient RL method act as an approximate reward-
+proportional sampler in a continuous outcome space. The
+primary comparison is against GRPO: both methods use the
+same policy, environment, and terminal reward, but only
+DARS corrects for local outcome collapse. GFlowNet pro-
+vides a reward-proportional reference with a different train-
+ing objective. The experiment is a controlled empirical test
+of whether DARS approaches the normalized reward distri-
+bution.
+Environment and Target: We evaluate how closely a
+policy approaches a known normalized reward density on the
+unit square X = [0, 1]2. Each episode starts at s0 = (0, 0).
+At state st, the policy either terminates or takes a nonnegative
+displacement satisfying
+0 ≤at,i ≤min(δ, 1 −st,i),
+i ∈{1, 2},
+with deterministic transition st+1 = st + at. Trajectories
+therefore move monotonically up and to the right. The step
+bound δ makes distant terminal states require several deci-
+sions to reach for the policy. The policy may stop at any
+visited state except the origin, and it is forced to stop at the
+boundary or when the rollout horizon is reached. Only the
+terminal state receives rewards.
+The movement policy uses polar coordinates. A neural
+network predicts a Bernoulli stopping probability and sep-
+arate mixtures of Beta distributions for a normalized angle
+and radius. The angle is mapped to θt ∈[0, π/2], and the
+radius is rescaled by both δ and the distance to the boundary.
+The resulting action is
+at = (rt cos θt, rt sin θt).
+This guarantees valid first-quadrant movements and lets the
+policy jointly learn where to move, how far to move, and
+when to terminate. Since the radial parameterization bounds
+the Euclidean step length, it imposes the slightly stricter
+constraint ∥at∥2 ≤δ.
+The reward is an equally weighted mixture of four isotropic
+Gaussians, as shown in Figure 1. Each component has stan-
+dard deviation σ = 0.075.
+4.1
+Baselines and Evaluation Metrics
+We compare GRPO and DARS-GRPO, using GFlowNet as a
+non-RL reward-proportional reference. We evaluate the ter-
+minal distribution produced by each trained policy using 106
+Table 1: Navigation Task Results (avg over 5 seeds)
+Metric
+GFlowNet
+GRPO
+DARS-GRPO
+Density and transport
+Mean raw reward ↑
+3.44
+6.96
+4.59
+JSD ↓
+0.020
+0.649
+0.041
+Hist. TV ↓
+0.149
+0.975
+0.219
+SW2 ↓
+0.036
+0.242
+0.015
+Energy ↓
+0.007
+0.281
+0.002
+Mode allocation and support
+Mode TV ↓
+0.104
+0.750
+0.014
+Min. mode mass ↑
+0.187
+0.000
+0.236
+Precision ↑
+0.998
+0.997
+0.998
+Recall ↑
+0.996
+0.032
+0.985
+Hierarchical W ↓
+0.128
+0.359
+0.073
+Per-mode and local diagnostics (desired mass: 0.25)
+Mode 1 mass
+0.318
+0.000
+0.254
+Mode 2 mass
+0.187
+0.000
+0.252
+Mode 3 mass
+0.286
+0.000
+0.258
+Mode 4 mass
+0.209
+1.000
+0.236
+Between-mode W ↓
+0.113
+0.335
+0.046
+Within-mode W ↓
+0.016
+0.023†
+0.027
+HDR outside-mass error ↓
+0.001
+0.050
+0.044
+RBF MMD2 by bandwidth
+σ = 0.020 ↓
+0.001
+0.703
+0.002
+σ = 0.040 ↓
+0.004
+0.832
+0.004
+σ = 0.080 ↓
+0.007
+0.803
+0.006
+σ = 0.160 ↓
+0.011
+0.690
+0.002
+σ = 0.320 ↓
+0.010
+0.372
+0.001
+Sinkhorn divergence by regularization
+ε = 0.001 ↓
+0.008
+0.115
+0.002
+ε = 0.005 ↓
+0.008
+0.115
+0.002
+ε = 0.010 ↓
+0.008
+0.114
+0.001
+ε = 0.020 ↓
+0.008
+0.112
+0.001
+†For GRPO, the hierarchical within-mode contribution treats empty target modes
+separately; the Gaussian W2 of its populated mode is 0.094.
+sampled terminal states per trained policy. Target samples
+are drawn from the Gaussian mixture and rejected when they
+fall outside the unit square. We use complementary metrics
+because no single score captures all forms of distributional
+mismatch in a multimodal setting.
+Mean raw reward is estimated as the empirical average of
+r(x) over sampled terminal states. Jensen–Shannon diver-
+gence (JSD) and histogram total variation (Hist. TV) com-
+pare the empirical and target densities on a 100 × 100 grid.
+Sliced Wasserstein-2 (SW2) (Kolouri et al. 2019), energy dis-
+tance (Székely, Rizzo et al. 2013), and Sinkhorn divergence
+(Feydy et al. 2019) compare generated and target samples
+directly and measure geometric mismatch. RBF maximum
+mean discrepancy (MMD) (Gretton et al. 2012) is reported at
+several bandwidths: small bandwidths emphasize local com-
+ponent shape, whereas large bandwidths emphasize mode
+
+
+Reward
+GFlowNet
+GRPO
+DARS-GRPO
+Figure 1: Terminal distributions on the navigation task.
+allocation and global structure. Sliced Wasserstein-2 and en-
+ergy distance use ten repetitions of 20,000 samples, while
+Sinkhorn divergence uses 500 samples.
+For mode-level evaluation, each terminal state is assigned
+to its nearest target center. From these assignments, we com-
+pute the mass of each mode, the minimum mode mass, and
+mode TV which measures deviation from uniform target
+mode weights. Precision is the fraction of generated sam-
+ples lying inside k-nearest-neighbor neighborhoods of target
+samples, while recall is the fraction of target samples covered
+by neighborhoods induced by generated samples (Kynkään-
+niemi et al. 2019). Precision therefore measures off-target
+generation, whereas recall diagnoses missing support and
+mode collapse.
+We measure Wasserstein error at two scales: the between-
+mode term evaluates mode weights and centers, while the
+within-mode term evaluates each mode’s mean and covari-
+ance. Their sum defines the hierarchical score,
+Whier = Wbetween + Wwithin.
+HDR outside mass is the fraction of generated samples
+outside the target’s 95% highest-density region. Since the
+target assigns approximately 0.05 probability mass outside
+this region, we report the calibration error |moutside −0.05|,
+for which lower values indicate better agreement with the
+target.
+4.2
+Results and Interpretation
+The primary result is the comparison with GRPO. In the
+reported run, GRPO concentrates on a single high-reward
+mode, whereas DARS-GRPO assigns substantial mass to
+all four modes and approaches their target weights. The
+DARS-GRPO point estimates are closer to the target than
+GRPO across the metrics reported in Table 1. GRPO’s higher
+mean raw reward reflects tight concentration near one of four
+equally high peaks, rather than agreement with the normal-
+ized reward distribution. Thus, within this controlled envi-
+ronment, the reported run provides evidence that density
+reweighting prevents the evaluated policy from concentrat-
+ing on one mode, recovers the correct mode weights, and
+improves global geometric agreement with the known target
+relative to GRPO. This is the central controlled contribution
+of the experiment.
+DARS-GRPO closely matches, and on several key met-
+rics surpasses, GFlowNet despite requiring only a sim-
+ple reward-scaling modification within a standard policy-
+gradient pipeline. Both methods achieve identical precision,
+indicating equally accurate recovery of high-reward out-
+comes. DARS consistently improves metrics that capture the
+global reward distribution, including sliced Wasserstein, en-
+ergy distance, mode total variation, minimum mode mass,
+hierarchical Wasserstein error, HDR outside mass, and most
+larger-bandwidth MMD and Sinkhorn metrics, demonstrat-
+ing more faithful recovery of target mode proportions and
+global geometry.
+GFlowNet performs slightly better on metrics emphasiz-
+ing fine-scale local density, such as Jensen–Shannon di-
+vergence, histogram total variation, within-mode Wasser-
+stein error, recall, and small-bandwidth MMD, reflecting its
+specialized flow-based objective. Nevertheless, these results
+show that a lightweight modification to conventional policy-
+gradient RL is sufficient to achieve reward-proportional be-
+havior that is competitive with a substantially more sophisti-
+cated algorithmic framework.
+Having established in a controlled setting that DARS
+approximates reward-proportional sampling, we next ask
+whether this property is useful in a real continuous-output
+RL problem where the target reward distribution is unknown.
+5
+Text-to-Image Prompt Adaptation
+5.1
+Motivation
+Prompt adaptation for image generation refers to the set-
+ting in which a language model rewrites the input prompt
+to match a desired set of outcomes before image gener-
+ation. Text-to-image prompt adaptation provides a natural
+real-world benchmark for evaluating reward-proportional re-
+inforcement learning. Unlike the synthetic experiments in
+Section 4, where the target reward distribution is explicitly
+known, the reward-proportional distribution over generated
+images is intractable and cannot be directly characterized. A
+single text prompt typically admits many semantically faith-
+ful realizations that differ in composition, viewpoint, light-
+ing, object arrangement, or artistic style while remaining
+equally valid.
+Since the underlying reward distribution is unavailable,
+directly measuring reward-proportional sampling is infeasi-
+ble. Instead, we evaluate its consequences through observ-
+able proxies. If DARS successfully distributes probability
+mass across multiple high-reward regions, it should produce
+a more diverse set of images while preserving prompt align-
+ment and image quality. We therefore measure visual diver-
+sity together with alignment and preference metrics as an
+indirect estimate of improved coverage of the latent reward
+landscape. Consequently, the objective is not merely to iden-
+tify a single high-reward image, but to maintain coverage
+over the diverse set of high-quality outcomes consistent with
+the prompt.
+Since input prompts are the conditioning signal in diffu-
+sion models, semantically faithful prompt rewrites help steer
+the generation in desired directions. Learning a distribution
+over such rewrites therefore provides an effective mecha-
+nism for exploring multiple high-reward image modes while
+keeping the underlying image generator fixed.
+Following this formulation, we fine-tune a language model
+using reinforcement learning to rewrite input prompts. Im-
+ages generated from the rewritten prompts are rewarded as
+defined in section 5.2. Since multiple visually distinct images
+
+
+Figure 2: Overview of DARS-GRPO for text-to-image prompt adaptation. A trainable language-model policy samples G rewrites
+of an input prompt, and a frozen text-to-image model generates one image per rewrite. Each image receives a task reward ri and
+is mapped by a frozen image encoder into a representation space, where a Gaussian kernel computes its within-group density
+ρi. DARS forms the scaled reward ˜ri = ri/ρi, reducing the contribution of high-reward images in dense representation-space
+regions and increasing the relative contribution of high-reward images in sparsely represented regions. GRPO then uses these
+scaled rewards to update only the prompt-rewriting policy.
+can achieve comparable rewards, broader coverage of the la-
+tent reward landscape should translate to greater image di-
+versity without sacrificing fidelity. To quantify this diversity,
+we measure distances in the DINOv2 representation space as
+a proxy for perceptual similarity (Oquab et al. 2023).
+5.2
+Reward Definitions
+The reward should preserve two complementary properties:
+semantic fidelity to the original prompt and visual appeal.
+Fidelity alone does not ensure that an image is aesthetically
+strong, whereas optimizing aesthetics alone can favor attrac-
+tive images that drift from the requested content. We therefore
+evaluate on two different reward functions: alignment-only
+reward and a combined reward consisting of aesthetic and
+alignment components.
+Let c denote the original prompt and yi an image generated
+from its ith rewrite. We measure semantic alignment using
+the image-text cosine similarity from a CLIP model (Radford
+et al. 2021). A binary semantic gate determines whether the
+image is sufficiently aligned with the original prompt. Thus
+the alignment reward is
+Ralign
+i
+= I[CLIP(c, yi) > ϕ] ,
+(5)
+where ϕ is the minimum accepted CLIP similarity. Images
+below this threshold receive zero reward to encourage strict
+adherence. This setting tests whether DARS can broaden
+coverage within the set of sufficiently aligned images.
+To measure visual appeal, we use LAION-Aesthetics Pre-
+dictor (Schuhmann 2022), which maps images to an aesthetic
+score on a 1–10 scale. Let a(·) denote this predictor, and let
+yref
+c
+be an image generated from the original input prompt.
+We define the aesthetic improvement and its multiplicative
+reward factor as
+∆ai = a(yi) −a
+ yref
+c
+
+,
+(6)
+Raes
+i
+= exp(∆ai) .
+(7)
+An aesthetic improvement produces a factor greater than one,
+no change produces a factor of one, and a decrease produces
+a factor between zero and one.
+Thus, the combined reward is given as
+Rcomb
+i
+= exp(∆ai) CLIP(c, yi)I[CLIP(c, yi) > ϕ]
+(8)
+5.3
+Density Calculation and Reward Scaling
+DARS estimates local density in the space of generated im-
+ages, since our objective is to promote diversity over visual
+outcomes rather than textual rewrites. As discussed in Sec-
+tion 3.1, we instantiate ϕ using a frozen DINOv2 encoder,
+which maps each generated image i to its unnormalized
+class-token (CLS) embedding yi. Local densities are then
+estimated in this representation space.
+For a group of G images, let yi ∈R768 denote the feature
+vector of image i. We compute the local density score for
+
+
+GRPO
+A snowman
+standing in
+,
+moody evening
+A snowman
+standing in
+,
+moody evening
+A snowman
+standing in
+,
+moody evening
+PAG
+A snowman
+standing in
+,
+charming backgrou
+A snowman
+standing in
+,
+elegant background
+A snowman
+standing in
+,
+polished background
+DARS (Ours)
+A snowman
+standing in
+,
+details of Paris
+A snowman
+standing in
+,
+of cherry blossoms
+A snowman
+standing in
+, 
+evening light
+Figure 3: Comparison of prompt rewrites and their corre-
+sponding generated images for “A snowman standing in the
+yard” using GRPO, PAG, and DARS-GRPO. GRPO pro-
+duces nearly identical rewrites and visually similar night-
+time scenes, whereas PAG introduces moderate variation and
+DARS-GRPO generates more diverse rewrites, settings, and
+visual compositions.
+image i using a Gaussian kernel as
+ρi =
+G
+X
+j=1
+Kh(yi, yj) =
+G
+X
+j=1
+exp
+
+−∥yi −yj∥2
+2
+2h2
+
+.
+(9)
+Following Equation (3), DARS rescales the task reward as
+eRi = Ri/ρi. We use this scaled reward to optimize the
+prompt-rewriting policy with DARS-GRPO.
+5.4
+Evaluation Metrics
+We evaluate each prompt-rewriting policy along three com-
+plementary dimensions: image diversity, rewrite diversity,
+and image fidelity or preference. Image diversity is measured
+in DINOv2 CLS representation space using the Vendi Score
+(Friedman and Dieng 2023) of the cosine-similarity matrix
+of L2-normalized CLS embeddings, and the mean pairwise
+Euclidean distance between CLS embeddings. Rewrite diver-
+sity is measured analogously in CLIP text-embedding space
+using Prompt Vendi and the mean pairwise cosine distance
+among rewritten prompts. Finally, CLIP-align, HPSv2 (Wu
+et al. 2023), and PickScore (Kirstain et al. 2023) assess the
+semantic compatibility and human-preference-style quality
+of each generated image relative to the input prompt. CLIP-
+align is the nonnegative cosine similarity between the L2-
+normalized CLIP embeddings of a generated image and its
+original prompt. Diversity metrics are computed within each
+group of rewrites or images generated for the same original
+prompt and then averaged across the evaluation set, follow-
+ing within-prompt conditional evaluation. For all metrics,
+higher values indicate greater diversity or stronger fidelity
+and preference, respectively.
+5.5
+Experiment Details
+We use a frozen Stable Diffusion v1.4 generator (Rombach
+et al. 2022) and optimize only the prompt-rewriting pol-
+icy. For all baselines and reward functions, both Qwen3-
+0.6B(base) (Yang et al. 2025) and GPT-2 (124M) (Radford
+et al. 2019) are already supervised fine-tuned on a shared set
+of curated prompt rewrites. We then train the models on 1,024
+randomly sampled MS-COCO prompts (Lin et al. 2014) and
+evaluate them on disjoint MS-COCO and Lexica prompts
+(Shen et al. 2023). DARS uses h = 20 for Gaussian kernels,
+and the alignment reward uses a CLIP-similarity threshold
+of 0.2.
+We compare DARS-GRPO with vanilla GRPO, PAG, and
+GFlowNet prompt optimization, together with Stable Diffu-
+sion v1.4 with random seed initialization and CADS (Sadat
+et al. 2024) as control baselines. All methods are evaluated
+using the same held-out prompts, generation budget, diffu-
+sion model, and sampling procedure. Diffusion seeds are
+sampled independently across methods, so image-diversity
+metrics also capture variation introduced by stochastic diffu-
+sion sampling while prompt-diversity metrics are unaffected
+by this confound.
+5.6
+Results and Interpretation
+Across both datasets, Policy LMs, and reward settings,
+DARS-GRPO consistently improves upon vanilla GRPO
+across all three diversity metrics (Table 2) without significant
+loss of image fidelity. Further, among all prompt-adaptation
+methods, it achieves the highest DINO pairwise distances
+and Image Vendi scores, indicating that density-aware re-
+ward scaling broadens the learned rewrite distribution and
+increases coverage in DINOv2 image-representation space.
+The high Prompt Vendi and diversity scores further indicate
+that this image diversity arises from diverse prompt rewrites,
+while CLIP-align, HPSv2, and PickScore imply close image
+fidelity.
+Changing the reward function affects performance across
+all metrics, showing that DARS responds to the reward land-
+scape rather than producing diversity gains randomly. Con-
+sistent with our hypothesis, the binary gated alignment-only
+reward yields broader sampling from uniformly scored re-
+ward zones, whereas the combined reward forces the policy
+to learn a more dynamic reward landscape characterized by
+aesthetically-driven peaks, thus, sampling from a more varied
+distribution as reflected by the higher average Image Vendi
+scores.
+Having demonstrated the effectiveness of DARS on a real-
+world RL problem with an intractable reward-proportional
+
+
+Table 2: Prompt Adaptation for Text-to-Image Generation results on MS-COCO and Lexica (avg over 5 seeds).
+Image Vendi ↑
+CLIP-align ↑
+HPSv2 ↑
+PickScore ↑
+Prompt Vendi ↑
+Prompt diversity ↑
+DINO pairwise distance ↑
+Policy LM
+Method
+COCO
+Lexica
+COCO
+Lexica
+COCO
+Lexica
+COCO
+Lexica
+COCO
+Lexica
+COCO
+Lexica
+COCO
+Lexica
+–
+SD v1.4
+8.60
+9.52
+0.27
+0.27
+0.26
+0.25
+21.53
+20.91
+–
+–
+–
+–
+40.58
+41.84
+–
+CADS
+12.93
+14.08
+0.26
+0.26
+0.24
+0.23
+20.86
+20.28
+–
+–
+–
+–
+46.22
+46.96
+Combined reward
+Qwen3-0.6B
+GRPO
+8.76
+9.81
+0.24
+0.24
+0.23
+0.23
+20.92
+20.69
+1.01
+1.04
+0.00
+0.01
+40.90
+42.10
+Qwen3-0.6B
+DARS-GRPO
+13.04
+14.45
+0.24
+0.24
+0.23
+0.23
+20.80
+20.37
+1.43
+1.67
+0.05
+0.06
+46.92
+47.89
+Qwen3-0.6B
+PAG
+8.25
+11.51
+0.26
+0.26
+0.25
+0.24
+21.34
+20.69
+1.26
+1.59
+0.04
+0.07
+40.20
+44.64
+Qwen3-0.6B
+GFN
+8.74
+11.69
+0.26
+0.26
+0.25
+0.24
+21.31
+20.69
+1.22
+1.59
+0.04
+0.07
+40.50
+44.71
+GPT-2
+GRPO
+9.60
+10.68
+0.24
+0.24
+0.23
+0.23
+20.87
+20.43
+1.09
+1.18
+0.01
+0.03
+41.85
+42.87
+GPT-2
+DARS-GRPO
+12.72
+14.67
+0.23
+0.23
+0.23
+0.23
+20.68
+20.26
+1.63
+1.78
+0.08
+0.10
+47.75
+48.60
+GPT-2
+PAG
+9.22
+14.03
+0.26
+0.24
+0.25
+0.23
+21.16
+20.35
+1.61
+2.14
+0.09
+0.13
+41.36
+46.43
+GPT-2
+GFN
+9.02
+13.67
+0.25
+0.24
+0.24
+0.22
+21.12
+20.26
+1.15
+1.69
+0.02
+0.08
+41.03
+46.67
+Alignment-only reward
+Qwen3-0.6B
+GRPO
+9.47
+10.94
+0.26
+0.26
+0.25
+0.24
+21.24
+20.55
+1.59
+1.64
+0.07
+0.08
+41.68
+43.52
+Qwen3-0.6B
+DARS-GRPO
+20.13
+20.03
+0.22
+0.21
+0.22
+0.22
+20.34
+19.81
+2.43
+2.40
+0.16
+0.16
+56.23
+55.76
+Qwen3-0.6B
+PAG
+9.53
+13.88
+0.25
+0.24
+0.25
+0.24
+21.22
+20.48
+1.79
+2.33
+0.11
+0.15
+41.99
+46.86
+Qwen3-0.6B
+GFN
+8.93
+12.13
+0.26
+0.26
+0.25
+0.24
+21.27
+20.60
+1.30
+1.62
+0.05
+0.08
+40.99
+44.97
+GPT-2
+GRPO
+8.76
+10.22
+0.26
+0.26
+0.26
+0.24
+21.42
+20.66
+1.03
+1.11
+0.01
+0.02
+40.93
+42.52
+GPT-2
+DARS-GRPO
+22.87
+22.64
+0.23
+0.22
+0.23
+0.22
+20.58
+19.89
+2.15
+2.29
+0.14
+0.15
+55.57
+55.00
+GPT-2
+PAG
+8.51
+13.15
+0.25
+0.24
+0.25
+0.23
+21.23
+20.38
+1.20
+1.66
+0.03
+0.07
+40.55
+45.78
+GPT-2
+GFN
+8.60
+14.08
+0.26
+0.24
+0.24
+0.22
+21.19
+20.33
+1.17
+1.79
+0.03
+0.08
+40.54
+46.03
+distribution, we next study the effect of the kernel width
+used for local density estimation on the learned outcome
+distribution.
+6
+Ablation Study
+As discussed in 3.3, kernel width h affects reward-scaling in
+DARS and hence needs to be calibrated for accurate density
+estimation. For the experiments in Section 5, we demonstrate
+the direct effects of varying kernel widths on image-diversity
+produced by DARS (Table 3). Diversity metrics consistently
+peak at intermediate kernel widths and degrade when the
+bandwidth is either too small or too large, while image qual-
+ity remains largely unchanged. This behavior reflects how
+DARS estimates local outcome density. With a very small
+kernel width, nearly every generated image appears isolated,
+causing density estimates to be dominated by self-similarity
+and resulting in almost uniform reward scaling. Conversely,
+an excessively large kernel width treats distant images as
+belonging to the same neighborhood, oversmoothing density
+estimates and diminishing the relative reward differences that
+encourage exploration. Intermediate kernel widths instead re-
+solve meaningful local neighborhoods allowing for effective
+density estimation in DARS.
+7
+Limitations
+DARS relies on a meaningful representation space and ker-
+nel bandwidth for estimating local outcome density. Its ef-
+fectiveness may therefore degrade when embedding dis-
+tances poorly reflect semantic similarity or when no sin-
+gle bandwidth captures the relevant neighborhood structure.
+The pairwise density computation also scales quadratically
+with rollout-group size, potentially limiting its use with large
+groups. Our experiments focus on a controlled navigation
+task and text-to-image prompt adaptation with fixed image
+Table 3: Kernel-width ablation results (avg over 5 seeds)
+Width
+Image Vendi ↑
+CLIP-align ↑
+Prompt Diversity ↑
+Prompt Vendi ↑
+10
+9.99
+0.26
+0.12
+1.99
+15
+14.12
+0.25
+0.21
+3.34
+20
+18.01
+0.24
+0.17
+2.74
+25
+19.77
+0.23
+0.22
+3.47
+30
+12.14
+0.25
+0.11
+2.09
+representations and generators. Broader evaluation across RL
+domains, policy architectures, and learned representations is
+needed. Finally, our results establish empirical approxima-
+tion to reward-proportional sampling rather than a general
+convergence guarantee.
+8
+Conclusion
+We introduced Density-Aware Reward Scaling (DARS), a
+lightweight mechanism for promoting diverse, high-reward
+outcomes within standard policy-gradient training. By in-
+versely scaling rewards using local outcome density, DARS
+counteracts repeated reinforcement of densely sampled re-
+gions without requiring a critic, auxiliary objective, learned
+density model, or modified policy-gradient loss. In a con-
+trolled multimodal navigation task, DARS-GRPO prevents
+the mode collapse observed with GRPO and closely recovers
+target mode allocation. In text-to-image prompt adaptation,
+it consistently increases prompt and image diversity across
+datasets, Policy LMs, and reward settings while retaining se-
+mantic fidelity. These results position density-aware reward
+scaling as a simple yet effective approach to improving out-
+come coverage.
+
+
+References
+Bengio, E.; Jain, M.; Korablyov, M.; Precup, D.; and Ben-
+gio, Y. 2021. Flow Network based Generative Models for
+Non-Iterative Diverse Candidate Generation. In Advances in
+Neural Information Processing Systems, volume 34, 27381–
+27394.
+Bengio, Y.; Lahlou, S.; Deleu, T.; Hu, E. J.; Tiwari, M.;
+and Bengio, E. 2023. GFlowNet Foundations. Journal of
+Machine Learning Research, 24(210): 1–55.
+Chen, Y.; Chakraborty, S.; Wolf, L.; Paschalidis, I. C.; and
+Pacchiano, A. 2026. Post-training Large Language Models
+for Diverse High-Quality Responses. In International Con-
+ference on Learning Representations.
+Feydy, J.; Séjourné, T.; Vialard, F.-X.; Amari, S.-i.; Trouvé,
+A.; and Peyré, G. 2019.
+Interpolating between Optimal
+Transport and MMD using Sinkhorn Divergences. In Pro-
+ceedings of the Twenty-Second International Conference on
+Artificial Intelligence and Statistics, volume 89 of Proceed-
+ings of Machine Learning Research, 2681–2690.
+Friedman, D.; and Dieng, A. B. 2023. The Vendi Score: A
+Diversity Evaluation Metric for Machine Learning. Trans-
+actions on Machine Learning Research.
+Gretton, A.; Borgwardt, K. M.; Rasch, M. J.; Schölkopf, B.;
+and Smola, A. 2012. A Kernel Two-Sample Test. Journal of
+Machine Learning Research, 13(25): 723–773.
+GX-Chen, A.; Prakash, J.; Guo, J.; Fergus, R.; and Ran-
+ganath, R. 2025.
+KL-Regularized Reinforcement Learn-
+ing is Designed to Mode Collapse.
+arXiv preprint
+arXiv:2510.20817.
+Haarnoja, T.; Zhou, A.; Abbeel, P.; and Levine, S. 2018.
+Soft Actor-Critic: Off-Policy Maximum Entropy Deep Rein-
+forcement Learning with a Stochastic Actor. In Proceedings
+of the 35th International Conference on Machine Learning,
+volume 80 of Proceedings of Machine Learning Research,
+1861–1870.
+Hao, Y.; Chi, Z.; Dong, L.; and Wei, F. 2023. Optimiz-
+ing Prompts for Text-to-Image Generation. In Advances in
+Neural Information Processing Systems, volume 36, 66923–
+66939.
+Jain, M.; Raparthy, S. C.; Hernández-García, A.; Rector-
+Brooks, J.; Bengio, Y.; Miret, S.; and Bengio, E. 2023.
+Multi-Objective GFlowNets. In Proceedings of the 40th In-
+ternational Conference on Machine Learning, volume 202 of
+Proceedings of Machine Learning Research, 14631–14653.
+Kirk, R.; Mediratta, I.; Nalmpantis, C.; Luketina, J.; Hambro,
+E.; Grefenstette, E.; and Raileanu, R. 2024. Understanding
+the Effects of RLHF on LLM Generalisation and Diversity.
+In International Conference on Learning Representations.
+Kirstain, Y.; Polyak, A.; Singer, U.; Matiana, S.; Penna, J.;
+and Levy, O. 2023. Pick-a-Pic: An Open Dataset of User
+Preferences for Text-to-Image Generation. arXiv preprint
+arXiv:2305.01569.
+Kolouri, S.; Nadjahi, K.; Simsekli, U.; Badeau, R.; and Ro-
+hde, G. 2019. Generalized sliced wasserstein distances. Ad-
+vances in neural information processing systems, 32.
+Kynkäänniemi, T.; Karras, T.; Laine, S.; Lehtinen, J.; and
+Aila, T. 2019. Improved Precision and Recall Metric for
+Assessing Generative Models. In Advances in Neural Infor-
+mation Processing Systems, volume 32, 3927–3936.
+Lahlou, S.; Deleu, T.; Lemos, P.; Zhang, D.; Volokhova,
+A.; Hernández-García, A.; Ezzine, L. N.; Bengio, Y.; and
+Malkin, N. 2023. A Theory of Continuous Generative Flow
+Networks. In Proceedings of the 40th International Confer-
+ence on Machine Learning, volume 202 of Proceedings of
+Machine Learning Research, 18269–18300.
+Lin, T.-Y.; Maire, M.; Belongie, S.; Hays, J.; Perona, P.; Ra-
+manan, D.; Dollár, P.; and Zitnick, C. L. 2014. Microsoft
+COCO: Common Objects in Context. In European Confer-
+ence on Computer Vision, 740–755. Springer.
+Liu, H.; Huang, H.; Wang, J.; Liu, C.; Li, X.; and Ji, X.
+2026. DiverseGRPO: Mitigating Mode Collapse in Image
+Generation via Diversity-Aware GRPO. In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 1864–1873.
+Oquab, M.; Darcet, T.; Moutakanni, T.; Vo, H.; Szafraniec,
+M.; Khalidov, V.; Fernandez, P.; Haziza, D.; Massa, F.;
+El-Nouby, A.; et al. 2023.
+DINOv2: Learning Ro-
+bust Visual Features without Supervision. arXiv preprint
+arXiv:2304.07193.
+Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright,
+C. L.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray,
+A.; et al. 2022. Training Language Models to Follow In-
+structions with Human Feedback. In Advances in Neural
+Information Processing Systems, volume 35, 27730–27744.
+Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.;
+Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.;
+Krueger, G.; and Sutskever, I. 2021. Learning Transferable
+Visual Models From Natural Language Supervision. In Pro-
+ceedings of the 38th International Conference on Machine
+Learning, volume 139 of Proceedings of Machine Learning
+Research, 8748–8763.
+Radford, A.; Wu, J.; Child, R.; Luan, D.; Amodei, D.;
+Sutskever, I.; et al. 2019. Language models are unsuper-
+vised multitask learners. OpenAI blog, 1(8): 9.
+Rombach, R.; Blattmann, A.; Lorenz, D.; Esser, P.; and Om-
+mer, B. 2022. High-Resolution Image Synthesis with La-
+tent Diffusion Models. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+10684–10695.
+Sadat, S.; Buhmann, J.; Bradley, D.; Hilliges, O.; and Weber,
+R. M. 2024. CADS: Unleashing the Diversity of Diffusion
+Models through Condition-Annealed Sampling. In Interna-
+tional Conference on Learning Representations.
+Schuhmann, C. 2022. LAION-Aesthetics. https://laion.ai/
+blog/laion-aesthetics/. Accessed: 2026-07-29.
+Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and
+Klimov, O. 2017. Proximal Policy Optimization Algorithms.
+arXiv preprint arXiv:1707.06347.
+Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.;
+Zhang, H.; Zhang, M.; Li, Y. K.; Wu, Y.; and Guo, D.
+
+
+2024. DeepSeekMath: Pushing the Limits of Mathemati-
+cal Reasoning in Open Language Models. arXiv preprint
+arXiv:2402.03300.
+Shen, X.; Qu, Y.; Backes, M.; and Zhang, Y. 2023. Prompt
+Stealing Attacks Against Text-to-Image Generation Models.
+CISPA Helmholtz Center for Information Security.
+Sinha, A.; Elango, S.; and Liu, D. 2026.
+Expected Re-
+turn Causes Outcome-Level Mode Collapse in Reinforce-
+ment Learning and How to Fix It with Inverse Probability
+Scaling. arXiv preprint arXiv:2601.21669.
+Székely, G. J.; Rizzo, M. L.; et al. 2013. Energy statistics: A
+class of statistics based on distances. Journal of statistical
+planning and inference, 143(8): 1249–1272.
+Wu, X.; Hao, Y.; Sun, K.; Chen, Y.; Zhu, F.; Zhao, R.; and Li,
+H. 2023. Human Preference Score v2: A Solid Benchmark for
+Evaluating Human Preferences of Text-to-Image Synthesis.
+arXiv preprint arXiv:2306.09341.
+Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu,
+B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical
+report. arXiv preprint arXiv:2505.09388.
+Yun, T.; Zhang, D.; Park, J.; and Pan, L. 2025. Learning
+to Sample Effective and Diverse Prompts for Text-to-Image
+Generation. In Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 23625–23635.
+Zhu, X.; Cheng, D.; Zhang, D.; Li, H.; Zhang, K.; Jiang, C.;
+Sun, Y.; Hua, E.; Zuo, Y.; Lv, X.; Zhang, Q.; Chen, L.; Shao,
+F.; Xue, B.; Song, Y.; Yang, Z.; Cui, G.; Ding, N.; Gao, J.; Liu,
+X.; Zhou, B.; Mei, H.; and Lin, Z. 2026. FlowRL: Matching
+Reward Distributions for LLM Reasoning. In International
+Conference on Learning Representations.
+
+
+A
+Mathematical Foundations for DARS
+A.1
+Inverse policy-density scaling yields a
+reward-proportional policy
+Let the continuous outcome space be Y ⊆Rd. At training
+time t, let the policy induce a probability density pt(y) on Y.
+Let the reward be a measurable function r(y) ≥0 satisfying
+0 < R :=
+Z
+Y
+r(y) dy < ∞,
+(10)
+and assume pt(y) > 0 wherever r(y) > 0. The desired
+reward-proportional density is
+p⋆(y) = r(y)
+R .
+(11)
+We prove the continuous analogue of inverse probability
+scaling. Parameterize an unrestricted policy density by a logit
+function f,
+pf(y) =
+ef(y)
+R
+Y ef(u) du.
+(12)
+At iteration t, freeze the current policy density in the reward
+denominator and use
+ert(y) = r(y)
+pt(y).
+(13)
+For the population objective
+Jt(f) =
+Z
+Y
+pf(y)ert(y) dy,
+(14)
+the following result holds.
+Theorem 1 At the current policy pt = pft, the functional
+policy-gradient direction is
+δJt
+δf (y)
+
+f=ft
+= r(y) −Rpt(y) = R
+ p⋆(y) −pt(y)
+
+.
+(15)
+Hence the reward-proportional density p⋆(y) = r(y)/R is
+the unique stationary probability density, interpreted in the
+closure of the exponential-family parameterization when r
+vanishes on part of the outcome space. Under the corre-
+sponding population gradient flow, every convergent density
+limit is p⋆.
+Proof 1 For any perturbation v, the normalized exponential
+density obeys
+d
+dspft+sv(y)
+
+s=0
+= pt(y) (v(y) −Ept[v]) .
+(16)
+Because the denominator in Equation (13) is stop-gradient,
+d
+dsJt(ft + sv)
+
+s=0
+=
+Z
+Y
+r(y)
+pt(y)pt(y)
+(17)
+× (v(y) −Ept[v]) dy
+(18)
+=
+Z
+Y
+r(y)v(y) dy
+(19)
+−R
+Z
+Y
+pt(y)v(y) dy
+(20)
+=
+Z
+Y
+(r(y) −Rpt(y)) v(y) dy.
+(21)
+Since this identity holds for every perturbation v, Equa-
+tion (15) follows. A stationary density must satisfy
+r(y) −Rpt(y) = 0
+(22)
+almost everywhere, and therefore
+pt(y) = r(y)
+R
+= p⋆(y).
+(23)
+The direction is not merely stationary at p⋆; it points to-
+ward it. Consider the population gradient flow
+∂tft(y) = R
+ p⋆(y) −pt(y)
+
+(24)
+and the functional
+Φ(f) = log
+Z
+Y
+ef(y)dy −
+Z
+Y
+p⋆(y)f(y)dy.
+(25)
+Its functional derivative is δΦ/δf = pf −p⋆. Therefore,
+along the gradient flow,
+d
+dtΦ(ft) =
+Z
+Y
+ pt(y) −p⋆(y)
+
+∂tft(y) dy
+(26)
+= −R
+Z
+Y
+ pt(y) −p⋆(y)
+2dy ≤0.
+(27)
+Equality holds only when pt = p⋆almost everywhere.
+Thus the only stationary density, and hence any conver-
+gent population-gradient-flow density limit, is the reward-
+proportional density in Equation (11).
+The cancellation underlying the result can also be seen
+directly. A small region dy around y is sampled with prob-
+ability approximately pt(y)dy. Its per-sample scaled reward
+is r(y)/pt(y). Thus its aggregate expected learning weight
+is proportional to
+pt(y)dy
+| {z }
+sampling probability
+r(y)
+pt(y)
+| {z }
+inverse-density reward
+= r(y)dy.
+(28)
+The current policy density cancels, leaving learning mass
+proportional only to reward mass.
+A.2
+The Gaussian kernel density score is
+proportional to the policy density
+Draw a rollout group of G outcomes independently from the
+current policy,
+Y1, . . . , YG
+iid
+∼pt.
+(29)
+DARS uses the unnormalized Gaussian kernel
+Kh(y, z) = exp
+
+−∥y −z∥2
+2h2
+
+.
+(30)
+Instead of separating any sample from the rest of the group,
+define the density-score field produced by the entire rollout
+group,
+ρG(y) =
+G
+X
+j=1
+Kh(y, Yj).
+(31)
+
+
+The score assigned to a sampled outcome is simply
+ρi = ρG(Yi).
+(32)
+Thus the same group of all G policy samples is used through-
+out.
+Define
+Ch = (2π)d/2hd,
+ϕh(z) = 1
+Ch
+exp
+
+−∥z∥2
+2h2
+
+. (33)
+Then ϕh is the N(0, h2Id) density and
+bpG,h(y) := ρG(y)
+GCh
+= 1
+G
+G
+X
+j=1
+ϕh(y −Yj).
+(34)
+Equation (34) is exactly the Gaussian kernel-density estima-
+tor formed from the full rollout group.
+Theorem 2 (Gaussian density approximation) For every
+fixed y,
+E[bpG,h(y)] = (pt ∗ϕh)(y),
+(35)
+where
+(pt ∗ϕh)(y) =
+Z
+Y
+pt(u)ϕh(y −u) du.
+(36)
+Assume that, on the region of interest, pt is twice continuously
+differentiable,
+sup
+y ∥∇2pt(y)∥op ≤M,
+(37)
+and pt(y) ≤P. If the region has a boundary, assume either
+that pt admits a C2 extension to a neighborhood of that
+region or that the statement is restricted to interior points at
+the bandwidth scale. Then
+|E[bpG,h(y)] −pt(y)| ≤dM
+2 h2,
+(38)
+and
+Var(bpG,h(y)) ≤
+P
+2dπd/2Ghd .
+(39)
+Consequently, for a fixed query point y and any δ ∈(0, 1),
+with probability at least 1 −δ,
+|bpG,h(y) −pt(y)| ≤dM
+2 h2 +
+r
+P
+2dπd/2Ghdδ .
+(40)
+Proof 2 Using the full group in Equation (34) and linearity
+of expectation,
+E[bpG,h(y)] = E
+
+1
+G
+G
+X
+j=1
+ϕh(y −Yj)
+
+
+(41)
+= 1
+G
+G
+X
+j=1
+E[ϕh(y −Yj)]
+(42)
+=
+Z
+Y
+ϕh(y −u)pt(u) du
+(43)
+= (pt ∗ϕh)(y).
+(44)
+No element of the rollout group is separated from the others.
+Let Z ∼N(0, h2Id). Then, away from boundary effects
+as specified above,
+(pt ∗ϕh)(y) = E[pt(y −Z)].
+(45)
+A second-order Taylor expansion gives
+pt(y −Z) = pt(y) −∇pt(y)⊤Z + 1
+2Z⊤∇2pt(ξ)Z
+(46)
+for a point ξ on the segment between y and y −Z. Since
+E[Z] = 0 and
+E∥Z∥2 = dh2,
+(47)
+we obtain
+|(pt ∗ϕh)(y) −pt(y)| ≤M
+2 E∥Z∥2 = dM
+2 h2,
+(48)
+which proves Equation (38).
+For fixed y, the G terms in Equation (34) are independent
+and identically distributed. Hence
+Var(bpG,h(y)) = 1
+G Var(ϕh(y −Y ))
+(49)
+≤1
+GE[ϕh(y −Y )2]
+(50)
+≤P
+G
+Z
+Rd ϕh(z)2 dz.
+(51)
+For the Gaussian kernel,
+Z
+Rd ϕh(z)2 dz =
+1
+2dπd/2hd ,
+(52)
+which proves Equation (39). Chebyshev’s inequality together
+with Equation (38) gives Equation (40).
+The preceding theorem shows directly how the approxi-
+mation depends on bandwidth and group size:
+bpG,h(y) = pt(y) + O(h2) + Op
+
+(Ghd)−1/2
+.
+(53)
+The O(h2) term is the Gaussian smoothing bias, while the
+stochastic error decreases as the effective number of samples
+in an h-scale neighborhood, Ghd, increases.
+Equation (40) is stated for a fixed query point because
+that is the elementary finite-sample calculation. To evaluate
+the same full-group estimator at the sampled outcomes Yi
+without separating any sample, use the standard uniform-
+consistency property of Gaussian kernel-density estimators.
+On a compact region D satisfying the regularity assumptions
+above,
+sup
+y∈D
+|bpG,h(y) −pt(y)| = O(h2) + Op
+ r
+log G
+Ghd
+!
+, (54)
+provided h →0 and Ghd/ log G →∞. Because Equa-
+tion (54) holds simultaneously for every y ∈D, it also holds
+when y is any of the observed outcomes Yi ∈D. Therefore,
+ρi
+GCh
+= pt(Yi) + O(h2) + Op
+ r
+log G
+Ghd
+!
+.
+(55)
+
+
+In particular, on any region where pt(y) ≥m > 0, if h
+and G are chosen so that the right-hand error in Equation (55)
+is small relative to m, then
+ρi = GCh pt(Yi)(1 + εi),
+|εi| ≪1.
+(56)
+Thus the DARS Gaussian score is approximately the policy
+probability density multiplied by the same global factor GCh
+for all outcomes in the region of interest.
+The bandwidth tradeoff is now explicit. The bandwidth
+should be small enough that
+pt ∗ϕh ≈pt,
+(57)
+but large enough that
+Ghd
+(58)
+is not too small. In the standard regime
+h →0,
+Ghd
+log G →∞,
+(59)
+the approximation error vanishes uniformly on the region of
+interest.
+Finally, Equation (56) implies
+Ri
+ρi
+=
+1
+GCh
+Ri
+pt(Yi)
+1
+1 + εi
+.
+(60)
+Thus, when the Gaussian kernel-density estimate is accu-
+rate, DARS differs from exact inverse policy-density scaling
+only by a common positive factor and a small multiplicative
+estimation error. Section A.1 then gives the corresponding
+reward-proportional population target.
+B
+Navigation Task
+Figure 4 visualizes the movement fields induced by the
+trained GRPO and DARS-GRPO policies. At each state
+s = (x, y) ∈[0, 1]2, actions are sampled repeatedly from
+the policy and used to estimate the mean one-step displace-
+ment E[st+1 −st | st = s]. The streamlines indicate its
+direction, their color indicates its magnitude, and the gray
+contours show the normalized reward landscape.
+Terminal actions are treated as zero displacement. Con-
+sequently, a small field magnitude may result from small
+proposed movements, frequent termination, or cancellation
+among sampled actions. The DARS-GRPO opptimised the
+policy such that the coverage over all the modes could be
+optimised in proportion to the reward. The visualization thus
+shows how density-aware reward scaling changes the learned
+navigation dynamics. It should not be interpreted as a gradi-
+ent or parameter-update field.
+C
+Text-to-Image Prompt Adaptation
+LM model choice: GPT-2 vs Qwen3-0.6B Figures 5–8
+compare GPT-2 and Qwen3-0.6B as policy LMs under the
+combined aesthetic and alignment reward. For each origi-
+nal prompt, GRPO generations are shown on the left and
+DARS generations on the right while keeping the diffusion
+model, sampling budget, and evaluation protocol fixed. This
+isolates the effect of the language-model used from that of
+the reinforcement learning objective.
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0.000
+0.005
+0.010
+0.015
+0.020
+0.025
+0.030
+Figure 4: Policy-induced movement fields for GRPO (left)
+and DARS-GRPO (right) on the four-mode navigation task.
+Streamlines show the estimated mean one-step displacement,
+color indicates its magnitude, and gray contours show the
+normalized reward landscape.
+Across both policy LMs, DARS consistently expands the
+diversity of generated images while preserving the seman-
+tic content of the original prompt. Compared with GRPO,
+DARS produces greater variation in scene layout, viewpoint,
+lighting, object appearance, and background context without
+substantially altering the primary subject. Although GPT-
+2 tends to make larger structural changes and Qwen3-0.6B
+generally preserves a more stable object identity, both ex-
+hibit the same qualitative benefit from density-aware reward
+scaling. These examples illustrate that the improvements ob-
+tained by DARS are not tied to a particular language model
+and generalize across different policy LMs.
+Reward choice: Combined vs Alignment-only
+Figures 9–12 compare the two reward functions using the
+same Qwen3-0.6B policy LM. The combined reward com-
+bines semantic fidelity with improvement under the frozen
+aesthetic scorer, whereas the alignment-only reward applies
+only the minimum CLIP-alignment constraint. Each embed-
+ded grid compares GRPO and DARS under one reward, al-
+lowing the effect of reward design to be separated from the
+effect of density scaling.
+The alignment-only objective permits DARS to explore
+a substantially broader visual region since it is free of aes-
+thetic bounds that affect the combined reward. Across the
+examples, it produces larger changes in setting, illumination,
+camera distance, and composition. This is particularly visi-
+ble for the bench, cat, scarecrow, and fox prompts in Figures
+10,11, and 12 where the generated scenes include a wider
+range of architectural and natural backgrounds. The quanti-
+tative results show the same pattern with higher Image Vendi
+Scores and DINO pairwise distance for alignment-only re-
+wards.
+Additional qualitative comparisons
+Figures 13–15 provide additional examples comparing
+GRPO, PAG, GFN, and DARS-GRPO. Across theseprompts,
+GRPO reuses a narrow rewriting pattern, whereas DARS
+produces more varied scene contexts consequently leading
+to more diverse images.
+
+
+GPT-2
+Qwen3-0.6B
+GPT-2
+Qwen3-0.6B
+Figure 5: Policy LM comparison for “A snowman standing in the yard” (top) and “A bicycle leaning against a brick wall”
+(bottom). Each embedded grid compares GRPO with DARS for the indicated language-model.
+
+
+GPT-2
+Qwen3-0.6B
+GPT-2
+Qwen3-0.6B
+Figure 6: Policy LM comparison for “A wooden bench under a tree” (top) and “A cat sleeping on a windowsill” (bottom). DARS
+expands the visual contexts while preserving the object and scene requested by each prompt.
+
+
+GPT-2
+Qwen3-0.6B
+GPT-2
+Qwen3-0.6B
+Figure 7: Policy LM comparison for “A scarecrow in the middle of a farm” (top) and “A castle on top of a hill” (bottom). The
+DARS samples show greater variation in character appearance, architecture, framing, and illumination than the corresponding
+GRPO samples.
+
+
+GPT-2
+Qwen3-0.6B
+GPT-2
+Qwen3-0.6B
+Figure 8: Policy LM comparison for “A lantern hanging outside a cottage” (top) and “A fox standing near a forest path” (bottom).
+Across both policy LMs, DARS broadens the within-prompt visual distribution while maintaining the prompt’s central subject.
+
+
+Combined
+Alignment-only
+Combined
+Alignment-only
+Figure 9: Reward comparison for “A snowman standing in the yard” (top) and “A bicycle leaning against a brick wall” (bottom),
+using Qwen3-0.6B.
+
+
+Combined
+Alignment-only
+Combined
+Alignment-only
+Figure 10: Reward comparison for “A wooden bench under a tree” (top) and “A cat sleeping on a windowsill” (bottom).
+
+
+Combined
+Alignment-only
+Combined
+Alignment-only
+Figure 11: Reward comparison for “A scarecrow in the middle of a farm” (top) and “A castle on top of a hill” (bottom).
+
+
+Combined
+Alignment-only
+Combined
+Alignment-only
+Figure 12: Reward comparison for “A lantern hanging outside a cottage” (top) and “A fox standing near a forest path” (bottom).
+
+
+GRPO
+A bicycle
+leaning
+, moody
+evening light
+A bicycle
+leaning
+, moody
+evening light
+A bicycle
+leaning
+, moody
+evening light
+PAG
+A bicycle
+leaning
+,
+graceful background
+A bicycle
+leaning
+,
+colorful background
+A bicycle
+leaning
+, 
+cozy background
+GFN
+A bicycle
+leaning
+,
+balanced composition
+A bicycle
+leaning
+,
+appealing light
+A bicycle
+leaning
+,
+balanced composition
+DARS (Ours)
+A bicycle
+leaning
+, 
+of cherry blossoms
+A bicycle
+leaning
+, 
+ summer light
+A bicycle
+leaning
+, 
+evening market
+Figure 13: Qualitative comparison for “A bicycle leaning against a brick wall.” GRPO repeatedly generates a similar nighttime
+composition, while DARS-GRPO varies lighting, seasonal context, and surrounding details while preserving the bicycle and
+wall.
+
+
+GRPO
+A wooden bench
+under a
+,
+moody evening light
+A wooden bench
+under a
+,
+moody evening light
+A wooden bench
+under a
+,
+moody evening light
+PAG
+A wooden bench
+under a
+, 
+graceful background
+A wooden bench
+under a
+, 
+elegant background
+A wooden bench
+under a
+, 
+detailed background
+GFN
+A wooden bench
+under a
+, 
+under a tree
+A wooden bench
+under a
+, 
+balanced composition
+A wooden bench
+under a
+, 
+appealing light
+DARS (Ours)
+A wooden bench
+under a
+,
+portrait of Paris
+A wooden bench
+under a
+,
+cherry blossoms
+A wooden bench
+under a
+, 
+detailed background
+Figure 14: Qualitative comparison for “A wooden bench under a tree.” DARS-GRPO explores more varied locations, tree
+appearances, and visual contexts than GRPO, while PAG and GFN produce more limited changes around the same central
+composition.
+
+
+GRPO
+A cat sleeping
+on a
+, 
+moody evening light
+A cat sleeping
+on a
+, 
+moody evening light
+A cat sleeping
+on a
+, 
+moody evening light
+PAG
+A cat sleeping
+on a
+, 
+clear daylight
+A cat sleeping
+on a
+, 
+clear daylight
+A cat sleeping
+on a
+, 
+detailed background
+GFN
+A cat sleeping
+on a
+, 
+balanced composition
+A cat sleeping
+on a
+, 
+appealing light
+A cat sleeping
+on a
+, 
+balanced composition
+DARS (Ours)
+A cat sleeping
+on a
+, 
+portrait of a city
+A cat sleeping
+on a
+, 
+detailed floral scene
+A cat sleeping
+on a
+, 
+evening light
+Figure 15: Qualitative comparison for “A cat sleeping on a windowsill.” All methods preserve the primary subject, while
+DARS-GRPO introduces broader variation in background scenery, lighting, and framing.
+
+
+C.1
+Implementation Details
+Experimental Configuration
+Unless otherwise specified,
+all experiments use the same training, generation, and eval-
+uation settings. Table 4 summarizes the policy optimization
+hyperparameters shared by DARS and the GRPO baseline,
+while Table 5 lists the hyperparameters specific to density-
+aware reward scaling. The generation pipeline, reward formu-
+lation, and datasets are held fixed across experiments unless
+explicitly varied in an ablation study.
+DARS and GRPO are trained under identical optimiza-
+tion settings to ensure a fair comparison. Both methods use
+the same policy LM, optimizer hyperparameters, decoding
+configuration, and rollout schedule. They differ only in the
+reward scaling mechanism. Unless otherwise stated, these
+hyperparameters are used for all reported experiments.
+Table 5 lists the hyperparameters specific to DARS. Den-
+sity is estimated in the DINOv2 image embedding space
+using a Gaussian kernel with bandwidth h = 20. To study
+the effect of density estimation, all kernel-width ablations
+retain the same training configuration while varying only the
+kernel bandwidth.
+Kernel-width ablations use the same experimental setup
+while varying only the Gaussian kernel width,
+h ∈{10, 15, 20, 25, 30},
+with all other hyperparameters kept fixed.
+Computing Environment
+All experiments were con-
+ducted on a server equipped with four NVIDIA A100-SXM4
+GPUs using the software environment summarized in Ta-
+ble 6. Mixed-precision training uses bf16, while Stable
+Diffusion inference is performed in fp16 to improve com-
+putational efficiency without affecting evaluation.
+Training Configuration
+Tables 4 and 5 summarize the
+optimization hyperparameters and DARS-specific settings
+used during training. Unless explicitly stated otherwise, all
+experiments employ these default configurations. DARS and
+GRPO differ only in the computation of policy rewards, while
+sharing identical optimization settings.
+Generation Configuration
+All generated images are pro-
+duced using the Stable Diffusion v1.4 pipeline with identical
+sampling settings across methods. Each rewritten prompt
+is decoded independently using 20 diffusion steps with a
+classifier-free guidance scale of 7.5. The same CLIP encoder,
+DINOv2 encoder, and aesthetic predictor are used through-
+out both training and evaluation to ensure consistency across
+reported metrics.
+Reward Configuration
+Two reward variants are consid-
+ered in this work. The primary configuration combines aes-
+thetic improvement with CLIP-based semantic alignment,
+while the alignment-only variant removes the aesthetic com-
+ponent to isolate the contribution of density-aware reward
+scaling. Apart from the reward definition, all experimental
+settings remain unchanged.
+Evaluation Protocol
+Evaluation follows the same protocol
+for all methods. For each evaluation prompt, the policy gen-
+erates N = 64 rewritten prompts, each of which is used to
+Table 4: Policy optimization hyperparameters (DARS and
+GRPO).
+Parameter
+Value
+Policy LMs
+SFT Qwen3-0.6B; SFT GPT-2
+Training temperature
+1.5
+Evaluation temperature
+1.0
+max_new_tokens
+64
+Learning rate
+1 × 10−5
+Weight decay
+0.1
+Gradient clipping
+1.0
+PPO clipping ϵ
+0.25
+KL coefficient
+1 × 10−9
+Policy updates per rollout
+1
+Training batch size
+2 prompts
+Table 5: DARS-specific hyperparameters.
+Parameter
+Value
+Density embedding space
+dinov2_image
+Density kernel
+Gaussian
+Kernel width (h)
+20.0
+generate one image under identical diffusion sampling set-
+tings. Diversity metrics are computed only among images
+originating from the same source prompt and are then aver-
+aged across the evaluation set.
+Image-text alignment is measured using OpenAI CLIP
+ViT-L/14, while image diversity is computed from DI-
+NOv2 image embeddings. The aesthetic LAION predictor
+(sac+logos+ava1-l14-linearMSE) is used wher-
+ever aesthetic reward is required.
+During training, model checkpoints are periodically evalu-
+ated on the validation set using the same evaluation protocol.
+The checkpoint used for all reported experiments is selected
+based on the highest validation Vendi Score after reward satu-
+ration, ensuring that model selection aligns with the diversity
+objective optimized by DARS.
+Datasets
+The MS-COCO training split is used for policy
+optimization, while evaluation is performed on held-out MS-
+COCO prompts and the Lexica benchmark to assess both
+in-domain and out-of-domain generalization. Unless other-
+wise stated, all reported quantitative results use these dataset
+splits.
+
+
+Table 6: Hardware and software environment used for train-
+ing.
+Component
+Value
+Operating System
+Ubuntu 22.04.4 LTS (Linux 5.15.0-94-generic)
+GPUs
+4× NVIDIA A100-SXM4-40GB
+Host RAM
+∼503 GiB
+Python
+3.13.9
+PyTorch
+2.12.1+cu130
+Key Libraries
+transformers 5.13.0, diffusers 0.39.0,
+accelerate 1.14.0, peft 0.19.1
+Mixed Precision
+bf16 (run.mixed_precision)
+Diffusion Dtype
+fp16
+Table 7: Shared generation and evaluation configuration.
+Parameter
+Value
+Diffusion model
+CompVis/stable-diffusion-v1-4
+Resolution / Steps / CFG
+512 × 512, 20 steps, guidance scale 7.5
+Scheduler
+DPM-Solver Multistep
+diffusion.seed_mode
+random
+run.seed
+42
+Rewrites per prompt (G = N)
+64
+CLIP encoder
+OpenAI CLIP ViT-L/14
+DINOv2 encoder
+facebook/dinov2-base (CLS embedding)
+Aesthetic predictor
+sac+logos+ava1-l14-linearMSE
+CLIP alignment threshold
+0.20
+Table 8: Reward settings.
+Setting
+Implementation
+Combined
+Product-style aesthetic gain with CLIP alignment gating
+Alignment only
+CLIP alignment reward without aesthetic gain
+Table 9: Training and evaluation datasets.
+Split
+Dataset
+Training
+dataset/coco/n_1024/train.jsonl
+MS-COCO evaluation
+dataset/coco/n_1024/test.jsonl
+Lexica evaluation
+dataset/lexica/n_1024/test.jsonl

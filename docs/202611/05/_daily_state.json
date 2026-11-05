@@ -1,0 +1,297 @@
+{
+  "date": "20261105",
+  "date_label": "",
+  "generated_at": "2026-11-05 00:18:00 UTC",
+  "recommend_exists": true,
+  "run_count": 1,
+  "papers": [
+    {
+      "paper_id": "2611.04061v1",
+      "route": "202611/05/2611.04061v1-on-the-primacy-bias-in-rlvr-training",
+      "title": "On the Primacy Bias in RLVR Training",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "研究大模型推理中可验证奖励强化学习的首因偏差",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04241v1",
+      "route": "202611/05/2611.04241v1-aceaction-5m-hierarchical-goals-for-generalist-action-learning-across-3d-game-worlds",
+      "title": "AceAction-5M: Hierarchical Goals for Generalist Action Learning Across 3D Game Worlds",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "跨3D游戏世界的视觉-语言-动作数据集，面向技能组合与子目标转换",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04774v1",
+      "route": "202611/05/2611.04774v1-cooperative-multi-agent-reinforcement-learning-with-submodular-trajectory-rewards",
+      "title": "Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "具有子模轨迹奖励的合作多智能体强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04838v1",
+      "route": "202611/05/2611.04838v1-found-by-search-broken-by-a-shortcut-transfer-and-tampering-of-searched-intrinsic-rewards",
+      "title": "Found by Search, Broken by a Shortcut: Transfer and Tampering of Searched Intrinsic Rewards",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "在MiniHack任务中搜索内在奖励以促进探索与迁移",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.05263v1",
+      "route": "202611/05/2611.05263v1-jhima-webrl-a-joint-hierarchical-multi-agent-reinforcement-learning-framework-for-long-horizon-web-tasks",
+      "title": "JHiMA-WebRL: A Joint Hierarchical Multi-Agent Reinforcement Learning Framework for Long-Horizon Web Tasks",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向长程多模态网页智能体的联合分层多智能体强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.05266v1",
+      "route": "202611/05/2611.05266v1-stabilizing-on-policy-targeted-guidance-in-agentic-reinforcement-learning",
+      "title": "Stabilizing On-Policy Targeted Guidance in Agentic Reinforcement Learning",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "基于文本反馈定向引导的同策略智能体强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04787v1",
+      "route": "202611/05/2611.04787v1-resi-math-exploring-recoverable-capability-frontiers-for-efficient-reasoning-improvement",
+      "title": "ReSI-Math: Exploring Recoverable Capability Frontiers for Efficient Reasoning Improvement",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "用于数学推理的可验证奖励强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04792v1",
+      "route": "202611/05/2611.04792v1-density-aware-reward-scaling-a-reinforcement-learning-framework-for-reward-proportional-sampling",
+      "title": "Density-Aware Reward Scaling: A Reinforcement Learning Framework for Reward-Proportional Sampling",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "在策略梯度强化学习中按密度缩放奖励以保持结果多样性",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.05151v1",
+      "route": "202611/05/2611.05151v1-catalyzing-interactive-html-generation-capabilities-via-high-fidelity-reinforcement-learning",
+      "title": "Catalyzing Interactive HTML Generation Capabilities via High-Fidelity Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "含高保真奖励与信用分配的浏览器交互强化学习，以迷你游戏为测试平台",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.05313v1",
+      "route": "202611/05/2611.05313v1-mdskill-learning-to-internalize-skill-memory-through-multi-view-distillation-for-efficient-dynamic-agent-self-evolution",
+      "title": "MDSKILL: Learning to Internalize Skill Memory through Multi-View Distillation for Efficient Dynamic Agent Self-Evolution",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "通过蒸馏内化技能记忆以改进自进化智能体的强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.05373v1",
+      "route": "202611/05/2611.05373v1-aligning-language-models-with-general-preferences-an-empirical-study-of-direct-nash-optimization",
+      "title": "Aligning Language Models with General Preferences: An Empirical Study of Direct Nash Optimization",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "通过偏好博弈纳什均衡对齐大模型的策略优化",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.03998v1",
+      "route": "202611/05/2611.03998v1-dory10-4b-a-looped-normalized-gpt",
+      "title": "Dory1.0-4B: A Looped Normalized-GPT",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "使用可验证奖励强化学习进行后训练",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04010v1",
+      "route": "202611/05/2611.04010v1-decision-transformer-with-task-aware-representations-for-offline-meta-reinforcement-learning",
+      "title": "Decision Transformer with Task-Aware Representations for Offline Meta-Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "结合任务表示、世界模型与 Q 监督的离线元强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04031v1",
+      "route": "202611/05/2611.04031v1-language-model-augmented-decision-transformer-for-multi-task-offline-reinforcement-learning",
+      "title": "Language Model Augmented Decision Transformer for Multi-Task Offline Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "用大模型做轨迹增广与策略学习的离线多任务强化学习",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04072v1",
+      "route": "202611/05/2611.04072v1-finite-sample-convergence-in-networked-average-reward-marl-decentralization-pitfalls-and-entropy-remedies",
+      "title": "Finite-Sample Convergence in Networked Average Reward MARL: Decentralization Pitfalls and Entropy Remedies",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "面向网络化多智能体强化学习的有限样本收敛分析",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04277v1",
+      "route": "202611/05/2611.04277v1-harness-s-learning-from-sibling-harnesses-for-generalizable-agent-training",
+      "title": "Harness-S: Learning from Sibling Harnesses for Generalizable Agent Training",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "通过兄弟Harness救援失败来训练可泛化智能体策略",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04543v1",
+      "route": "202611/05/2611.04543v1-cando-conservative-action-noise-directional-optimization-for-residual-reinforcement-learning",
+      "title": "CANDO: Conservative Action-Noise Directional Optimization for Residual Reinforcement Learning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "残差强化学习方法，提升预训练策略适配的样本效率与稳定性",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    },
+    {
+      "paper_id": "2611.04614v1",
+      "route": "202611/05/2611.04614v1-policy-network-diffusion",
+      "title": "Policy Network Diffusion",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "扩散模型生成强化学习策略网络参数",
+      "first_seen_at": "2026-11-05 00:18:00 UTC",
+      "updated_at": "2026-11-05 00:18:00 UTC"
+    }
+  ]
+}

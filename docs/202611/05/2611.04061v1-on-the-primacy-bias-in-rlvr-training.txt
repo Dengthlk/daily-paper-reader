@@ -1,0 +1,495 @@
+Title: On the Primacy Bias in RLVR Training
+
+URL Source: https://arxiv.org/pdf/2611.04061v1
+
+Published Time: Wed, 04 Nov 2026 01:34:19 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# On the Primacy Bias in RLVR Training 
+
+Phuc Minh Nguyen 1 Ngoc-Hieu Nguyen 2 Parshin Shojaee 3
+
+Chinh Duc La 7 Duy Minh Ho Nguyen 4,5,6 Rui Zhang 2
+
+Khoa D. Doan 7 Ting Hua 1 Nitesh V. Chawla 11University of Notre Dame 2The Pennsylvania State University 3Virginia Tech 
+
+> 4
+
+University of Stuttgart 5German Research Center for Artificial Intelligence 
+
+> 6
+
+Max Planck Research School for Intelligent Systems 7VinUniversity 
+
+## Abstract 
+
+Reinforcement Learning with Verifiable Reward (RLVR) has emerged as a promis-ing approach for enhancing the reasoning capabilities of large language models. However, it still remains unclear whether RLVR can extend reasoning capabilities beyond what is already encoded in the base model. In this paper, we study this question through the lens of primacy bias — the tendency of models to over-rely on already-learned representations, disproportionately improving performance on problems they already handle well while underexploring harder ones that require de-parting from those representations. Through our controlled experiments and large-scale analysis, we show that RLVR training on mixed data tends to further sharpen performance on easier problems while yielding only marginal gains on harder ones. We find that although hard problems lead to modest gains overall, they are actually the ones that help most in expanding the model’s reasoning capabilities and pushing the representations. However, prolonged training on these hard problems may also hurt and lead to forgetting on easy problems. These findings help to better understand some of the prior conflicting observations about RLVR, specifically, why on (OOD) domains where the base model performs poorly, improvements on hard problems can expand reasoning; while on well-trained domains, forgetting can reduce performance and mask genuine gains obtained from hard problems. Code : https://github.com/minhphucng30-UND/Primacy-bias-RLVR 
+
+## 1 Introduction 
+
+Large language models (LLMs) fine-tuned for reasoning have recently achieved remarkable gains on complex reasoning benchmarks. A key driver is Reinforcement Learning with Verifiable Reward (RLVR) [10, 20], which iteratively optimizes LLMs using simple, verifiable rewards, thereby incentivizing complex reasoning behaviors such as backtracking and self-verification within the reasoning traces of these models. Despite this progress, the answer to the question “ does RLVR expand toward new reasoning capa-bilities? ” still remains under debate. Some studies have suggested that RL fine-tuning only improves sample efficiency on problems already solvable within the base model, rather than enabling it to solve new problems [41, 23, 36]. On the other hand, some other works [31, 22, 35, 40] have provided evi-dence that RL-trained models can still induce novel reasoning strategies on out-of-distribution (OOD) domains. These works, however, suggest that the relationship between the base model and the evalu-ated task—specifically the extent to which the base model can already solve the task problems—may play an important role in explaining whether RLVR leads to reasoning expansion or sharpening. 
+
+> 40th Conference on Neural Information Processing Systems (NeurIPS 2026). arXiv:2611.04061v1 [cs.AI] 2 Nov 2026
+
+In this paper, we seek a principled explanation for these seemingly contradictory outcomes through the lens of primacy bias —the tendency to overfit to initial experiences (i.e., the pre-trained knowl-edge) that can damage the rest of the learning process [17, 2]. This bias not only limits exploration but also impairs the learnability of on-policy data during RL training. It arises because the model be-comes increasingly rigid and remains confined near its pre-trained initialization, rather than allowing meaningful adaptation of its internal representations towards new downstream tasks—a behavior com-monly referred to as the lazy training regime [24, 8, 24]. To study this hypothesis, we first investigate primacy bias in RLVR using experiments that fully control both pre-training and post-training pipeline (Section 4). We compare coverage dynamics during RL fine-tuning induced by pre-training against random initialization. Our results show that primacy bias leads to coverage shrinkage, regardless of the fine-tuning distribution. Furthermore, we observe that this primacy bias induces sparser parameter updates during training which hinders the network’s ability to learn rare or more challenging problems (i.e., those that the pre-trained or base model struggles to handle). These observations suggest that the RLVR model mostly operates in the lazy regime [8, 15], staying close to its pre-trained initialization and requiring prolonged training to meaningfully adapt to harder examples [27, 18, 24]. We then extend our analysis to LLM reasoning and investigate the existence of lazy training under RLVR ( Section 5). Our results show that RLVR-trained models could often be well approximated by the linearization around their pre-trained base model, while exhibiting minimal feature drift. This result suggests that RLVR in this more general setting also operates in the lazy regime, providing a possible explanation for the sparse parameter updates observed during RLVR training, as reported in [26]. We believe that these findings place RLVR within a theoretically tractable regime, which can provide a foundation for more principled, scalable, and analyzable studies of learning dynamics in reasoning post-training [27, 18, 6]. Motivated by our findings, we identify an unlearnable phenomenon that emerges from the interaction between primacy bias and the lazy training regime in RLVR-based LLM training ( Section 6). To study this, we first perform fine-tuning across a mixture of easy and hard reasoning problems and observe that mixed training disproportionately improves rewards on easy examples while limiting learning on harder ones. Our results show that although hard problems lead to only modest overall gains during training, they are actually the ones that help most in expanding the model’s reasoning capabilities. At the same time, focused training on hard problems introduces a subtle trade-off that must be carefully taken into account. We find that prolonged training on these difficult examples can also hurt and lead to catastrophic forgetting on the easier problems, likely due to substantial deviations from the initial base model representations. This explains why, as observed in [22], prolonged RLVR training can expand the reasoning boundary in less familiar or out-of-distribution domains, where the pre-trained model initially struggles. In such settings, extended training enables the model to gradually escape the lazy regime and meaningfully adapt to the new target tasks [18, 35, 40], ultimately leading to broader reasoning coverage. In contrast, in domains where the pre-trained model already performs well—such as mathematical or code reasoning, particularly on easier problems—prolonged training may provide limited benefit and can even lead to adverse effects such as coverage shrinkage or catastrophic forgetting. In these cases, the gains obtained from adapting to harder examples may be outweighed by degradation on the easier ones due to substantial deviations from the base model representations and the effects of catastrophic forgetting. We hope that our study provides a clearer understanding of the conflicting observations surrounding RLVR post-training and motivates more principled approaches for studying and controlling the trade-off between adaptation and forgetting. In summary, our main contributions are as follows: • We unveil the primacy bias and lazy learning as the underlying mechanism to reconcile conflicting findings of whether RLVR expands or sharpens the reasoning boundary, where models tend to rely on base model’s features when adapting to post-training data, limiting their ability to acquire new capabilities during RL fine-tuning. • Through our controlled and large-scale empirical analysis, we demonstrate that RLVR operates in a near-linearized regime around the base model, with the learned representation remaining largely un-changed throughout the RL fine-tuning process. As a result, this leads models to disproportionately improve on easy problems while limiting their ability to effectively learn on hard ones. • Despite limited overall improvement, learning on hard problems can expand the reasoning boundary, but comes at the cost of forgetting on easy problems. This explains why, on OOD tasks, 2where forgetting is minimal, improvements on unsolved problems can increase Pass@ k, whereas on over-trained domains, severe forgetting masks out improvement on hard problems. 
+
+## 2 Related Works 
+
+RL Generalization of Reasoning LMs. The role of reinforcement learning in driving generalization beyond the base model has been a central topic of study. Early works argue that RL-trained models may not acquire fundamentally new reasoning capabilities beyond those already present in their base models [39, 23, 36]. In particular, [41] demonstrates that RL training can even reduce the number of solvable problems, as measured by the Pass@ k metric, suggesting that performance is largely constrained by the base model’s capacity. Additionally, [36] proposes a theoretical framework indicating that RL is unlikely to surpass the inherent limitations of the base model. By contrast, [22] shows that extended RL training can enhance coverage on synthesized reasoning tasks. [35] further shows that RL can exhibit grokking and develop new reasoning strategies on extremely hard tasks. In contrast, we argue that these conflicting findings may arise from primacy bias: early learned features can hinder learning on hard mathematical tasks, while in OOD settings, where such biases are misaligned with target tasks, RL can promote new reasoning strategies. 
+
+Primacy Bias in Neural Networks. Similar to biological systems, neural networks also exhibit critical periods—early phases of training during which representations remain highly plastic and are disproportionately shaped by initial data [2]. This phenomenon has later been explored in reinforcement learning, where it is often referred to as primacy bias [17]. Primacy bias occurs when the RL learning process is disrupted by overfitting to earlier experiences. One effect induced by primacy bias is the reduction of update/gradient norm, causing parameters to stop changing and hindering learnability during RL training [1, 17]. Recently, [24] attributed primacy bias to limited feature learning, indicating a model’s confinement to the lazy regime in which it fits the data without substantially updating its representations. This effectively behaves as a linear model, and consequently generalizes poorly. We build on this line by connecting coverage shrinkage to primacy bias, showing that primacy bias also arises in RLVR training, hindering learnability on hard problems. 
+
+Neural Tangent Kernel. The infinite-width limit is a well-studied model for deep network optimization [15]. In this regime, models remain close to initialization and behave like linear models governed by the initial Neural Tangent Kernel (NTK), which remains constant during training—known as the lazy training regime [8]. Several studies have investigated the inductive biases in lazy training [27, 6, 5], revealing that the NTKs preferentially fit data using the top eigenmodes of their spectrum, a phenomenon termed spectral bias . While this spectral bias can enable good generalization on some learning problems, target functions y(x) that are not in the top eigenspaces of the kernel (misaligned), which can be measured by centered-kernel alignment (CKA) [9], require a potentially much larger amount of data. In contrast, in a rich (feature-learning) regime, the model can deviate substantially from its initialization, enabling meaningful changes to its internal representations, improving sample efficiency on target functions that are challenging for the lazy regime.[12, 18, 4]. Furthermore, [18] characterizes the effect of delayed generalization (grokking) as a phase transition from lazy to rich (feature-learning) learning dynamics. In this paper, we show that RLVR models operate in the lazy regime, where RL-trained models remain close to the pre-trained model, inducing a bias toward solutions near the initial representation. As a result, optimization tends to prioritize improvements on easy problems while making little to no progress on harder ones, leading to a form of delayed generalization. 
+
+## 3 Preliminaries 
+
+Language Model (LM). We consider a language model πθ parameterized by θ, where the models learn to map an input prompt x to predictions y = {y1, · · · , yL} ∈ V L, where V is the vocabulary size, in an auto-regressive manner: 
+
+πθ (y|x) = 
+
+> |y|
+
+Y
+
+> k=1
+
+πθ (yk|x, y<k ) = 
+
+> |y|
+
+Y
+
+> k=1
+
+Softmax (zθ (x, y<k )) yk (1) where yk is the token at timestep k, and y<k denotes the first k −1 tokens of y, and zθ (x, y<k ) ∈ RV
+
+denotes the logits at the k-th token, and |y| is the response length. 3Coverage. Coverage is the primary metric to quantify the reasoning capacity of LLMs. Let r(x, y) ∈{0, 1} be a binary verifiable reward, indicating whether the response y is correct for a given problem x.To measure the coverage of a language model πθ , the Pass@ k metric has been often used. This metric quantifies the probability that πθ correctly solves a problem x within k attempts, and is defined as: Pass@ k(x, π θ ) = 1 − (1 − Pass@1 (x, π θ )) k (2) where Pass @1( x, π θ ) = Ey∼πθ (·| x) [r(x, y) = 1] . In practice, Pass@ k is evaluated over a problem set D and measures the fraction of problems solved at least once by πθ within k attempts. 
+
+## 4 Primacy bias and Lazy learning 
+
+We study how pre-training–induced bias affects coverage expansion (or shrinkage) during RL training through the lens of primacy bias [17, 2], a phenomenon in which early learning experiences hinder later learning phases. For example, pre-trained models tend to learn representations dominated by the majority classes, leaving rare classes underrepresented. Thus, RL finetuning is "initially restricted" by these "suboptimal" representations. Furthermore, we’ll show that, under some conditions, the feature updates during RL stage are limited, a phenomenon known as lazy learning [24, 8]. As a result, due to the primacy bias, hard (or rare) examples remain underexplored during the RL phase. We hypothesize that this phenomenon consequently affects the reasoning boundary (coverage) in LLM post-training. 1 2 3 4 5 6 7 8 9 10             
+
+> Class Index
+> 0.00.20.40.60.8
+> Density Higher β= sharper decay Pre-trained distributions with different β
+> 12345678910
+> Class Index
+> 0.050 0.075 0.100 0.125 0.150 0.175 0.200
+> Density
+> Deasy  (Aligned)
+> Duniform
+> Dhard  (Misaligned)
+> Dominant Classes Rare Classes
+> RL data distribution
+> 0.51.01.52.02.53.0
+> β
+
+Figure 1: Experimental designs on toy example of image classification. 1) The pre-trained data distribution is controlled by the skewness parameter β, greater skewness induces strong bias towards dominant classes. 2) The class distribution of RL training data consists of Deasy , Dhard , and Duniform .Easy examples align with pre-trained knowledge, whereas hard examples are misaligned with it and predominantly belong to rare classes. 
+
+4.1 Primacy bias leads to coverage shrinkage 
+
+In this section, we study the impact of primacy bias in RLVR in a toy image classification setting where we can control the full pre-training and post-training pipeline, as well as input difficulty. Using a standard image classification task like MNIST [21], we first pre-train a neural network on a labeled dataset and then fine-tune it with GRPO [33], where the reward is 1 if the predicted class matches the ground-truth label and 0 otherwise. In this setting, we control the input’s difficulty based on how often its class appears in the pre-training dataset. We model this effect using Zipf’s law distribution. So, the probability of observing the i-th most frequent class is given by: 
+
+pi ∝ i−β , i ∈ { 1, · · · C} (3) where C is the number of classes, and β > 0 is a parameter to control the skewness of the data distribution. As β increases, the long tail becomes more pronounced, making the model focus on learning features from dominant classes, which can be suboptimal for low-frequency classes [11, 19] (as shown in Figure 1 (left)). To study the role of data distribution in RLVR, we also construct three fine-tuning datasets: Deasy , Dhard , and Duniform , corresponding to data distributions that emphasize dominant classes, rare classes, and a uniform distribution over all classes, as shown in Figure 1 (right). Our first observation is that RLVR training from a pre-trained model (using β = 1 .2) leads to coverage shrinkage, whereas RLVR training from a randomly initialized model does not (as shown in Figure 2, left). Notably, this observation holds across different finetuning datasets. Secondly, when fine-tuning from a pre-trained model, using easy problems leads to a shrinkage in coverage, where the model primarily sharpens its performance on already well-learned classes, 40 16 32 48 64 80 96 112 128 
+
+> Epochs
+> 0.82 0.84 0.86 0.88 0.90 0.92 0.94 0.96
+> Pass@32
+
+Coverage dynamics         
+
+> Dhard
+> Deasy
+> Duniform
+> Pre-train Random
+> 016 32 48 64 80 96 112 128
+> Epochs
+> 0246810 12 14 16
+> Loss
+
+Cross-Entropy Loss on easy/hard classes 
+
+> Hard class Easy class
+
+Figure 2: Coverage (Pass@ k) on test inputs over the course of RLVR initialized from a pre-trained or randomly initialized model variants. Coverage shrinkage happens under both Duniform and Deasy ,whereas learning on Dhard initially improves Pass@ k but begins to decline with prolonged training (Left), due to catastrophic forgetting on majority classes (Right). similar to observations in post-trained LLMs [41]. On the other hand, training on hard problems can initially improve Pass@ k but eventually degrades with prolonged training. As shown in Fig. 2 (right), the loss on easy classes steadily increases over the course of training. This indicates that focusing on difficult examples induces forgetting of easier ones, ultimately leading to a decline in Pass@ k.Additionally, we examine the effect of skewness β from pre-training to RL training. We find that larger skewness leads to: ( i) Delayed improvements on hard problems , requiring substantially more training steps to reach perfect training accuracy on the hard examples (Fig. 3, left); and ( ii ) Sparser parameter updates , with only a small subset of parameters changing during RL training (Fig. 3, right). Taken together, these findings provide evidence for a form of primacy bias in RLVR, whereby early training experiences hinder the model’s ability to learn rare classes or hard problems. Because the model relies heavily on pre-trained features when adapting to new data, it leads to limited parameter updates during RL, and delayed performance gains on hard examples. 0 16 32 48 64 80 96 112 128                 
+
+> Epochs
+> 0.00.20.40.60.81.0
+> Accuracy
+> Training accuracy on Dhard
+> 016 32 48 64 80 96 112 128
+> Epochs
+> 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95
+> Sparsity update ratio
+> 0.51.01.52.02.53.0
+> β
+> 0.10 0.15 0.20 0.25 0.30 0.35
+> Kernel alignment CKA (kNTK ,yy >)
+> 0.51.01.52.02.53.0
+> β
+
+Figure 3: Skewness induces three key effects: it delays performance gains when learning on hard classes (left), results in sparser parameter updates during RLVR training (middle), and reduces alignment with the target labels on Dhard . These results indicate that pre-trained models remain in a lazy regime during RLVR post-training, staying close to their initialization and requiring prolonged training to transition into an exploratory, feature-learning regime. 
+
+4.2 Lazy learning regime 
+
+Recently, Lyle et al. [24] have proposed a framework to understand primacy bias in deep learning. In this framework, primacy bias occurs because the network fails to enter a feature-learning regime after early training. Instead, the fine-tuning stage operates in a lazy regime where the network becomes increasingly rigid and does not produce substantial changes in the learned representation. When the data distribution or task changes, e.g., as in post-training, gradient updates are insufficient to significantly modify the previously learned features. As a result, the model continues to rely on representations optimized for the initial data rather than adapting to the new distribution, leading to degraded performance relative to a freshly initialized model. Based on our observation and the above discussion, we hypothesize that RLVR is operated in the lazy regime . In this regime, the training dynamics stay close to the pre-trained initialization and a neural 5network fθ (x) can be well approximated by its first-order linearization around the initialization: 
+
+fθ (x) ≈ fθ0 (x) + ∇θ f (x) θ0 (θ − θ0) (4) where θ0 denotes the pre-trained initialization of the model parameters. Furthermore, the learning dynamics are dictated by the initial neural tangent kernel (NTK) [15]: 
+
+kNTK =
+
+
+
+∇θ f (x) θ0
+
+  
+
+∇θ f (x) θ0
+
+⊤
+
+(5) 
+
+The learnability of different problem subsets. To identify which tasks the network can learn well in the lazy regime, several studies have proposed using centered kernel alignment, CKA (kNTK , yy ⊤)
+
+[9, 32], as a measure of similarity between the initial NTK and the downstream target labels y:CKA  kNTK , yy ⊤ = y⊤kNTK y
+
+|| kNTK || F || y|| 2 (6) A high CKA value indicates that the initial kernel is well-aligned with the target task, enabling good generalization with minimal feature learning, and generalizes poorly when the target labels y are 
+
+misaligned with the initial NTK. As shown in the third panel of Fig. 3, greater skewness leads to lower CKA alignment on Dhard , indicating that delayed generalization can be understood as the misalignment of features. In this transition, the model must adapt its internal representations to improve sample efficiency on functions that are poorly captured under the lazy regime [12, 18, 4]. 
+
+## 5 Fine-Tuning Reasoning Models with RLVR Occurs in the Lazy Regime 
+
+The above analysis suggests that primacy bias induced by pre-trained initialization drives the model into a lazy regime, limiting its ability to learn from hard problems. In this section, we investigate whether the lazy regime persists during RLVR fine-tuning in reasoning models. To do so, we evaluate two criteria: (i) whether the linearly approximated model closely matches the behavior of the fine-tuned model, and (ii) whether RLVR training induces significant feature drift from the pre-trained initialization. 
+
+5.1 RLVR models are well-approximated by linearization 
+
+We compare the model and its corresponding linearized policy. Specifically, we linearly approximate the fine-tuned model logits, denoted as zlin , from the pre-trained model logits zθ0 as follows: 
+
+zlin (x) = zθ0 (x) + ∇θ zθ (x) ⊤ 
+
+> θ=θ0
+
+(θ − θ0) , πlin (·| x) = Softmax ( zlin (x)) . (7) where zθ0 denotes the logits of the pre-trained policy, to quantify the linearized approximation between the RL and SFT stages, as recent evidence suggests that SFT already operates in a near-lazy regime [25, 30, 3]. We utilize the KL divergence between the fine-tuned models and their corresponding linearized approximations: 
+
+Ex∼D [KL (πθ (·| x)|| πlin (·| x))] , (8) We analyze publicly released checkpoints, as shown in Tab. 1. The suite spans different RL algorithms (GRPO, DAPO) and domains (math, coding, instruction following). Table 1: Linear approximation in SFT vs RLVR. Linearized approximations reliably capture RL fine-tuned models, yet break down in the supervised fine-tuning (SFT) setting.                                      
+
+> Base Model fine-tuned (FT) Model Algorithm Data KL (πθ|| πlin )Sparsity Update (%)
+> Qwen2.5-Math-1.5B DS-R1-Distill-Qwen-1.5B SFT Mixed 12.73 2.8% DS-R1-Distill-Qwen-1.5B DeepScaleR-1.5B-Preview GRPO Math 0.06 53.8% DS-R1-Distill-Qwen-1.5B DeepCoder-1.5B-Preview GRPO Code 0.125 45.5% Qwen3-8B-Base Klear-Reasoner-8B-SFT SFT Math+Code 17.946 69.5% Qwen3-8B-Base GT-Qwen3-8B-Base GRPO Math 0.042 79.9% Qwen3-4B Polaris-4B-Preview DAPO Math 0.052 79.3%
+
+Results. As shown in Tab. 1, interestingly, for all fine-tuned RL models, the KL divergence is extremely small, indicating that the linearized approximation closely matches the fully fine-tuned 6models. In contrast, supervised fine-tuning (SFT) yields much larger KL divergence, reflecting greater nonlinear changes. Moreover, RL-trained models exhibit a substantially higher update sparsity ratio than SFT, suggesting that they remain closer to their base model. We also quantify the per-token log-probability correlation between the linearized approximation and the final fine-tuned models. As shown in Fig. 4, the linearized approximation closely matches the RL fine-tuned models, whereas the SFT models show little to no correlation. −4.0 −3.5 −3.0 −2.5 −2.0 −1.5 −1.0 −0.5 0.0                        
+
+> ln πlin (y|x)
+> −4.0
+> −3.5
+> −3.0
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.50.0
+> ln  πθ(y|x)
+> Polaris-4B (DAPO)
+> Pearson ρ= 0.92
+> −3.5−3.0−2.5−2.0−1.5−1.0−0.50.0
+> ln πlin (y|x)
+> −3.5
+> −3.0
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.50.0
+> ln  πθ(y|x)
+> Qwen3-8B-Base-MATH (GRPO)
+> Pearson ρ= 0.91
+> −4.0−3.5−3.0−2.5−2.0−1.5−1.0−0.50.0
+> ln πlin (y|x)
+> −7
+> −6
+> −5
+> −4
+> −3
+> −2
+> −10
+> ln  πθ(y|x)
+> DS-R1-Distill-Qwen-1.5B (SFT)
+> Pearson ρ= 0.06
+
+Figure 4: Per-token correlations between the fine-tuned policy and its linearized approximation reveal that RLVR models align much more closely with their first-order approximations than SFT models. 
+
+5.2 RLVR models show minimal feature drifts compared to SFT 
+
+Another characteristic of the lazy–rich dichotomy in supervised learning [16, 38] is that the lazy regime yields minimal representational change. To quantify feature similarity between pre-trained and fine-tuned models, we measure subspace rotation via the mean principal angle (MPA) [7, 43] and spectral changes via spectrum drift (NSS). Specifically, given centered activation matrices Al
+
+b
+
+and Al
+
+ft at layer l, we compute MPA and NSS between them. MPA (Al
+
+b, A l
+
+ft ) = 1
+
+k
+
+kX
+
+i=1 
+
+arccos  σi
+
+ Vb,k (Vft ,k )⊤ , NSS (Al
+
+b, A l
+
+FT ) = || σ(Al
+
+b) − σ(Al
+
+ft )|| 2
+
+|| σ(Al
+
+b)|| 2
+
+(9) where Vb,k Vft ,k ∈ Rk×d denotes the top-k right singular vectors of Al
+
+b, Al
+
+ft , and σi denotes the singular value. 0 5 10 15 20 25 
+
+Layer Index 
+
+> 0.00.10.20.30.4
+
+Mean Principle Angle      
+
+> DeepScaleR-1.5B (GRPO) Polaris-4B (DAPO) DeepSeek-R1-Distill-Qwen-1.5B (SFT)
+> 0510 15 20 25
+
+Layer Index 
+
+> 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175
+
+Spectrum Drift 
+
+> DeepScaleR-1.5B (GRPO) Polaris-4B (DAPO) DeepSeek-R1-Distill-Qwen-1.5B (SFT)
+
+Figure 5: Mean Principal Angle (in radians) and Spectrum Drift (NSS) between the base and fine-tuned features across models. RL models show considerably lower shifts compared to SFT. The feature similarities between the pre-trained and their corresponding fine-tuned (SFT or RLVR) models across different layers are shown in Fig. 5. Across models, RL fine-tuning yields consistently small principal angles, indicating stronger preservation of the base model’s features. In contrast, SFT exhibits substantially larger deviations from initial features. To further support that LLM RL fine-tuning operates in the lazy regime, where the Neural Tangent Kernel (NTK) matrix mostly stays constant throughout the train-ing process, we first calculate the empirical NTK (eNTK) on 256 unique sam-ples across MLP layers using Qwen2.5-3B-Instruct, following previous work [25]: 70.0 0.5 1.0 1.5 2.0 2.5 3.0 050 100 150 200 250 300 
+
+> Frequency Relative Kernel Distance RL SFT
+
+Figure 6: Histogram of relative kernel dis-tances between RL- and SFT-fine-tuned mod-els across different examples. 
+
+KNTK (xi, x j ) = ⟨∇ θ fθ (xi), ∇θ fθ (xj )⟩ (10) where fθ denotes the model predictions, we calculate the relative distance computed before and after fine-tuning: 
+
+|K NTK FT (xi, x j ) − K NTK base (xi, x j )||K NTK base (xi, x j )| (11) where KNTK base denotes the eNTK of the base model and 
+
+KNTK FT denotes the eNTK of the RL fine-tuned model. As shown in Fig. 6, RL remains tightly concentrated near zero with significantly less variance, indicating that the kernel changes only marginally during train-ing. In contrast, SFT exhibits a much broader distribution that deviates substantially from zero, suggesting significantly larger kernel changes. These results suggest that RL fine-tuning operates in a 
+
+lazy regime , where the fine-tuned model is well-approximated by its linearization, and the learned representations remain largely unchanged throughout fine-tuning. 
+
+## 6 The Unlearnable Phenomenon in RLVR Training. 
+
+In this section, we show that, due to primacy bias, LLMs primarily improve rewards on already known and easy problems throughout the RLVR training. As a result, they achieve only marginal gains on harder problems. We also observe that, while training on these hard problems yields little improvement, it can improve Pass@ k performance; however, prolonged training comes at the expense of reduced Pass@ 1 due to forgetting on easy problems. 
+
+6.1 The harder the examples are, the harder it is for RLVR models to learn 
+
+Our hypothesis is that, in the lazy regime, RLVR models rely on their initial representations to optimize rewards, which may be insufficient for harder examples and thus lead to degraded learning efficiency. 
+
+Setup. We fine-tune the Qwen2.5-3B-Instruct model on the MATH dataset and filter out unsolved problems under the final policy to focus on solvable instances. The remaining data is partitioned into disjoint subsets of increasing difficulty based on pass@1 accuracy, and separate policies are trained on each subset to analyze how learning dynamics vary with difficulty level. Additional experimental de-tails are provided in Appendix B. In short, difficulty is closely related to CKA: well-aligned examples are easier to learn, whereas poorly aligned examples remain difficult. This not only supports our anal-ysis above, but also sheds further light on the learning dynamics of RLVR on these examples. For eval-uation, we utilize test sets from Olympiad-Bench [13], Minerva [37], and MATH-500 [14] datasets. 
+
+Remark. Throughout this paper, we define example difficulty by how challenging an example is for the model to solve, as measured by its accuracy. In the controlled toy experiments (Sec. 4), we have full control over the pretraining data distribution, allowing us to manipulate difficulty by increasing distribution skew. In contrast, in the large-scale LLM experiments, where the pretraining data distribution is inaccessible, we cannot directly manipulate difficulty. Instead, we estimate it empirically using the model’s accuracy on the MATH benchmark, with lower accuracy indicating greater difficulty. Despite these differences in how difficulty is manipulated or measured, both settings share the same underlying notion of difficulty. 
+
+Training exclusively on hard examples yields little improvement. Our first result is shown in Fig. 7. We observe that RLVR yields meaningful improvements only on easy subsets, whereas on harder subsets, it shows little to no improvement, even when training is focused on them. Our results show that during training, most improvements arise from easier examples, while harder examples contribute minimally to overall reward gains. This provides further evidence to the phenomenon we observed earlier in Sec. 4, where rare (hard) problems exhibit delayed improvement and require substantially more training steps due to a lack of feature learning, and prolonged training is needed to adapt their representations. 80 20 40 60 80 100 120 140 160 180 
+
+Training steps 
+
+> 0.00.10.20.30.4
+> Accuracy improvement
+
+Accuracy improvement ∆r(x)       
+
+> 0200 400 600 800 1000 1200 1400
+
+Training steps 
+
+> 0.00 0.02 0.04 0.06 0.08
+
+Training Accuracy 
+
+> 0.10.20.30.40.50.6
+> Accuracy threshold  τ
+
+Figure 7: RLVR tends to improve only on easy subsets, while harder subsets exhibit minimal gains (left). Prolonged training on these hard subsets still yields limited improvement, failing to significantly enhance performance on training dataset. Table 2: Comparison of Pass@128 performance when learning on hard/easy and full training dataset, where we train for 512 steps. 
+
+Model OlympiadBench Minerva MATH-500 
+
+Base 68.77 (+0.0) 53.91 (+0.0) 94.31 (+0.0) GRPO (full dataset) 67.87 (-0.9) 48.83 (-5.08) 93.24 (-1.07) GRPO (Hard) 69.87 (+1.1) 52.98 (-0.93) 94.51 (+0.2) GRPO (Easy) 66.38 (-2.39) 49.18 (-4.73) 92.47 (-1.84) 0 200 512 1024 1536 2048 Training steps           
+
+> 0.660 0.665 0.670 0.675 0.680 0.685 0.690 0.695 0.700
+> Pass@ 128
+> Olympiad-Bench 0200 512 1024 1536 2048 Training steps
+> 0.530 0.535 0.540 0.545 0.550 0.555 0.560
+> Pass@ 128
+> Minerva 0200 512 1024 1536 2048 Training steps
+> 0.9300 0.9325 0.9350 0.9375 0.9400 0.9425 0.9450 0.9475
+> Pass@ 128
+> Math-500
+
+Figure 8: Pass@ k performance of the base model and intermediate checkpoints with GRPO (hard), when we prolonged training from 512 to 2048 training steps. 0 200 512 1024 1536 2048 
+
+Training steps 
+
+> 0.61 0.62 0.63 0.64
+> Accuracy
+> KL increases/ Linearization break down region
+> 0.00 0.01 0.02 0.03 0.04 0.05 0.06 0.07
+> KL  (πθ|| πlin )
+
+Figure 9: RLVR models gradually forget easy examples (evaluated on MATH-500) when learning on hard problems, and the linearized approximation begins to break down under prolonged training. 
+
+Training on hard examples improves coverage (Pass@ k), while easy examples degrade it. Inter-estingly, our evaluation results in Tab. 2 show that despite limited improvement from training in hard subsets, the model still exhibits improved Pass@ k,while learning on easy problems exhibits degradation in Pass@ k and coverage shrinkage. This suggests that these small gains can still transfer positively to other hard problems. 
+
+Impact of prolonged training. We further examine whether increasing gradient steps improves Pass@ k,expecting the model to escape the lazy regime. Fig. 8 shows its evolution over post-training steps. In contrast to [28], prolonged training actually degrades performance on the Pass@ k metric. We hypothesize that this discrepancy stems from forgetting easier problems. As shown in Fig. 9, additional training steps tend to reduce average accuracy, suggesting that RLVR models gradually forget easy examples during training. 9Pass@ k has been a standard metric for assessing the reasoning capabilities of LLMs. However, its value is inherently dependent on the specific evaluation set on which it is computed. In mathematical reasoning, Pass@ k is usually calculated over all test sets, including both already solvable and 
+
+unsolvable problems. As a result, the decline in performance on already solvable problems might mask the improvement of RL-trained models on hard, unsolvable problems. To quantify this phenomenon, we also compare with Pass@ k specifically computed on unsolvable problems (i.e., zero-accuracy problems) under the base model. As shown in Fig. 10, training on hard problems can significantly help models solve new problems and expand their coverage (Pass@ k), in contrast to GRPO on the full dataset. This result further suggests that RLVR models can still acquire new capabilities under the prolonged training, but this gain comes at the cost of forgetting easier problems which might be hurtful in the simple well-trained tasks but mostly helpful if tasks are hard enough and new to models. 0 200 512 1024 1536 2048           
+
+> Training steps
+> 0246810
+> Pass@128
+> Olympiad-Bench GRPO (hard) GRPO (full)
+> 0200 512 1024 1536 2048
+> Training steps
+> 0246810
+> Pass@128
+> Minerva GRPO (hard) GRPO (full)
+> 0200 512 1024 1536 2048
+> Training steps
+> 0510 15 20
+> Pass@128
+> Math-500 GRPO (hard) GRPO (full)
+
+Figure 10: While Pass@ k (with k = 128 ) degrades with prolonged training, this decline is primarily driven by forgetting on solvable problems; in contrast, the Pass@ k performance on problems that are unsolvable for the base model increases steadily when learning only on hard problems. 
+
+Discussion. Our analysis suggests that just exclusively learning on hard problems (without any algorithmic modification) could be sufficient to improve models’ coverage (Pass@ k). However, prolonged training can also degrade Pass@ k due to forgetting solvable/easy problems. This explains why, in mathematical reasoning — where Pass@ k is computed over a mixture of easy and hard problems — such forgetting can significantly hurt overall performance and hinder progress on hard problems. In contrast, on OOD and more difficult tasks [22, 35], this forgetting effect can actually be beneficial, since the base model performs poorly with initial representations and improvements on previously unsolved problems dominate the evaluation. 
+
+## 7 Conclusion 
+
+We investigate the ongoing debate over whether RLVR truly expands the reasoning boundary beyond what is acquired during pre-training, through the lens of primacy bias and the lazy training regime. Through extensive, controlled, and large-scale empirical analysis, we confirm that this bias emerges during RLVR training, causing models to remain confined around their pre-trained initialization and preventing meaningful adaptation to hard examples. We then uncover an unlearnable phenomenon as a consequence of primacy bias, where RL favors improvement on easy problems, hindering the ability to learn harder ones. Consequently, attempting to escape the lazy regime can help models learn previously unsolvable problems, but at the cost of forgetting easier ones. This helps explain why, in OOD domains—where forgetting is less harmful—RL can expand the reasoning boundary, in contrast to mathematical reasoning. 
+
+## References 
+
+[1] Z. Abbas, R. Zhao, J. Modayil, A. White, and M. C. Machado. Loss of plasticity in continual deep reinforcement learning. In S. Chandar, R. Pascanu, H. Sedghi, and D. Precup, editors, 
+
+Proceedings of The 2nd Conference on Lifelong Learning Agents , volume 232 of Proceedings of Machine Learning Research , pages 620–636. PMLR, 22–25 Aug 2023. URL https: //proceedings.mlr.press/v232/abbas23a.html .[2] A. Achille, M. Rovere, and S. Soatto. Critical learning periods in deep networks. In International Conference on Learning Representations , 2019. URL https://openreview.net/forum? id=BkeStsCcKQ .10 [3] Z. R. Afzal, T. Esmaeilbeig, M. Soltanalian, and M. I. Ohannessian. Linearization explains fine-tuning in large language models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2026. URL https://openreview.net/forum?id=tdwRIP6NG2 .[4] L. Arnaboldi, L. Stephan, F. Krzakala, and B. Loureiro. From high-dimensional & mean-field dynamics to dimensionless odes: A unifying approach to sgd in two-layers networks. 
+
+ArXiv , abs/2302.05882, 2023. URL https://api.semanticscholar.org/CorpusID: 256827614 .[5] B. Bordelon, A. Canatar, and C. Pehlevan. Spectrum dependent learning curves in kernel regression and wide neural networks. In International Conference on Machine Learning , 2020. URL https://api.semanticscholar.org/CorpusID:211066351 .[6] A. Canatar, B. Bordelon, and C. Pehlevan. Spectral bias and task-model alignment explain generalization in kernel regression and infinitely wide neural networks. Nature Communications ,12, 2020. URL https://api.semanticscholar.org/CorpusID:226227332 .[7] E. A. Chi, J. Hewitt, and C. D. Manning. Finding universal grammatical relations in multilingual BERT. In D. Jurafsky, J. Chai, N. Schluter, and J. Tetreault, editors, Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 5564–5577, Online, July 2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.acl-main.493. URL https://aclanthology.org/2020.acl-main.493/ .[8] L. Chizat, E. Oyallon, and F. R. Bach. On lazy training in differentiable programming. In 
+
+Neural Information Processing Systems , 2018. URL https://api.semanticscholar.org/ CorpusID:189928159 .[9] C. Cortes, M. Mohri, and A. Rostamizadeh. Algorithms for learning kernels based on cen-tered alignment. ArXiv , abs/1203.0550, 2012. URL https://api.semanticscholar.org/ CorpusID:9137763 .[10] DeepSeek-AI, D. Guo, D. Yang, H. Zhang, J.-M. Song, R. Zhang, et al. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645:633 – 638, 2025. URL https: //api.semanticscholar.org/CorpusID:275789950 .[11] E. Francazi, M. Baity-Jesi, and A. Lucchi. A theoretical analysis of the learning dynamics under class imbalance. In A. Krause, E. Brunskill, K. Cho, B. Engelhardt, S. Sabato, and J. Scarlett, editors, Proceedings of the 40th International Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pages 10285–10322. PMLR, 23–29 Jul 2023. URL https://proceedings.mlr.press/v202/francazi23a.html .[12] B. Ghorbani, S. Mei, T. Misiakiewicz, and A. Montanari. Limitations of lazy training of two-layers neural networks. In Neural Information Processing Systems , 2019. URL https: //api.semanticscholar.org/CorpusID:195316867 .[13] C. He, R. Luo, Y. Bai, S. Hu, Z. Thai, J. Shen, J. Hu, X. Han, Y. Huang, Y. Zhang, J. Liu, L. Qi, Z. Liu, and M. Sun. OlympiadBench: A challenging benchmark for promoting AGI with olympiad-level bilingual multimodal scientific problems. In L.-W. Ku, A. Martins, and V. Srikumar, editors, Proceedings of the 62nd Annual Meeting of the Association for Com-putational Linguistics (Volume 1: Long Papers) , pages 3828–3850, Bangkok, Thailand, Aug. 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.acl-long.211. URL 
+
+https://aclanthology.org/2024.acl-long.211/ .[14] D. Hendrycks, C. Burns, S. Kadavath, A. Arora, S. Basart, E. Tang, D. Song, and J. Steinhardt. Measuring mathematical problem solving with the MATH dataset. In Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2) , 2021. URL 
+
+https://openreview.net/forum?id=7Bywt2mQsCe .[15] A. Jacot, F. Gabriel, and C. Hongler. Neural tangent kernel: Convergence and generalization in neural networks. In S. Bengio, H. Wallach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett, editors, Advances in Neural Information Processing Systems , volume 31. Curran Associates, Inc., 2018. URL https://proceedings.neurips.cc/paper_files/paper/ 2018/file/5a4be1fa34e62bb8a6ec6b91d2462f5a-Paper.pdf .11 [16] N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, and P. T. P. Tang. On large-batch training for deep learning: Generalization gap and sharp minima. In International Conference on Learning Representations , 2017. URL https://openreview.net/forum?id=H1oyRlYgg .[17] M. Kielo and V. Lukin. It’s time to move on: Primacy bias and why it helps to forget. In 
+
+The Third Blogpost Track at ICLR 2024 , 2024. URL https://openreview.net/forum?id= 7ZEwqUyKMC .[18] T. Kumar, B. Bordelon, S. J. Gershman, and C. Pehlevan. Grokking as the transition from lazy to rich training dynamics. In The Twelfth International Conference on Learning Representations ,2024. URL https://openreview.net/forum?id=vt5mnLVIVo .[19] F. Kunstner, R. Yadav, A. Milligan, M. Schmidt, and A. Bietti. Heavy-tailed class imbalance and why adam outperforms gradient descent on language models. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. URL https://openreview. net/forum?id=T56j6aV8Oc .[20] N. Lambert, J. Morrison, V. Pyatkin, S. Huang, H. Ivison, F. Brahman, L. J. V. Miranda, A. Liu, N. Dziri, X. Lyu, Y. Gu, S. Malik, V. Graf, J. D. Hwang, J. Yang, R. L. Bras, O. Tafjord, C. Wilhelm, L. Soldaini, N. A. Smith, Y. Wang, P. Dasigi, and H. Hajishirzi. Tulu 3: Pushing frontiers in open language model post-training. In Second Conference on Language Modeling ,2025. URL https://openreview.net/forum?id=i1uGbfHHpH .[21] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner. Gradient-based learning applied to document recognition. Proc. IEEE , 86:2278–2324, 1998. URL https://api.semanticscholar.org/ CorpusID:14542261 .[22] M. Liu, S. Diao, X. Lu, J. Hu, X. Dong, Y. Choi, J. Kautz, and Y. Dong. ProRL: Prolonged reinforcement learning expands reasoning boundaries in large language models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. URL https: //openreview.net/forum?id=YPsJha5HXQ .[23] Z. Liu, C. Chen, W. Li, P. Qi, T. Pang, C. Du, W. S. Lee, and M. Lin. Understanding r1-zero-like training: A critical perspective. In 2nd AI for Math Workshop @ ICML 2025 , 2025. URL 
+
+https://openreview.net/forum?id=jLpC1zavzn .[24] C. Lyle, G. Sokar, R. Pascanu, and A. Gyorgy. What can grokking teach us about learning under nonstationarity? ArXiv , abs/2507.20057, 2025. URL https://api.semanticscholar.org/ CorpusID:280323656 .[25] S. Malladi, A. Wettig, D. Yu, D. Chen, and S. Arora. A kernel-based view of language model fine-tuning. In International Conference on Machine Learning , 2022. URL https: //api.semanticscholar.org/CorpusID:252815771 .[26] S. Mukherjee, L. Yuan, D. Hakkani-Tür, and H. Peng. Reinforcement learning finetunes small subnetworks in large language models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. URL https://openreview.net/forum?id= 0NdS4xCngO .[27] B. Neyshabur, R. Tomioka, and N. Srebro. In search of the real inductive bias: On the role of implicit regularization in deep learning. CoRR , abs/1412.6614, 2014. URL https: //api.semanticscholar.org/CorpusID:6021932 .[28] Y. Pan and Y. Li. Toward understanding why adam converges faster than SGD for transformers. In OPT 2022: Optimization for Machine Learning (NeurIPS 2022 Workshop) , 2022. URL 
+
+https://openreview.net/forum?id=Sf1NlV2r6PO .[29] Qwen, A. Yang, et al. Qwen2.5 technical report, 2025. URL https://arxiv.org/abs/2412. 15115 .[30] Y. Ren and D. J. Sutherland. Learning dynamics of LLM finetuning. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview. net/forum?id=tPNHOoZFl9 .12 [31] C. Research, A. Chan, A. Shalaby, A. Wettig, A. Sanger, A. Zhai, A. Ajay, A. Nair, C. Snell, C. Lu, et al. Composer 2 technical report. arXiv preprint arXiv:2603.24477 , 2026. [32] H. Shan and B. Bordelon. A theory of neural tangent kernel alignment and its influence on training. 2021. URL https://api.semanticscholar.org/CorpusID:246705939 .[33] Z. Shao, P. Wang, Q. Zhu, R. Xu, J. Song, X. Bi, H. Zhang, M. Zhang, Y. K. Li, Y. Wu, and D. Guo. Deepseekmath: Pushing the limits of mathematical reasoning in open language models, 2024. URL https://arxiv.org/abs/2402.03300 .[34] G. Sheng, C. Zhang, Z. Ye, X. Wu, W. Zhang, R. Zhang, Y. Peng, H. Lin, and C. Wu. Hybridflow: A flexible and efficient rlhf framework. arXiv preprint arXiv: 2409.19256 , 2024. [35] Y. Sun, Y. Cao, P. Huang, H. Bai, H. Hajishirzi, N. Dziri, and D. Song. RL grokking recipe: How does RL unlock and transfer new algorithms in LLMs? In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview.net/forum? id=CJJ8VxOWbG .[36] F. Wu, W. Xuan, X. Lu, M. Liu, Y. Dong, Z. Harchaoui, and Y. Choi. The invisible leash? why RLVR may or may not escape its origin, 2026. URL https://openreview.net/forum?id= qGhFl1SiPX .[37] M. Xia, V. Rühle, S. Rajmohan, and R. Shokri. Minerva: A programmable memory test bench-mark for language models. In Forty-second International Conference on Machine Learning ,2025. URL https://openreview.net/forum?id=ib9drlZllP .[38] C. Xing, D. Arpit, C. Tsirigotis, and Y. Bengio. A walk with SGD: How SGD explores regions of deep network loss?, 2019. URL https://openreview.net/forum?id=B1l6e3RcF7 .[39] Q. Yu, Z. Zhang, R. Zhu, Y. Yuan, X. Zuo, YuYue, W. Dai, T. Fan, G. Liu, J. Liu, L. Liu, X. Liu, H. Lin, Z. Lin, B. Ma, G. Sheng, Y. Tong, C. Zhang, M. Zhang, R. Zhang, W. Zhang, H. Zhu, J. Zhu, J. Chen, J. Chen, C. Wang, H. Yu, Y. Song, X. Wei, H. Zhou, J. Liu, W.-Y. Ma, Y.-Q. Zhang, L. Yan, Y. Wu, and M. Wang. DAPO: An open-source LLM reinforcement learning system at scale. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. URL https://openreview.net/forum?id=2a36EMSSTp .[40] L. Yuan, W. Chen, Y. Zhang, G. Cui, H. Wang, Z. You, N. Ding, Z. Liu, M. Sun, and H. Peng. From f(x) and g(x) to f(g(x)): LLMs learn new skills in RL by composing old ones. In 
+
+The Fourteenth International Conference on Learning Representations , 2026. URL https: //openreview.net/forum?id=jt7oCtYqHE .[41] Y. Yue, Z. Chen, R. Lu, A. Zhao, Z. Wang, Y. Yue, S. Song, and G. Huang. Does reinforcement learning really incentivize reasoning capacity in LLMs beyond the base model? In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. URL https: //openreview.net/forum?id=4OsgYD7em5 .[42] C. Zhang, G. Neubig, and X. Yue. On the interplay of pre-training, mid-training, and rl on reasoning language models, 2025. URL https://arxiv.org/abs/2512.07783 .[43] Z. Zhou, H. Yu, X. Zhang, R. Xu, F. Huang, K. Wang, Y. Liu, J. Fang, and Y. Li. On the role of attention heads in large language model safety. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview.net/forum?id=h0Ak8A5yqw .13 A Limitations. 
+
+This work primarily contributes to the ongoing debate on whether RLVR truly expands reasoning boundaries beyond those acquired during pre-training, attributing these conflicting views to the primacy bias phenomenon. It may help practitioners detect and mitigate the trade-off between adaptability and forgetting in post-training, thereby improving reliability in verifiable domains such as math and code. However, stronger RLVR training may also enhance general reasoning capabilities that could be misused. Moreover, methods relying on automated verifiers are susceptible to reward hacking and over-optimization, while diversity-preserving interventions may increase the likelihood of rare undesirable outputs. Our empirical analysis is limited to finite evaluation sets and task-specific reward signals. Extending our analysis to coding and other verifiable domains would be valuable. However, due to computational constraints, particularly the high cost of sandbox-based program execution for coding RLVR, we leave these extensions for future work. 
+
+## B Additional Experimental Details. 
+
+Models. We utilize Qwen2.5-3B-Instruct [29] for RLVR training. 
+
+Training configurations. We utilize the Verl framework [34] for RLVR training. We train each model on 4 GPUs with a constant learning rate of 10 −6, the maximum response length is 3072, with a total batch size of 256. For each prompt, we collect 16 rollouts to compute advantages for the GRPO update. We use a sampling temperature τ = 1 . We do not apply Reverse KL divergence or entropy loss in our training. We train each model on 4 Nvidia H100 GPUs. 
+
+Details constructing difficulty subset of training data. We fine-tune the Qwen2.5-3B-Instruct model [29] on the MATH training dataset D [14], which consists of 7500 training examples, to identify difficult examples after RL fine-tuning. Full experimental details are provided in Appendix B. After fine-tuning, we discard all problems with zero accuracy under the final policy πθ , retaining only solvable instances. We then partition D into N disjoint subsets {D k}Nk=1 according to their estimated accuracy under πθ , ordered by increasing difficulty: 
+
+Dk = {x | τk−1 < pass@ 1( x) ≤ τk}, k ∈ [N ], (12) where {τk}Nk=1 is an increasing sequence of thresholds defining the difficulty levels. We then fine-tune a separate policy on each subset Dk to study how learning dynamics vary with problem difficulty. To quantify improvements, we define the accuracy improvement metric before and after fine-tuning on these subsets: 
+
+∆r(x) = Ey∼πθ (·| x)[r(x, y)] − Ey∼πb(·| x)[r(x, y)] (13) To estimate the average accuracy of the RL-trained policy, we sample G = 64 responses per problem with a temperature of 1.0. Finally, we construct N disjoint subsets, where each subset contains problems whose scores fall within the interval [τk, τ k+1 ], for k ∈ [N ].14 C Gradient norm in RL-training. 0 25 50 75 100 125 150 175 200 
+
+## Training steps 
+
+> 0.26 0.28 0.30 0.32 0.34 0.36 0.38
+> Gradient norm
+
+## τ =0.02 
+
+## τ =0.3 
+
+## τ =0.5 
+
+## τ =0.7 
+
+Figure 11: Gradient norm on different difficulty subsets; easy subsets tend to have larger gradient norm, indicating the RL models make faster progress on easy problems. In this section, we investigate the gradient norm when learning under easy/hard problems. We argue that the gradient is dominated by the easy problems, and, as a result is biased towards making progress on easy problems at the expense of hard problems. Fig. 11 demonstrates our results. Harder examples tend to have smaller gradient norms, suggesting that RLVR makes faster progress on easy problems compared to harder ones. 
+
+## D Additional experiments on Llama-3.2-3B-Instruct. 
+
+To strengthen the empirical evidence, we conducted additional experiments on Llama-3.2-3B-Instruct, using the same training setup as in our Qwen2.5-3B experiments. Specifically, we compare training on the full dataset against training exclusively on hard examples. 0 20 40 60 80 100 120 140 160 180 200 
+
+Training steps 
+
+> 0.00.10.20.30.40.50.60.7
+> Accuracy improvement
+
+Accuracy improvement ∆ r(x)
+
+> Hard Full
+
+Figure 12: Similar to Qwen2.5-3B-Instruct, Llama-3.2-3B-Instruct exhibits rapid improvement when trained on the full dataset but shows minimal learning when trained on hard subsets. We provide our results in Fig. 12, showing that training exclusively on hard examples leads to substantially slower optimization. Training on the full dataset rapidly improves training accuracy, Furthermore, Table 3 shows that, on the new model backbone, hard-only training consistently 15 Table 3: Comparison of Pass@128 performance when learning on hard and full training datasets under Llama-3.2-3B-Instruct.             
+
+> Model OlympiadBench Minerva MATH-500
+> Base 61.01 51.37 91.30
+> GRPO (full dataset) 50.36 51.04 83.4 GRPO (Hard) 57.8 51.61 89.1
+
+achieves higher Pass@128 on problems unsolvable by the base model and maintains better Pass@ k
+
+performance than GRPO training on the full dataset, consistent with our earlier observations on Qwen2.5-3B-Instruct. 16 NeurIPS Paper Checklist 
+
+1. Claims 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the paper’s contributions and scope? Answer: [Yes] Justification: We uncover the primacy bias and lazy training regime in Large Language Models (Sections 4 and 5), we further uncover the unlearable phenomenon during RLVR training, addressing the conflicting debate on whether RL can truly expands reasoning boundary (Section 6). Guidelines: • The answer [N/A] means that the abstract and introduction do not include the claims made in the paper. • The abstract and/or introduction should clearly state the claims made, including the contributions made in the paper and important assumptions and limitations. A [No] or [N/A] answer to this question will not be perceived well by the reviewers. • The claims made should match theoretical and experimental results, and reflect how much the results can be expected to generalize to other settings. • It is fine to include aspirational goals as motivation as long as it is clear that these goals are not attained by the paper. 2. Limitations 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? Answer: [Yes] Justification: We discuss the limitations of the work in Appendix A Guidelines: • The answer [N/A] means that the paper has no limitation while the answer [No] means that the paper has limitations, but those are not discussed in the paper. • The authors are encouraged to create a separate “Limitations” section in their paper. • The paper should point out any strong assumptions and how robust the results are to violations of these assumptions (e.g., independence assumptions, noiseless settings, model well-specification, asymptotic approximations only holding locally). The authors should reflect on how these assumptions might be violated in practice and what the implications would be. • The authors should reflect on the scope of the claims made, e.g., if the approach was only tested on a few datasets or with a few runs. In general, empirical results often depend on implicit assumptions, which should be articulated. • The authors should reflect on the factors that influence the performance of the approach. For example, a facial recognition algorithm may perform poorly when image resolution is low or images are taken in low lighting. Or a speech-to-text system might not be used reliably to provide closed captions for online lectures because it fails to handle technical jargon. • The authors should discuss the computational efficiency of the proposed algorithms and how they scale with dataset size. • If applicable, the authors should discuss possible limitations of their approach to address problems of privacy and fairness. • While the authors might fear that complete honesty about limitations might be used by reviewers as grounds for rejection, a worse outcome might be that reviewers discover limitations that aren’t acknowledged in the paper. The authors should use their best judgment and recognize that individual actions in favor of transparency play an impor-tant role in developing norms that preserve the integrity of the community. Reviewers will be specifically instructed to not penalize honesty concerning limitations. 3. Theory assumptions and proofs 
+
+Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof? Answer: [Yes] Justification: We present our lazy regime and primacy bias assumption in Section 4.2. Guidelines: • The answer [N/A] means that the paper does not include theoretical results. 17 • All the theorems, formulas, and proofs in the paper should be numbered and cross-referenced. • All assumptions should be clearly stated or referenced in the statement of any theorems. • The proofs can either appear in the main paper or the supplemental material, but if they appear in the supplemental material, the authors are encouraged to provide a short proof sketch to provide intuition. • Inversely, any informal proof provided in the core of the paper should be complemented by formal proofs provided in appendix or supplemental material. • Theorems and Lemmas that the proof relies upon should be properly referenced. 4. Experimental result reproducibility 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-perimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)? Answer: [Yes] Justification: All implementation details are in B. Guidelines: • The answer [N/A] means that the paper does not include experiments. • If the paper includes experiments, a [No] answer to this question will not be perceived well by the reviewers: Making the paper reproducible is important, regardless of whether the code and data are provided or not. • If the contribution is a dataset and/or model, the authors should describe the steps taken to make their results reproducible or verifiable. • Depending on the contribution, reproducibility can be accomplished in various ways. For example, if the contribution is a novel architecture, describing the architecture fully might suffice, or if the contribution is a specific model and empirical evaluation, it may be necessary to either make it possible for others to replicate the model with the same dataset, or provide access to the model. In general. releasing code and data is often one good way to accomplish this, but reproducibility can also be provided via detailed instructions for how to replicate the results, access to a hosted model (e.g., in the case of a large language model), releasing of a model checkpoint, or other means that are appropriate to the research performed. • While NeurIPS does not require releasing code, the conference does require all submis-sions to provide some reasonable avenue for reproducibility, which may depend on the nature of the contribution. For example (a) If the contribution is primarily a new algorithm, the paper should make it clear how to reproduce that algorithm. (b) If the contribution is primarily a new model architecture, the paper should describe the architecture clearly and fully. (c) If the contribution is a new model (e.g., a large language model), then there should either be a way to access this model for reproducing the results or a way to reproduce the model (e.g., with an open-source dataset or instructions for how to construct the dataset). (d) We recognize that reproducibility may be tricky in some cases, in which case authors are welcome to describe the particular way they provide for reproducibility. In the case of closed-source models, it may be that access to the model is limited in some way (e.g., to registered users), but it should be possible for other researchers to have some path to reproducing or verifying the results. 5. Open access to data and code 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-tions to faithfully reproduce the main experimental results, as described in supplemental material? Answer: [Yes] Justification: The data and models are publicly available, and the code is available at 
+
+https://anonymous.4open.science/r/neurips26_sub-0DE8/ .Guidelines: • The answer [N/A] means that paper does not include experiments requiring code. • Please see the NeurIPS code and data submission guidelines ( https://neurips.cc/ public/guides/CodeSubmissionPolicy ) for more details. 18 • While we encourage the release of code and data, we understand that this might not be possible, so [No] is an acceptable answer. Papers cannot be rejected simply for not including code, unless this is central to the contribution (e.g., for a new open-source benchmark). • The instructions should contain the exact command and environment needed to run to reproduce the results. See the NeurIPS code and data submission guidelines ( https: //neurips.cc/public/guides/CodeSubmissionPolicy ) for more details. • The authors should provide instructions on data access and preparation, including how to access the raw data, preprocessed data, intermediate data, and generated data, etc. • The authors should provide scripts to reproduce all experimental results for the new proposed method and baselines. If only a subset of experiments are reproducible, they should state which ones are omitted from the script and why. • At submission time, to preserve anonymity, the authors should release anonymized versions (if applicable). • Providing as much information as possible in supplemental material (appended to the paper) is recommended, but including URLs to data and code is permitted. 6. Experimental setting/details 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyperpa-rameters, how they were chosen, type of optimizer) necessary to understand the results? Answer: [Yes] Justification: All implementation details are in the Appendix B. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The experimental setting should be presented in the core of the paper to a level of detail that is necessary to appreciate the results and make sense of them. • The full details can be provided either with the code, in appendix, or as supplemental material. 7. Experiment statistical significance 
+
+Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments? Answer: [No] Justification: Training Large Language models is time-consuming and compute-intensive. Our experiments do not run multiple seeds on one configuration due to limited computing and financial budget. Our evaluation protocol is similar to prior influential works in LLM Reasoning [42, 35, 40]. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The authors should answer [Yes] if the results are accompanied by error bars, confidence intervals, or statistical significance tests, at least for the experiments that support the main claims of the paper. • The factors of variability that the error bars are capturing should be clearly stated (for example, train/test split, initialization, random drawing of some parameter, or overall run with given experimental conditions). • The method for calculating the error bars should be explained (closed form formula, call to a library function, bootstrap, etc.) • The assumptions made should be given (e.g., Normally distributed errors). • It should be clear whether the error bar is the standard deviation or the standard error of the mean. • It is OK to report 1-sigma error bars, but one should state it. The authors should preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis of Normality of errors is not verified. • For asymmetric distributions, the authors should be careful not to show in tables or figures symmetric error bars that would yield results that are out of range (e.g., negative error rates). • If error bars are reported in tables or plots, the authors should explain in the text how they were calculated and reference the corresponding figures or tables in the text. 8. Experiments compute resources 
+
+19 Question: For each experiment, does the paper provide sufficient information on the com-puter resources (type of compute workers, memory, time of execution) needed to reproduce the experiments? Answer: [Yes] Justification: They are mentioned in Appendix B. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The paper should indicate the type of compute workers CPU or GPU, internal cluster, or cloud provider, including relevant memory and storage. • The paper should provide the amount of compute required for each of the individual experimental runs as well as estimate the total compute. • The paper should disclose whether the full research project required more compute than the experiments reported in the paper (e.g., preliminary or failed experiments that didn’t make it into the paper). 9. Code of ethics 
+
+Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?Answer: [Yes] Justification: This work solely focuses on understanding the ongoing debate of coverage expansion/shrinkage problem in RLVR training. No human subject or private data is involved in this work, and no experiment is conducted for harmful purposes. Guidelines: • The answer [N/A] means that the authors have not reviewed the NeurIPS Code of Ethics. • If the authors answer [No], they should explain the special circumstances that require a deviation from the Code of Ethics. • The authors should make sure to preserve anonymity (e.g., if there is a special consid-eration due to laws or regulations in their jurisdiction). 10. Broader impacts 
+
+Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed? Answer: [Yes] Justification: We mentioned in the Appendix A. Guidelines: • The answer [N/A] means that there is no societal impact of the work performed. • If the authors answer [N/A] or [No], they should explain why their work has no societal impact or why the paper does not address societal impact. • Examples of negative societal impacts include potential malicious or unintended uses (e.g., disinformation, generating fake profiles, surveillance), fairness considerations (e.g., deployment of technologies that could make decisions that unfairly impact specific groups), privacy considerations, and security considerations. • The conference expects that many papers will be foundational research and not tied to particular applications, let alone deployments. However, if there is a direct path to any negative applications, the authors should point it out. For example, it is legitimate to point out that an improvement in the quality of generative models could be used to generate Deepfakes for disinformation. On the other hand, it is not needed to point out that a generic algorithm for optimizing neural networks could enable people to train models that generate Deepfakes faster. • The authors should consider possible harms that could arise when the technology is being used as intended and functioning correctly, harms that could arise when the technology is being used as intended but gives incorrect results, and harms following from (intentional or unintentional) misuse of the technology. • If there are negative societal impacts, the authors could also discuss possible mitigation strategies (e.g., gated release of models, providing defenses in addition to attacks, mechanisms for monitoring misuse, mechanisms to monitor how a system learns from feedback over time, improving the efficiency and accessibility of ML). 11. Safeguards 
+
+20 Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)? Answer: [No] Justification: This work solely focuses on understanding the ongoing debate between the coverage expansion/shrinkage problem in RLVR training. No new data or pretrained model is released in this work. Guidelines: • The answer [N/A] means that the paper poses no such risks. • Released models that have a high risk for misuse or dual-use should be released with necessary safeguards to allow for controlled use of the model, for example by requiring that users adhere to usage guidelines or restrictions to access the model or implementing safety filters. • Datasets that have been scraped from the Internet could pose safety risks. The authors should describe how they avoided releasing unsafe images. • We recognize that providing effective safeguards is challenging, and many papers do not require this, but we encourage authors to take this into account and make a best faith effort. 12. Licenses for existing assets 
+
+Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected? Answer: [Yes] Justification: All data used in this work are publicly available for research purposes and are cited accordingly. Guidelines: • The answer [N/A] means that the paper does not use existing assets. • The authors should cite the original paper that produced the code package or dataset. • The authors should state which version of the asset is used and, if possible, include a URL. • The name of the license (e.g., CC-BY 4.0) should be included for each asset. • For scraped data from a particular source (e.g., website), the copyright and terms of service of that source should be provided. • If assets are released, the license, copyright information, and terms of use in the package should be provided. For popular datasets, paperswithcode.com/datasets 
+
+has curated licenses for some datasets. Their licensing guide can help determine the license of a dataset. • For existing datasets that are re-packaged, both the original license and the license of the derived asset (if it has changed) should be provided. • If this information is not available online, the authors are encouraged to reach out to the asset’s creators. 13. New assets 
+
+Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets? Answer: [N/A] Justification: This work solely focuses on understanding the ongoing debate between the coverage expansion/shrinkage problem in RLVR training. No new data or pretrained model is released in this work. Guidelines: • The answer [N/A] means that the paper does not release new assets. • Researchers should communicate the details of the dataset/code/model as part of their submissions via structured templates. This includes details about training, license, limitations, etc. • The paper should discuss whether and how consent was obtained from people whose asset is used. • At submission time, remember to anonymize your assets (if applicable). You can either create an anonymized URL or include an anonymized zip file. 14. Crowdsourcing and research with human subjects 
+
+21 Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)? Answer: [N/A] Justification: This work solely focuses on understanding the ongoing debate between the coverage expansion/shrinkage problem in RLVR training. No human subject is involved in this work. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Including this information in the supplemental material is fine, but if the main contribu-tion of the paper involves human subjects, then as much detail as possible should be included in the main paper. • According to the NeurIPS Code of Ethics, workers involved in data collection, curation, or other labor should be paid at least the minimum wage in the country of the data collector. 15. Institutional review board (IRB) approvals or equivalent for research with human subjects 
+
+Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained? Answer: [N/A] Justification: This work solely focuses on understanding the ongoing debate between the coverage expansion/shrinkage problem in RLVR training. No human subject is involved in this work. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Depending on the country in which research is conducted, IRB approval (or equivalent) may be required for any human subjects research. If you obtained IRB approval, you should clearly state this in the paper. • We recognize that the procedures for this may vary significantly between institutions and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the guidelines for their institution. • For initial submissions, do not include any information that would break anonymity (if applicable), such as the institution conducting the review. 16. Declaration of LLM usage 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does not impact the core methodology, scientific rigor, or originality of the research, declaration is not required. Answer: [N/A] Justification: We solely use LLM to help with writing, all core methods and experiments 1170 were proposed without LLM involvement. Guidelines: • The answer [N/A] means that the core method development in this research does not involve LLMs as any important, original, or non-standard components. • Please refer to our LLM policy in the NeurIPS handbook for what should or should not be described. 22

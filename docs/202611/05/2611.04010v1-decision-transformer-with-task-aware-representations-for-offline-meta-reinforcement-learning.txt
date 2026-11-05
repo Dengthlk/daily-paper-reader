@@ -1,0 +1,827 @@
+Title: Decision Transformer with Task-Aware Representations for Offline Meta-Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2611.04010v1
+
+Published Time: Wed, 04 Nov 2026 01:28:59 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+Preprint 
+
+# DECISION TRANSFORMER WITH TASK -A WARE 
+
+# REPRESENTATIONS FOR OFFLINE 
+
+# META -R EINFORCEMENT LEARNING 
+
+Xinbo Zhao 1, Yuhang Liu 1, Xin Zhang 2,
+
+Lei Le 3, Zhaohan Xi 1, Yingxue Zhang 1
+
+> 1
+
+State University of New York at Binghamton 
+
+> 2
+
+San Diego State University 
+
+> 3
+
+LinkedIn 
+
+{xzhao9,yliu41,zxi1,yzhang42}@binghamton.edu xzhang19@sdsu.edu some.other.lei@gmail.com 
+
+# ABSTRACT 
+
+To enable effective generalization in offline meta-RL, it is essential to accurately infer the underlying task through latent task representations, which provide a compact and transferable summary of task-specific characteristics for guiding policy generation. In this paper, we propose Contrastive Task-Aware Decision Transformer (CoTA-DT) , a DT-based offline meta-RL framework that learns task representations by jointly integrating four complementary components: (i) 
+
+contrastive learning from offline trajectories, (ii) alignment with natural-language task descriptions, (iii) one-step supervision via a task-conditioned world model, and (iv) long-term supervision via a task-conditioned Q function. The learned task representations are used as conditioning signals for a DT-based policy, en-abling task-aware meta-policy learning. To further support generalization in both zero-shot and few-shot settings, we design a language-grounded, self-adaptive strategy that enables effective and reliable adaptation to unseen tasks. Notably, in CoTA-DT, the pretrained LLM serves as a shared backbone for language en-coding, world modeling, Q-function estimation, and policy learning. This unified design facilitates parameter sharing, improving both efficiency and generalization. Extensive experiments across diverse offline meta-RL benchmarks demonstrate that CoTA-DT consistently outperforms prior methods, particularly in challenging zero-shot generalization scenarios. 
+
+# 1 INTRODUCTION 
+
+Offline meta-reinforcement learning (RL) aims to learn transferable priors from offline trajectories across related tasks, enabling efficient adaptation to new tasks with little or no additional data. In recent years, a prominent line of work in offline meta-RL has built on Decision Transformers (DTs) (Chen et al., 2021), leveraging the strong generalization capabilities of transformer architec-tures (Mitchell et al., 2021; Lin et al., 2022). These DT-based approaches formulate policy learning as sequence modeling over trajectories and perform adaptation through sequence conditioning. For example, Prompt-DT (Xu et al., 2022) leverages expert demonstrations as prompts to encode task-specific information, enabling prompt-based adaptation at test time. Generalized Decision Trans-formers (GDT) (Furuta et al., 2021; Wang et al., 2023) incorporate hindsight signals, such as reward statistics or retrospective summaries, as conditioning inputs for task adaptation. Meta-DT (Wang et al., 2024) conditions the policy on compact task representations learned from trajectories to support generalization. More recently, T2DA (Zhang et al., 2025) conditions a DT-based policy on text embeddings derived from natural-language task descriptions. Despite the advances, these approaches typically learn task identifiers from a single source—such as language, trajectory data, or reward signals—and use them as conditioning inputs to guide DT-based policies for generalization. When such signals are ambiguous, noisy, or distributionally shifted relative to training, task identification can become unreliable, leading to degraded adaptation performance. These limitations naturally raise 1arXiv:2611.04010v1 [cs.LG] 2 Nov 2026 Preprint a question: How can we learn an offline meta-policy that achieves reliable task identification and supports robust generalization in both few-shot and zero-shot settings? 
+
+Reliable task identification across a broad family of related tasks depends on the availability of task-specific information. In offline meta-RL, collected trajectories serve as the primary source of information and implicitly encode task differences. However, relying solely on offline data is often insufficient, especially when the data are limited, noisy, or provide only partial coverage of the task space. Beyond trajectories, additional sources of information are often available. For example, natural-language task descriptions derived from task-level metadata—such as task goals, names, relevant objects, and environment constraints—provide complementary high-level semantics that are not always recoverable from trajectories alone. Meanwhile, environment transitions and rewards vary across tasks, offering informative one-step signals of task-specific dynamics and objectives, while cumulative returns ( e.g. , Q functions) capture long-horizon goals and provide global signals for distinguishing tasks. These observations motivate jointly leveraging multiple sources of information to learn robust task representations and enable reliable task identification in offline meta-RL. In this paper, we propose Contrastive Task-Aware Decision Transformer (CoTA-DT) , a DT-based offline meta-RL framework that learns task representations by jointly integrating four complementary components: (i) contrastive task encoding from offline trajectories, (ii) alignment with natural-language task descriptions, (iii) one-step supervision via a task-conditioned world model, and (iv) 
+
+long-term supervision via a task-conditioned Q function. Specifically, task representations are first learned from trajectories via a contrastive objective that pulls together representations from the same task while separating those from different tasks. However, trajectory-only representations can be noisy due to data variability. To better capture underlying task objectives and reduce bias, we further align them with natural-language task descriptions encoded by a pretrained large language model (LLM), promoting semantic consistency between trajectory- and language-derived information. To further refine the representations, we introduce a task-conditioned world model that provides one-step supervision through transitions and rewards, along with a task-conditioned Q function that offers long-horizon supervision over task objectives. These complementary signals regularize the representations, and all components are optimized jointly to learn task representations from multiple perspectives. The resulting task representations are used as conditioning signals for a DT-based policy, enabling task-aware meta-policy learning. To support generalization in both zero-shot and few-shot settings, we design a language-grounded, self-adaptive strategy for reliable adaptation. Notably, in CoTA-DT, the pretrained LLM serves as a shared backbone for language encoding, world modeling, Q-function estimation, and policy learning. This unified design enables parameter sharing across stages and leverages the LLM’s prior knowledge from large-scale pretraining, along with its strong sequence modeling and transfer capabilities under prompt conditioning (Brown et al., 2020; Ouyang et al., 2022; Touvron et al., 2023), thereby improving both efficiency and generalization. Our main contributions are as follows: 
+
+• We introduce CoTA-DT, an offline meta-RL framework whose policy conditions on a task latent that supports both language-based initialization and updates from observed transitions. • We learn discriminative, language-grounded task representations that capture task dynamics and long-horizon returns, supporting adaptation to unseen tasks with a shared LoRA-adapted LLM backbone. • We develop zero-shot deployment through language-grounded latent inversion and few-shot adapta-tion through support-based initialization, with optional policy fine-tuning. • Extensive experiments across various offline meta-RL benchmarks demonstrate that CoTA-DT con-sistently outperforms prior methods, particularly in challenging zero-shot generalization settings 1.
+
+# 2 RELATED WORK 
+
+Offline Meta-RL. Offline RL learns policies from fixed datasets without further environment interac-tion (Levine et al., 2020; Konyushkova et al., 2020). Extending this setting, offline meta-RL aims to learn transferable priors that enable generalization across tasks using only offline data (Mitchell et al., 2021; Pong et al., 2021; Dorfman et al., 2021; Li et al., 2020a). A large body of work in  
+
+> 1Code available at https://anonymous.4open.science/r/CotaDT-35DB .
+
+2Preprint this area builds on temporal-difference (TD) learning, often incorporating optimization-based meta-learning or latent context inference mechanisms to capture task-specific information (Finn et al., 2017; Mitchell et al., 2021; Xu et al., 2018; Rakelly et al., 2019; Zintgraf et al., 2021; Yuan & Lu, 2022; Li et al., 2024). However, applying TD learning in the offline setting is challenging due to the deadly triad (Levine et al., 2020), which can lead to instability and error accumulation. To mitigate this issue, many approaches impose constraints to keep learned policies within the support of the dataset (Ajay et al., 2022; Kumar et al., 2020; Kostrikov et al., 2021; Yu et al., 2020b; Kidambi et al., 2020). Other works pursue more stable alternatives, such as return-conditioned or sequence modeling approaches based on Decision Transformers (Wang et al., 2024; Hu et al., 2024; Xu et al., 2022; Wang et al., 2023; Zhang et al., 2025). 
+
+LLMs for RL. Recent work explores leveraging the representation and generalization capabilities of LLMs for RL, including using them as policy backbones or for reward modeling (Morad et al., 2024; Reed et al., 2022; Brohan et al., 2023). In the offline RL setting, LLMs are incorporated in several ways. LaMo (Shi et al., 2023) demonstrates that pretrained language models can be adapted as effective policy backbones, while KALM (Pang et al., 2024) leverages LLM-generated rollouts to augment offline datasets. More recently, T2DA (Zhang et al., 2025) conditions decision models on text embeddings derived from LLMs to support generalization in offline meta-RL, and LLMDPD (Zhang & Guo, 2025) further enhances generalization by integrating LLM priors into diffusion-based policy learning. In contrast, our method leverages LLMs as a shared backbone for both task representation learning and policy modeling. 
+
+# 3 PRELIMINARIES 
+
+3.1 OFFLINE META -R EINFORCEMENT LEARNING 
+
+An RL task is formulated as an MDP M = ( S, A, T, r, γ ) with state space S, action space A,transition T : S × A → ∆( S), reward r : S × A → R, and discount γ ∈ [0 , 1) . The objective is to learn a policy π(a|s) that maximizes the expected return: max π JM (π) = Eπ [P∞ 
+
+> t=0
+
+γtr(st, a t)] . In offline meta-RL, tasks Mi = ( S, A, T i, r i, γ ) ∼ P (M) share the same state and action spaces but differ in Ti and ri. For each of N training tasks, an offline dataset Di = {(si,j , a i,j , r i,j , s ′ 
+
+> i,j
+
+)}Jj=1 
+
+is collected by an arbitrary behavior policy πiβ . Each training task is paired with a description hi.For an unseen task M⋆ ∼ P (M), the description h⋆ is available. Zero-shot evaluation provides no target-task support trajectories before rollout; few-shot evaluation additionally provides k support trajectories. During rollout, the agent observes states and rewards and may update its task latent from past transitions, with policy parameters fixed. The goal is to learn a meta-policy maximizing 
+
+J(πmeta ) = EM ∼P (M) [JM (πmeta )] .3.2 DECISION TRANSFORMER 
+
+Decision Transformer (DT) recasts RL as return-conditioned sequence modeling: each trajectory is a sequence of (Rt, s t, a t) triplets where Rt = PTt′=t γt′−trt′ is the return-to-go (RTG), and the model is trained to autoregressively predict at from past RTGs, states, and actions by minimizing prediction error against ground-truth actions. 
+
+# 4 METHOD 
+
+In this section, we present Contrastive Task-Aware Decision Transformer (CoTA-DT), an offline meta-RL framework that enables reliable task identification through multi-perspective task representations and integrates task inference into DT-based policy for improved generalization. Fig. 1 illustrates the method overview. 4.1 MULTI -P ERSPECTIVE TASK REPRESENTATION LEARNING 
+
+To enable effective generalization in offline meta-RL, it is essential to distinguish between tasks by capturing both their differences and shared structure. Accurately inferring the underlying task 3Preprint 
+
+Figure 1: Overview of CoTA-DT. (a) Multi-perspective task representation learning jointly optimizes four signals— (i) contrastive task encoding from offline trajectories, (ii) language alignment between 
+
+ui and wi, (iii) a task-conditioned world model predicting ˆrt, ˆst+1 , and (iv) a long-horizon Q head predicting ˆQt—all sharing one frozen LLM with a single LoRA adapter. (b) A Decision Transformer policy is trained on the same LLM backbone, conditioned on zt. (c) At zero-shot adaptation, a new task description is encoded into w⋆, z0 is constructed by aligning with w⋆, and the rollout uses self-adaptive zt updates. through latent task representations is therefore critical, as it provides a compact and transferable summary of task-specific characteristics that can be used to condition policy generation. However, relying on a single source of information, such as offline datasets, is often insufficient for learning reliable task representations. Offline datasets typically contain trajectories exhibiting varying levels of expertise, data quality, and coverage. As a result, the learned representations can be noisy and less robust. To address this limitation, we propose to learn and refine latent task representations from multiple perspectives: (i) contrastive task encoding from offline trajectories (Sec. 4.1.1), (ii) 
+
+alignment with natural-language task descriptions (Sec. 4.1.2), (iii) one-step supervision via a task-conditioned world model (Sec. 4.1.3), and (iv) long-term supervision via a task-conditioned Q function (Sec. 4.1.3). 4.1.1 CONTRASTIVE TASK ENCODING 
+
+To learn latent task representations, offline trajectories provide a primary source of information for capturing task-specific characteristics, as they inherently reflect the underlying task through observed behaviors. We encode short trajectory segments using a separate GRU context encoder Eϕ, which maps transitions to a task latent z ∈ R64 ; the LLM backbone processes text and projected continuous tokens. Sub-trajectories capture partial yet informative aspects of the task, enabling the learned representations to reflect not only the underlying task objectives but also the stage of task execution. For example, in locomotion tasks, a short segment can indicate both the objective ( e.g. , moving forward or turning) and the current execution stage ( e.g. , initiating motion, stabilizing, or adjusting direction). Formally, given a sub-trajectory τt−H:t = {(sj , a j , r j , s j+1 )}tj=t−H of horizon H extracted from an offline trajectory, the encoder maps it to a latent representation zt = Eϕ(τt−H:t), z t ∈ Rdz . For timesteps near the beginning of a trajectory where t − H < 0, we construct τt−H:t by zero-padding the missing prefix. For each anchor sub-trajectory τt−H:t, we construct a positive sample τ + as a nearby segment from the same trajectory, e.g. , τ + = τt−H+δ:t+δ with a small offset δ. Negative samples {τ − 
+
+> k
+
+}Kk=1 are drawn from trajectories of different tasks. Let z+ 
+
+> t
+
+= Eϕ(τ +), z − 
+
+> k
+
+= Eϕ(τ − 
+
+> k
+
+).4Preprint We optimize the standard InfoNCE (van den Oord et al., 2018) objective: 
+
+LNCE = −E
+
+"
+
+log exp(sim( zt, z + 
+
+> t
+
+)/κ α)exp(sim( zt, z + 
+
+> t
+
+)/κ α) + PKk=1 exp(sim( zt, z − 
+
+> k
+
+)/κ α)
+
+#
+
+, (1) where sim( ·, ·) denotes cosine similarity and κα is a temperature parameter. This objective encourages representations of temporally adjacent sub-trajectories from the same task to align, as they share the same task objective and similar execution stages, while pushing apart representations from different tasks. 4.1.2 LANGUAGE -A LIGNED TASK REPRESENTATION 
+
+Since the latent representations z learned by the contrastive encoder are derived from sub-trajectories, they can be biased toward local behaviors or the current execution stage rather than the underlying task objective. This issue is particularly pronounced when sub-trajectories are sampled from low-quality, non-expert data, or from very early stages of task execution, where the task goal is not yet clearly manifested. To encourage the latent representations to better capture the global task objective, we ground z in natural-language task descriptions, enforcing consistency between latent representations and their corresponding semantic descriptions. Specifically, natural-language descriptions hi are deterministically constructed from task-level meta-data of task Mi, including the task name, goal, relevant objects, environmental conditions, and typical performance. Each description hi is encoded into a text embedding vi using a pretrained LLM with LoRA adaptation (Hu et al., 2022), i.e. , vi = LLM θbase ,θ L
+
+ hi
+
+, where the LLM backbone θbase is kept frozen and the LoRA adapter θL is fine-tuned. For each task i, we also compute an aggregated representation ¯zi by averaging latent representations over a set of sub-trajectories sampled from the offline dataset Di: ¯zi = 1
+
+> m
+
+Pmj=1 Eϕ(τ ij ), τ ij ∼ D i. Both ¯zi and vi are then projected into a shared embedding space via lightweight projection heads Proj z and Proj h for alignment: 
+
+ui = Proj z (¯ zi)
+
+∥Proj z (¯ zi)∥2
+
+, wi = Proj h(vi)
+
+∥Proj h(vi)∥2
+
+, ui, w i ∈ Rda . (2) We then quantify the similarity between ui and wi by defining a cosine similarity matrix over a minibatch of tasks I, scaled by a learnable temperature κβ optimised in log-space to enforce positivity, following (Radford et al., 2021): 
+
+Sij = u⊤ 
+
+> i
+
+wj
+
+κβ
+
+, κβ = elog κβ , (3) We optimize a symmetric CLIP-style (Radford et al., 2021) alignment objective: 
+
+Lalign = 12 (Lz→h + Lh→z ) ,
+
+Lz→h = − 1
+
+> |I|
+
+X
+
+> i∈I
+
+log exp( Sii )P   
+
+> j∈I exp( Sij )
+
+, Lh→z = − 1
+
+> |I|
+
+X
+
+> i∈I
+
+log exp( Sii )P  
+
+> j∈I exp( Sji )
+
+. (4) This contrastive objective treats (¯ zi, h i) as a positive pair, while (¯ zi, h j ) for j̸ = i serve as negatives. It encourages trajectory-derived task representations z to align with their corresponding language descriptions, thereby grounding the latent representations in high-level task semantics. 4.1.3 TASK -C ONDITIONED WORLD MODELING AND Q L EARNING 
+
+Beyond trajectories and natural-language task descriptions, environment transitions and rewards inherently vary across tasks, providing informative one-step signals of task-specific dynamics and objectives that help regularize task representations. Over longer horizons, cumulative returns ( e.g. ,Q functions) capture task goals and provide complementary global signals for distinguishing tasks. Motivated by these observations, we introduce a task-conditioned world model and a task-conditioned Q function to further refine the learned representations. 5Preprint 
+
+Task-Conditioned World Modeling. Given a transition (st, a t, r t, s t+1 ) sampled from a sub-trajectory τt−H:t, we first infer a latent representation zt = Eϕ(τt−H:t). Conditioned on zt, the world model predicts the immediate reward and next state, i.e. , p rt, s t+1 | st, a t; zt
+
+, and is trained with supervised objectives 
+
+Lrew = E∥ˆrt − rt∥22
+
+, Ldyn = E∥ˆst+1 − st+1 ∥22
+
+, (5) where ˆrt and ˆst+1 denote the predicted reward and next state, respectively. 
+
+Task-Conditioned Q Learning. To incorporate long-horizon supervision, we introduce a task-conditioned Q function that predicts the return-to-go given a state-action pair (st, a t) and the corre-sponding task representation zt = Eϕ(τt−H:t): Q(st, a t; zt) ≈ E
+
+h PTt′=t γt′−trt′
+
+i
+
+. The model is trained with a supervised regression objective: 
+
+LQ = E∥ ˆRt − Rt∥22
+
+, (6) where Rt denotes the empirical return-to-go computed from offline trajectories, and ˆRt is the corresponding prediction produced by the Q function. Both the world model and the Q function are implemented by repurposing the same pretrained LLM backbone θbase with the shared LoRA adapter θL, originally fine-tuned for language processing, and augmenting it with task-specific prediction heads for reward, dynamics, and return estimation (shown in Fig. 1). Moreover, the supervision signals from both components are backpropagated through 
+
+zt to jointly update the contrastive task encoder Eϕ and LoRA parameters θL. The world model provides one-step supervision through task-specific transitions and rewards, while the Q function supplies long-horizon supervision that captures task objectives over extended trajectories. These complementary signals encourage Eϕ to capture both short-term dynamics and long-term goals, improving its discriminative power for task identification and generalization, while also enabling the LLM to better understand environment dynamics and task objectives. 
+
+Overall Objective. We jointly optimize the multi-perspective representation learning objective: 
+
+Lrepr = λ1LNCE + λ2Lalign + λ3 (Lrew + αLdyn ) + λ4LQ, (7) where λ1–λ4 are balancing coefficients. This objective enables the task encoder Eϕ to learn reliable, task-aware latent representations z by integrating complementary supervision signals, while the shared LoRA-adapted LLM backbone jointly captures trajectory information, task semantics, environment dynamics, and long-horizon objectives, ultimately benefiting downstream DT-based policy learning. 4.2 TASK -A WARE POLICY LEARNING FOR COTA-DT Given the learned latent representations, CoTA-DT learns a DT-based policy for offline meta-RL. The policy is formulated as conditional sequence modeling: at each timestep t, the model conditions on the return-to-go Rt, the state history s<t , the action history a<t , and a task-aware latent representation 
+
+zt = Eϕ(τt−H:t) inferred from the local sub-trajectory τt−H:t. This representation encodes both the underlying task identity and the current execution stage, providing contextual guidance for action generation. The resulting conditional policy is defined as πθ (at | R≤t, s ≤t, a <t ; zt), and is trained on offline trajectories to predict actions autoregressively: 
+
+Lpolicy = E(st,a t,R ≤t)∼D 
+
+h
+
+− log πθ (at | R≤t, s ≤t, a <t ; zt)
+
+i
+
+, (8) where D is the offline dataset. Here, the DT-based policy is initialized using the same pretrained LLM backbone θbase and the shared LoRA adapter θL learned in Sec. 4.1, with an additional action prediction head fact . Through this shared architecture, the LoRA-adapted LLM is further fine-tuned under policy supervision via Eq. 8, while the policy directly benefits from the task representation learning stage, which integrates trajectory information, task semantics, environment dynamics, and long-horizon objectives. This unified architecture provides richer task context for action prediction, thereby improving generalization to unseen tasks. 6Preprint 4.3 LANGUAGE -G ROUNDED AND SELF -A DAPTIVE GENERALIZATION 
+
+4.3.1 ZERO -S HOT ADAPTATION .For a new unseen task M⋆, CoTA-DT can generate task-conditioned trajectories once an initial task representation z0 is provided. In principle, z0 should be inferred by the well-trained task encoder Eϕ
+
+from trajectories of the target task. However, in the zero-shot setting, no task-specific trajectories are available, making it infeasible to obtain z0 directly from data. 
+
+Language-Grounded Initialization. To address this issue, we instead initialize z0 by grounding it in the task description h⋆ of the unseen task, which is typically available, providing a meaningful starting point for subsequent policy rollout. Given a task description h⋆, we first encode it into a text embedding v⋆ using the pretrained LLM backbone θbase with LoRA adaptation θL: v⋆ =LLM θbase ,θ L
+
+ h⋆
+
+. The embedding is then projected into the shared alignment space via the projection head Proj h: w⋆ = norm  Proj h(v⋆). To obtain an initial task representation z0 ∈ Rdz , we optimize Eq. (9) to find a latent vector whose projection best aligns with w⋆, using a small number of updating steps starting from z = 0:
+
+z0 = arg min 
+
+> z
+
+h
+
+1 − norm  Proj z (z)⊤w⋆
+
+i
+
+. (9) During this process, only z is updated, while the encoder Eϕ, projection heads Proj z , Proj h, the shared LoRA adapter θL, and the LLM backbone θbase remain fixed. As a result, this procedure serves as a lightweight test-time inference step rather than additional training. 
+
+Self-Adaptive Rollout. The resulting z0 is used to condition CoTA-DT policy at the beginning of rollout. As the rollout proceeds, once H transitions have been collected, we progressively update the task representation by recomputing zt = Eϕ(τt−H:t−1) from the most recent sub-trajectory. The updated zt conditions subsequent action generation, enabling a self-adaptive rollout that continuously refines the task representation based on newly observed transitions. By capturing both task identity and execution stage, zt allows the policy to adapt dynamically to the evolving task context, resulting in reliable and effective adaptation. 4.3.2 FEW -SHOT ADAPTATION .In the few-shot setting, a small support set D⋆ is available alongside the task description h⋆. We construct the initial task representation z0 by leveraging both the available data and the task description to obtain a more reliable initialization. Specifically, we sample a set of sub-trajectories C from D⋆
+
+and aggregate their encoder outputs ¯z = 1
+
+> |C|
+
+P  
+
+> τ∈C
+
+Eϕ(τ ), then use ¯z as the starting point for the optimization in Eq. (9), yielding a refined z0 grounded in both D⋆ and h⋆. With z0 held fixed, we further fine-tune only the LoRA adapter θL and the action head fact (with adapted parameters ≤ 1% 
+
+of the LLM backbone) on D⋆ using Lpolicy (Eq. 8) for a small number of gradient steps. The adapted policy is then deployed using the same self-adaptive rollout procedure as in the zero-shot setting. 
+
+# 5 EXPERIMENTS 
+
+We design our experiments to answer four questions. (Q1) Does CoTA-DT outperform state-of-the-art language-conditioned and context-based offline meta-RL baselines in both zero-shot and few-shot 
+
+settings? (Q2) How does each component—contrastive task encoding ( LNCE ), language alignment (Lalign ), world modeling ( Lrew +Ldyn ) and Q learning ( LQ)—contribute to CoTA-DT performance? 
+
+(Q3) How robust is the method to dataset quality? (Q4) Is multi-perspective task representation learning effective in producing high-quality representations? 
+
+Environments. We follow the offline meta-RL protocol of T2DA (Zhang et al., 2025) and evaluate on four benchmarks: Point-Robot (2D navigation, 50 tasks, T =20 ), Cheetah-Vel (target velocity, 50 tasks, T =200 ), Ant-Dir (target direction, 50 tasks, T =200 ), and Meta-World (22 manipulation tasks (Yu et al., 2020a), T =200 ); see Appendix C for full statistics. Each task is accompanied by a natural-language description ( e.g. , “Navigate to position (−0.75 , 0.93) ”; see Appendix C for details). For all environments, we follow prior work (including T2DA (Zhang et al., 2025) and 7Preprint 
+
+Figure 2: Zero-shot test return curves of CoTA-DT against baselines on Mixed datasets. Meta-DT (Wang et al., 2024)) and report results under three offline dataset qualities: Medium , Expert ,and Mixed , using the best-performing checkpoint. 
+
+Baselines. We compare against six representative baselines spanning language-conditioned policies (BC-Z (Jang et al., 2022), BAKU (Haldar et al., 2024)), prompt-based DTs (Prompt-DT (Xu et al., 2022)), context-based methods (Meta-DT (Wang et al., 2024), UNICORN (Li et al., 2024)) and the strongest published language-conditioned DT, T2DA-T (Zhang et al., 2025). All methods are evaluated zero-shot and few-shot on 5 held-out tasks over 5 seeds; we report raw undiscounted episodic return ± one standard deviation. Implementation details, exact hyperparameters and per-task numbers are deferred to the appendix. 5.1 MAIN RESULTS : Z ERO -S HOT AND FEW -S HOT ADAPTATION 
+
+Table 1 reports zero-shot returns on the Mixed dataset, which is the most challenging setting. CoTA-DT achieves the best performance on all four benchmarks. The largest absolute gain over the second-best baseline (T2DA-T) is observed on Meta-World ( +189 .0), while consistent relative improvements are also achieved on locomotion tasks ( +15 .7% on Cheetah-Vel and +2 .8% on Ant-Dir). Table 2 reports the corresponding few-shot returns. CoTA-DT again attains the best performance on every benchmark, with margins that further widen over the second-best baseline T2DA-T (e.g., 
+
++213 .1 on Meta-World and +11 .5 on Cheetah-Vel), benefiting from the availability of a small support set. The results suggest that CoTA-DT learns more robust and discriminative task representations, enabling effective generalization in both settings. Table 1: Zero-shot test return on the Mixed dataset. Best in bold , second-best underlined.                                   
+
+> BC-Z BAKU Prompt-DT Meta-DT UNICORN T2DA-T CoTA-DT
+> Pt-Robot −13 .0±0.7−14 .5±0.8−15 .2±0.6−12 .2±0.5−13 .1±0.7−8.7±0.3−7.9±0.4
+> Cheetah-Vel −129 .2±10 .0−112 .3±4.2−136 .9±17 .5−99 .7±6.9−101 .9±18 .0−90 .7±5.8−76 .5±4.7
+> Ant-Dir 611 .7±30 .9695 .8±25 .5395 .8±12 .6411 .0±13 .3426 .1±23 .8955 .0±9.0981 .3±16 .8
+> Meta-World 910 .3±27 .1970 .9±36 .2867 .4±46 .5994 .2±45 .0756 .1±60 .81103 .5±36 .31292 .5±28 .2
+
+Table 2: Few-shot test return on the Mixed dataset. Best in bold , second-best underlined.                                   
+
+> BC-Z BAKU Prompt-DT Meta-DT UNICORN T2DA-T CoTA-DT
+> Pt-Robot −12 .3±0.8−13 .4±0.9−12 .0±1.3−10 .2±0.6−12 .9±1.2−7.6±0.4−6.9±0.2
+> Cheetah-Vel −109 .2±11 .2−97 .5±4.3−101 .3±10 .6−86 .5±7.3−89 .7±19 .8−78 .8±4.1−67 .3±5.2
+> Ant-Dir 696 .5±39 .8817 .6±20 .1509 .0±13 .4534 .2±14 .0459 .4±15 .51012 .3±9.81040 .2±15 .8
+> Meta-World 1131 .7±56 .31129 .2±24 .8972 .8±31 .21083 .4±49 .5826 .8±66 .91189 .7±45 .31402 .8±30 .1
+
+5.2 ROBUSTNESS TO DATASET QUALITY 
+
+Table 3 reports the same comparison on the Medium and Expert datasets. CoTA-DT remains the top performer in every setting, including the Expert regime, where offline data are highly homogeneous and contrastive signals are notoriously weak. Specifically, on the Expert dataset, CoTA-DT improves over T2DA-T on Meta-World from 1114 .0 to 1375 .7 (+23 .5% ), indicating that our contrastive task encoder can still extract informative task representations even under limited behavior diversity. 8Preprint Table 3: Zero-shot return on Expert and Medium datasets. Best in bold , second-best underlined.                                 
+
+> Quality BC-Z BAKU Prompt-DT Meta-DT T2DA-T CoTA-DT Expert Pt-Robot −12 .3±0.2−13 .7±0.2−15 .8±0.3−11 .2±0.1−7.3±0.2−6.9±0.4
+> Meta-World 875 .1±30 .3853 .3±16 .8755 .1±38 .0830 .2±18 .91114 .0±59 .31375 .7±21 .6
+> Medium Pt-Robot −16 .1±0.5−14 .8±0.6−17 .9±0.4−12 .6±0.3−12 .4±0.5−11 .8±0.6
+> Meta-World 682 .7±54 .4679 .2±13 .1583 .4±29 .5774 .0±35 .41003 .5±78 .21055 .2±40 .3
+
+Table 4: Component and backbone ablations across all four benchmarks (Mixed, zero-shot, mean ±std over 5 seeds). 
+
+Environment CoTA-DT (full) w/o LNCE w/o Lalign w/o Lrew + Ldyn w/o LQ w/o LLM Pt-Robot ↑ −7.9 ± 0.4 −10 .9 ± 0.1 −12 .3 ± 0.5 −10 .8 ± 0.3 −10 .2 ± 0.2 −8.4 ± 0.5
+
+Cheetah-Vel ↑ −76 .5 ± 4.7 −95 .4 ± 6.1 −110 .8 ± 7.0 −99 .1 ± 5.8 −87 .3 ± 6.4 −84 .6 ± 5.9
+
+Ant-Dir ↑ 981 .3 ± 16 .8 906 .7 ± 22 .5 794 .2 ± 26 .8 874 .6 ± 21 .0 917 .1 ± 19 .3 957 .3 ± 14 .1
+
+Meta-World ↑ 1292 .5 ± 28 .2 1018 .5 ± 25 .0 868 .0 ± 36 .7 947 .3 ± 24 .5 1106 .8 ± 34 .9 1218 .2 ± 37 .6
+
+Note. “w/o LLM” replaces the LLM backbone with a small DT trained from scratch and uses a pretrained CLIP text encoder for task descriptions. 
+
+5.3 ABLATION STUDIES 
+
+We ablate each component of CoTA-DT across all four benchmarks (Table 4). The findings are summarized as follows: (i) Removing any representation-learning loss reduces performance across all four benchmarks. (ii) Lalign has the largest effect in all four environments, with drops of 424 .5 on Meta-World and 187 .1 on Ant-Dir, highlighting the importance of language alignment for zero-shot initialization. (iii) Removing LNCE lowers Meta-World return by 274 .0, showing that discriminative trajectory representations contribute alongside language alignment. (iv) World-model and return-prediction supervision also contribute: removing Lrew + Ldyn lowers return by 22 .6 on Cheetah-Vel and 345 .2 on Meta-World, while removing LQ lowers Meta-World return by 185 .7. (v) The w/o LLM variant replaces the pretrained LLM with a small DT trained from scratch while retaining a pretrained CLIP text encoder. Although it trails full CoTA-DT on all four benchmarks, it reaches 
+
+1218 .2 ± 37 .6 on Meta-World, compared with 1103 .5 ± 36 .3 for the T2DA-T. 5.4 VISUALIZATION ANALYSIS OF THE TASK REPRESENTATIONS 
+
+We visualize the learned task representations on Point-Robot in Fig. 3. Three observations follow. (i) 
+
+In (a) & (d), task representations learned solely from offline data and text embeddings derived from task descriptions form two disjoint clouds, indicating that representations cannot reliably identify the task. (ii) In (b) & (e), language alignment brings the representations onto a shared circular manifold, but the resulting band remains noisy, suggesting that alignment captures the global task geometry but does not enforce within-task tightness. (iii) In (c) & (f), ¯zi and wi align as corresponding points on a clean ring, and {zi} concentrate around their text anchors. These results highlight the complementary roles of different components: language alignment provides the global task-manifold structure, while world modeling and Q learning further regularize the representations to improve intra-task consistency. 9Preprint 
+
+Figure 3: Task representations on Point-Robot. Each marker is color-coded by goal angle; circles denote task representations, and stars denote text embeddings wi of task descriptions. The top row visualizes aggregated representations ¯zi versus wi, while the bottom row shows all {zi} learned from sub-trajectories versus wi. Columns compare three types of representations: (a) & (d) show representations learned solely from offline data using the contrastive task encoder; (b) & (e) are language-aligned task representations (task encoding + language alignment); (c) & (f) are the final representations learned by CoTA-DT (task encoding + language alignment + world modeling + Q learning). 
+
+# 6 CONCLUSION 
+
+We present CoTA-DT, an offline meta-RL framework that learns task representations by integrating contrastive discrimination, language alignment, world-modeling, and Q learning within a LoRA adapter on an LLM backbone. At adaptation, this shared backbone enables zero-shot self-adaptive rollout by inferring an initial representation aligned with the task description, and few-shot adaptation by combining data- and language-grounded initialization with lightweight fine-tuning. Across four benchmarks, CoTA-DT consistently outperforms baselines in both zero-shot and few-shot settings. REPRODUCIBILITY STATEMENT 
+
+We describe the training objectives, policy learning, and adaptation procedures in Section 4, with pseudocode for all four stages in Appendix H. Section 5 specifies the evaluation protocol. Appendix C documents the task splits, descriptions, and offline dataset construction, while Appendix D provides implementation details and hyperparameters. We provide implementation and data-generation scripts at https://anonymous.4open.science/r/CotaDT-35DB .
+
+# REFERENCES 
+
+Anurag Ajay, Yilun Du, Abhi Gupta, Joshua Tenenbaum, Tommi Jaakkola, and Pulkit Agrawal. Is con-ditional generative modeling all you need for decision-making? arXiv preprint arXiv:2211.15657 ,2022. 10 Preprint Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen Chebotar, Xi Chen, Krzysztof Choromanski, Tianli Ding, Danny Driess, Avinava Dubey, Chelsea Finn, et al. Rt-2: Vision-language-action models transfer web knowledge to robotic control. In Conference on Robot Learning (CoRL) ,2023. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners. In Advances in Neural Information Processing Systems 33 (NeurIPS 2020) , 2020. Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Misha Laskin, Pieter Abbeel, Aravind Srinivas, and Igor Mordatch. Decision transformer: Reinforcement learning via sequence modeling. Advances in neural information processing systems , 34:15084–15097, 2021. Ron Dorfman, Idan Shenfeld, and Aviv Tamar. Offline meta reinforcement learning – iden-tifiability challenges and effective data collection strategies. In M. Ranzato, A. Beygelz-imer, Y. Dauphin, P.S. Liang, and J. Wortman Vaughan (eds.), Advances in Neural Information Processing Systems , volume 34, pp. 4607–4618. Curran Associates, Inc., 2021. URL https://proceedings.neurips.cc/paper_files/paper/2021/ file/248024541dbda1d3fd75fe49d1a4df4d-Paper.pdf .Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In Proceedings of the 34th International Conference on Machine Learning -Volume 70 , pp. 1126–1135, 2017. Hiroki Furuta, Yutaka Matsuo, and Shixiang Shane Gu. Generalized decision transformer for offline hindsight information matching. arXiv preprint arXiv:2111.10364 , 2021. URL https: //arxiv.org/abs/2111.10364 .Yunkai Gao, Rui Zhang, Jiaming Guo, Fan Wu, Qi Yi, Shaohui Peng, Siming Lan, Ruizhi Chen, Zidong Du, Xing Hu, Qi Guo, Ling Li, and Yunji Chen. Context shift reduction for offline meta-reinforcement learning. In Advances in Neural Information Processing Systems , volume 36, 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/ hash/fd489a44f3bcb9f122e4931ef21d0c43-Abstract-Conference.html .Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor. In International conference on machine learning , pp. 1861–1870. Pmlr, 2018. Siddhant Haldar, Zhuoran Peng, and Lerrel Pinto. Baku: An efficient transformer for multi-task policy learning. Advances in Neural Information Processing Systems , 37:141208–141239, 2024. Edward J Hu, Yelong Shen, Phil Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. International Conference on Learning Representations (ICLR) , 2022. Shengchao Hu, Ziqing Fan, Li Shen, Ya Zhang, Yanfeng Wang, and Dacheng Tao. Harmodt: Harmony multi-task decision transformer for offline reinforcement learning. In International Conference on Machine Learning , 2024. Eric Jang, Alex Irpan, Mohi Khansari, Daniel Kappler, Frederik Ebert, Corey Lynch, Sergey Levine, and Chelsea Finn. BC-Z: Zero-shot task generalization with robotic imitation learning. In 
+
+Conference on Robot Learning (CoRL 2022) , 2022. Rahul Kidambi, Aravind Rajeswaran, Praneeth Netrapalli, and Thorsten Joachims. Morel: Model-based offline reinforcement learning. In Proceedings of the 34th International Conference on Neural Information Processing Systems , NIPS’20, Red Hook, NY, USA, 2020. Curran Associates Inc. ISBN 9781713829546. 11 Preprint Ksenia Konyushkova, Konrad Zolna, Yusuf Aytar, Alexander Novikov, Scott E. Reed, Serkan Cabi, and Nando de Freitas. Semi-supervised reward learning for offline reinforcement learning. CoRR ,abs/2012.06899, 2020. URL https://arxiv.org/abs/2012.06899 .Ilya Kostrikov, Ashvin Nair, and Sergey Levine. Offline reinforcement learning with implicit q-learning. CoRR , abs/2110.06169, 2021. URL https://arxiv.org/abs/2110.06169 .Aviral Kumar, Aurick Zhou, George Tucker, and Sergey Levine. Conservative q-learning for offline reinforcement learning. In Proceedings of the 34th International Conference on Neural Information Processing Systems , NIPS’20, Red Hook, NY, USA, 2020. Curran Associates Inc. ISBN 9781713829546. Michael Laskin, Luyu Wang, Junhyuk Oh, Emilio Parisotto, Stephen Spencer, Richie Steigerwald, Borja Ibarz, et al. In-context reinforcement learning with algorithm distillation. In International Conference on Learning Representations (ICLR 2023) , 2023. Sergey Levine, Aviral Kumar, George Tucker, and Justin Fu. Offline reinforcement learning: Tutorial, review, and perspectives on open problems. arXiv preprint arXiv:2005.01643 , 2020. Jiachen Li, Quan Vuong, Shuang Liu, Minghua Liu, Kamil Ciosek, Henrik Christensen, and Hao Su. Multi-task batch reinforcement learning with metric learning. In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin (eds.), Advances in Neu-ral Information Processing Systems , volume 33, pp. 6197–6210. Curran Associates, Inc., 2020a. URL https://proceedings.neurips.cc/paper_files/paper/2020/ file/4496bf24afe7fab6f046bf4923da8de6-Paper.pdf .Lanqing Li, Rui Yang, and Dijun Luo. Focal: Efficient fully-offline meta-reinforcement learning via distance metric learning and behavior regularization. arXiv preprint arXiv:2010.01112 , 2020b. Lanqing Li, Hai Zhang, Xinyu Zhang, Shatong Zhu, Yang Yu, Junqiao Zhao, and Pheng-Ann Heng. Towards an information theoretic framework of context-based offline meta-reinforcement learning. 
+
+Advances in Neural Information Processing Systems , 37:75642–75667, 2024. Runji Lin, Ye Li, Xidong Feng, Zhaowei Zhang, Xian Hong Wu Fung, Haifeng Zhang, Jun Wang, Yali Du, and Yaodong Yang. Contextual transformer for offline meta reinforcement learning. arXiv preprint arXiv:2211.08016 , 2022. Eric Mitchell, Rafael Rafailov, Xue Bin Peng, Sergey Levine, and Chelsea Finn. Offline meta-reinforcement learning with advantage weighting. In International Conference on Machine Learning , pp. 7780–7791. PMLR, 2021. Steven Morad, Ajay Shankar, Jan Blumenkamp, and Amanda Prorok. Language-conditioned offline rl for multi-robot navigation, 2024. URL https://arxiv.org/abs/2407.20164 .Long Ouyang, Jeff Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. arXiv preprint arXiv:2203.02155 , 2022. Jing-Cheng Pang, Si-Hang Yang, Kaiyuan Li, Xiong-Hui Chen, Nan Tang, and Yang Yu. Kalm: Knowledgeable agents by offline reinforcement learning from large language model rollouts. 
+
+Advances in Neural Information Processing Systems , 37:126620–126652, 2024. Vitchyr H. Pong, Ashvin Nair, Laura M. Smith, Catherine Huang, and Sergey Levine. Offline meta-reinforcement learning with online self-supervision. CoRR , abs/2107.03974, 2021. URL 
+
+https://arxiv.org/abs/2107.03974 .Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners. OpenAI Technical Report , 2019. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. Learning transferable visual models from natural language supervision. In Proceedings of the 38th International Conference on Machine Learning (ICML) , pp. 8748–8763, 2021. 12 Preprint Kate Rakelly, Aurick Zhou, Chelsea Finn, Sergey Levine, and Deirdre Quillen. Efficient off-policy meta-reinforcement learning via probabilistic context variables. In International conference on machine learning , pp. 5331–5340. PMLR, 2019. Scott Reed, Konrad Zolna, Emilio Parisotto, Sergio Gomez Colmenarejo, Alexander Novikov, Gabriel Barth-Maron, Mai Gimenez, Yury Sulsky, Jackie Kay, Jost Tobias Springenberg, et al. A generalist agent. arXiv preprint arXiv:2205.06175 , 2022. Ruizhe Shi, Yuyao Liu, Yanjie Ze, Simon Shaolei Du, and Huazhe Xu. Unleashing the power of pre-trained language models for offline reinforcement learning. In The Twelfth International Conference on Learning Representations , 2023. Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faysal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 , 2023. Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. Shudong Wang, Xinfei Wang, Chenhao Zhang, Shanchen Pang, Haiyuan Gui, Wenhao Ji, and Xiaojian Liao. Soft conflict-resolution decision transformer for offline multi-task reinforcement learning. arXiv preprint arXiv:2511.13133 , 2025. Zhe Wang, Haozhu Wang, and Yanjun (Jane) Qi. T3gdt: Three-tier tokens to guide decision transformer for offline meta reinforcement learning. In NeurIPS 2023 Workshop on Robot Learning ,2023. Zhi Wang, Li Zhang, Wenhao Wu, Yuanheng Zhu, Dongbin Zhao, and Chunlin Chen. Meta-dt: Offline meta-rl as conditional sequence modeling with world model disentanglement. Advances in Neural Information Processing Systems , 37:44845–44870, 2024. Mengdi Xu, Yikang Shen, Shun Zhang, Yuchen Lu, Ding Zhao, Joshua Tenenbaum, and Chuang Gan. Prompting decision transformer for few-shot policy generalization. In international conference on machine learning , pp. 24631–24645. PMLR, 2022. Zhongwen Xu, Hado P van Hasselt, and David Silver. Meta-gradient reinforcement learning. 
+
+Advances in neural information processing systems , 31, 2018. An Yang et al. Qwen technical report. arXiv preprint arXiv:2309.16609 , 2024. Tianhe Yu, Deirdre Quillen, Zhanpeng He, Ryan Julian, Karol Hausman, Chelsea Finn, and Sergey Levine. Meta-world: A benchmark and evaluation for multi-task and meta reinforcement learning. In Conference on robot learning , pp. 1094–1100. PMLR, 2020a. Tianhe Yu, Garrett Thomas, Lantao Yu, Stefano Ermon, James Y Zou, Sergey Levine, Chelsea Finn, and Tengyu Ma. Mopo: Model-based offline policy optimization. In Advances in Neural Information Processing Systems , volume 33, pp. 14129–14142. Curran Associates, Inc., 2020b. Haoqi Yuan and Zongqing Lu. Robust task representations for offline meta-reinforcement learning via contrastive learning. In International Conference on Machine Learning , pp. 25747–25759. PMLR, 2022. Hanping Zhang and Yuhong Guo. Llm-driven policy diffusion: Enhancing generalization in offline reinforcement learning, 2025. URL https://arxiv.org/abs/2509.00347 .Shilin Zhang, Zican Hu, Wenhao Wu, Xinyi Xie, Jianxiang Tang, Chunlin Chen, Daoyi Dong, Yu Cheng, Zhenhong Sun, and Zhi Wang. Text-to-decision agent: Offline meta-reinforcement learning from natural language supervision. arXiv preprint arXiv:2504.15046 , 2025. Luisa Zintgraf, Sebastian Schulze, Cong Lu, Leo Feng, Maximilian Igl, Kyriacos Shiarlis, Yarin Gal, Katja Hofmann, and Shimon Whiteson. Varibad: Variational bayes-adaptive deep rl via meta-learning. Journal of Machine Learning Research , 22(289):1–39, 2021. 13 Preprint 
+
+# A EXTENDED RELATED WORK 
+
+We provide a more detailed account of the four lines of work most relevant to CoTA-DT. 
+
+TD-based offline meta-RL. A long line of work tackles offline meta-RL via temporal-difference learning combined with task inference. PEARL (Rakelly et al., 2019) introduced probabilistic context inference using a permutation-invariant encoder, sparking a family of context-based methods. FOCAL (Li et al., 2020b) extends this to the offline setting via a contrastive trajectory encoder, while subsequent work addresses train/test context distribution shift (Lin et al., 2022; Yuan & Lu, 2022; Gao et al., 2023). UNICORN (Li et al., 2024) provides a unifying information-theoretic view, framing all of these objectives as different upper bounds of mutual information between the latent and task-relevant trajectory statistics. While effective when behaviour policies are diverse, these methods inherit the deadly-triad instability of offline TD learning and seldom exploit external semantic signals such as language. 
+
+DT-based offline meta-RL. Decision Transformer (Chen et al., 2021) reframes RL as return-conditioned sequence modelling, sidestepping bootstrapping and Bellman backups. Prompt-DT (Xu et al., 2022) prepends expert trajectory snippets as a prompt. Generalised DT (Furuta et al., 2021; Wang et al., 2023) replaces this prompt with hindsight statistics. Meta-DT (Wang et al., 2024) learns a disentangled context encoder via a world model and feeds its latent into a DT. Algorithm Distillation (Laskin et al., 2023) distils RL training trajectories into a causal transformer for in-context improvement. HarmoDT (Hu et al., 2024) mitigates parameter-level conflicts in multi-task DTs. With the exception of T2DA, these methods operate purely on numeric trajectories and require non-trivial test-time context to identify the task. 
+
+Language-conditioned policies. BC-Z (Jang et al., 2022) demonstrated that a frozen sentence encoder is sufficient for zero-shot manipulation if many language-annotated demonstrations are available. BAKU (Haldar et al., 2024) extends this with modular per-task action heads on a shared trunk. Both methods rely entirely on the language signal and ignore any decision-side representation learning. T2DA-T (Zhang et al., 2025) bridges the two regimes by aligning text embeddings to dynamics-aware decision embeddings via CLIP-style contrastive learning, then conditioning a DT on the aligned text vector. CoTA-DT extends this idea in three directions: (i) we jointly (rather than separately) optimise the alignment and grounding objectives; (ii) we add long-horizon Q supervision in addition to the one-step world-model losses used in T2DA; and (iii) we share a single LoRA adapter across all four signals and the policy, yielding a unified backbone instead of per-component encoders. 
+
+LLMs as backbones for sequential decision making. Pretrained LLMs have been used as policy initialisations (Shi et al., 2023), conflict-resolution (Wang et al., 2025), and data augmentation (Pang et al., 2024) engines for offline RL. Most existing approaches treat the LLM as a single-purpose component. CoTA-DT instead reuses one frozen LLM with a single LoRA adapter as a shared backbone for language encoding, world modelling, value estimation, and policy generation, yielding a ∼10 × parameter-efficiency advantage over running independent encoders. 
+
+# B BASELINE DESCRIPTIONS 
+
+We compare CoTA-DT to six representative baselines covering language-conditioned, prompt-based, and context-based paradigms. 
+
+Prompt-DT (Xu et al., 2022). Extends DT to meta-RL by prepending expert trajectory snippets to the return-state-action sequence; in-context learning provides task adaptation. Its main limitation is the dependence on test-time expert prompts. 
+
+BC-Z (Jang et al., 2022). Language-conditioned imitation that parameterises the policy as π(a |
+
+s, e lang ), where elang is a sentence embedding from a frozen language encoder. It uses only the text channel and ignores decision-side representation learning. 14 Preprint 
+
+BAKU (Haldar et al., 2024). Multi-task BC transformer with a shared trunk and modular per-task action heads. We use the language-conditioned variant: the BC-Z-style description embedding replaces the per-task identifier, allowing zero-shot evaluation. 
+
+Meta-DT (Wang et al., 2024). Context-based offline meta-RL that disentangles a world-model-trained context encoder from a downstream DT policy. The latent is fed to the DT as a prefix token. Meta-DT does not exploit any natural-language signal. 
+
+UNICORN (Li et al., 2024). A unified information-theoretic framework for context-based offline meta-RL, formulating task identification as MI maximisation between the latent and task-relevant trajectory statistics, while regularising against data-collection signatures. UNICORN generalises FOCAL- and CSRO-style contrastive encoders. 
+
+T2DA-T (Zhang et al., 2025). The strongest published language-conditioned baseline. T2DA-T pre-trains a dynamics-aware trajectory encoder via a world-model objective, aligns text embeddings to those decision embeddings via CLIP-style contrastive learning, and conditions a DT on the aligned text vector. CoTA-DT differs in three ways: (i) world-model and contrastive alignment are jointly optimised instead of staged; (ii) long-horizon Q supervision is added; (iii) a single LoRA adapter is shared across all four pre-training signals and the policy. 
+
+# C ENVIRONMENTS AND TASKS 
+
+Environment statistics. Table 5 summarises the four offline meta-RL environments. The Point-Robot, Cheetah-Vel and Ant-Dir benchmarks follow the T2DA protocol (Zhang et al., 2025): 50 tasks per environment, with the last 5 indices held out for evaluation. Meta-World uses the 22-task subset of MT50 (Yu et al., 2020a) consisting of task indices 0–21, with indices {1, 4, 14 , 15 } held out for evaluation. Table 5: Environment statistics. ds, da and T are the state, action and episode-length dimensions.                                       
+
+> Environment # Tasks Train/Test dsdaTTask variation Point-Robot 50 45/5 2220 Target (x, y )position Cheetah-Vel 50 45/5 20 6200 Target velocity ∈[0 .075 ,3]
+> Ant-Dir 50 45/5 27 8200 Target heading ∈[0 ,2π]
+> Meta-World 22 18/4 39 4200 Diverse manipulation
+
+Dataset construction. For all four environments we use SAC (Haarnoja et al., 2018) to indepen-dently train a policy for each task and save policy checkpoints at different training steps. We then construct three dataset variants per environment by rolling out trajectories from these checkpoints: 
+
+Medium uses a ∼50%-converged checkpoint; Expert uses the highest-return checkpoint after conver-gence; and Mixed uses all saved checkpoints across training, yielding a diverse mix of skill levels. Each dataset contains 200 trajectories per task. The data-generation script and SAC hyperparameters are included in the supplementary material 2.
+
+Natural-language task descriptions. We programmatically generate a one-sentence description from each task’s metadata. Examples: • Point-Robot: “Navigate to position (−0.75 , 0.93) , distance 1.19 , heading northwest.” 
+
+• Cheetah-Vel: “HalfCheetah target velocity 1.42 units per second.” 
+
+• Ant-Dir: “Ant robot heads northeast at angle 42 ◦.” 
+
+• Meta-World: original short verb description, e.g. “rotate faucet clockwise” .Sentences are tokenised with the LLaMA-3.2 tokenizer (max 64 tokens). 
+
+> 2https://anonymous.4open.science/r/CotaDT-35DB .
+
+15 Preprint 
+
+# D IMPLEMENTATION DETAILS 
+
+Backbone and adapters. We use the open-source LLaMA-3.2-1B (Touvron et al., 2023); the base 1B parameters θbase are always frozen. A single LoRA adapter θL (rank r=8 , α=16 , applied to all q_proj and v_proj ) is shared across the four prediction heads ( frew , f dyn , f Q, f act ) and across both training phases. Adapter size is ≈ 0.85 M parameters, giving the framework a ∼10 ×
+
+parameter-efficiency advantage over running independent transformers per signal. 
+
+Context encoder. Eϕ is a 1-layer GRU (hidden 256 , output dz =64 ) followed by linear L2-normalisation, ≈ 0.36 M parameters. Sub-trajectory horizon H=20 across all environments. 
+
+Continuous-token projectors. gz , g s, g a, g R are linear projections R• → R2048 matching LLaMA’s hidden size. The text branch reuses the LLaMA token embedding. 
+
+CLIP-style alignment. Proj z , Proj h are 2-layer MLPs R{64 ,2048 } → R128 followed by L2-normalisation. The temperature κβ is parameterised as κβ = exp(log κβ ) with log κβ initialised at 
+
+log(0 .07) and clamped to [0 .01 , 1.0] . Three design choices are critical: (i) keeping CLIP gradients unblocked on both sides (without this the loss stays at ln |I| ), (ii) the learnable temperature, and (iii) 
+
+a 10-epoch CLIP warm-up. 
+
+Representation learning phase. We optimise Eq. (7) with (λ1, λ 2, λ 3, λ 4) = (0 .1, 0.5, 1.0, 0.1) 
+
+and α = 1 .0, where λ1–λ4 correspond to the weights on LNCE , Lalign , (Lrew +αLdyn ) and LQ
+
+respectively. Adam, lr 3×10 −4, batch 128 , 200 epochs (Point-Robot 80 ). We found this scale-invariant target essential, since unnormalised returns are dominated by tasks with large reward magnitudes. 
+
+Policy learning phase. We initialise from the representation-learning checkpoint, replace the auxiliary heads with fact , and continue to fine-tune θL together with fact via Lpolicy (Eq. 8). DT input format is [z, ˆR1, s 1, a 1, ˆR2, s 2, a 2, . . . ] with z as a prefix token, refreshed by re-encoding the most recent H steps. AdamW, lr 5×10 −5, weight decay 10 −4, batch 64 (PR) / 32 (CV, AD, MW), DT horizon 20 (PR) / 40 otherwise; 10 5 training steps with 5,000 -step linear warm-up; gradient clipping 0.25 .
+
+Zero-shot inversion. Eq. (9) is solved with Adam, 200 steps, lr 0.01 , on a fresh z initialised at 0.Empirically convergence happens within ∼ 50 steps; the remainder tightens the latent norm. 
+
+Few-shot fine-tuning. Given k support trajectories, we obtain z0 via data-grounded initialisation (starting from ¯z) followed by the same CLIP-space inversion as zero-shot (Eq. 9); we then hold z0
+
+fixed and fine-tune only θL and fact for 100 steps with Adam, lr 5×10 −5. The full adaptation costs 
+
+< 1 minute on a single A6000. 
+
+Compute. All experiments run on multi-GPU servers equipped with NVIDIA RTX A6000 (48 GB) GPUs; each training job uses a single GPU and we run 4 jobs in parallel on a 4 ×A6000 node. The representation phase takes ∼3 h on Point-Robot and ∼6 h on Meta-World; the policy phase takes 
+
+∼2-3 h. A single forward pass (one trajectory of length H=20 , batch 128 ) takes ∼18 ms, dominated by the LLM backbone. 
+
+Note on supplementary code. For historical reasons, our supplementary code uses an [st; zt]
+
+concatenation and per-step sliding-window updates instead of the prefix-token + per-window scheme described in Sec. 4.1. The paper version is ∼5% better on Ant-Dir and matches elsewhere; the code variant is preserved as the concat_z ablation. Numbers reported in Tables 1–4 use the paper version. D.1 HYPERPARAMETER CONFIGURATION 
+
+Table 6 lists the full set of CoTA-DT hyperparameters. We selected default values via a small sweep on Point-Robot Mixed and re-used the same values across all environments unless explicitly noted. 16 Preprint The most influential knobs are the loss weights (λ1, λ 2, λ 3, λ 4), the learnable CLIP temperature κβ ,and the CLIP warm-up epoch count Nwarm .Table 6: CoTA-DT hyperparameters. Values are shared across all four benchmarks unless noted. 
+
+Group Hyperparameter Value 
+
+Backbone LLM backbone LLaMA-3.2 1B (frozen) Hidden size 2048 LoRA rank r / α 8 / 16 LoRA target modules q_proj , v_proj (all layers) Context encoder Eϕ
+
+Architecture 1-layer GRU Hidden / output dim 256 / dz = 64 
+
+Sub-trajectory length H 20 Projectors 
+
+Proj z , Proj h 2-layer MLP, hidden 256 , output 128 
+
+gz , g s, g a, g R Linear → 2048 Output normalisation L2
+
+CLIP alignment Temperature init / clamp log(0 .07) / [0 .01 , 1.0] 
+
+Warm-up epochs Nwarm 10 CLIP gradient stop-grad none (gradients flow on both sides) Negative pairs / batch in-batch ( |I| = 128 )Repr. learning Loss weights (λ1, λ 2, λ 3, λ 4, α ) (0 .1, 0.5, 1.0, 0.1, 1.0) 
+
+Optimiser Adam Learning rate 3×10 −4
+
+Batch size 128 Epochs 80 (PR) / 200 (CV, AD, MW) Gradient clip 1.0 Policy learning Optimiser AdamW Learning rate / weight decay 5×10 −5 / 10 −4
+
+Batch size 64 (PR) / 32 (CV, AD, MW) DT horizon 20 (PR) / 40 (CV, AD, MW) Total steps 1×10 5
+
+LR warm-up steps 5,000 Zero-shot Initial z 0
+
+Few-shot fine-tune Trainable parameters θL, f act only 
+
+D.2 HYPERPARAMETER SENSITIVITY 
+
+Table 7 reports a one-at-a-time sensitivity sweep on Point-Robot Mixed. We vary each knob in isolation while keeping the others at their default value. 
+
+Sensitivity findings. Three observations follow. (i) The two CLIP-related knobs ( λ2 and κβ init) and the value-supervision weight λ4 are the load-bearing hyperparameters: setting any of them to zero or to an extreme value degrades return by 1–5 points. (ii) The contrastive weight λ1 and the LoRA rank r are remarkably robust: a 4× range around the default changes performance by less than the seed-to-seed variance. (iii) Context horizon H exhibits a clear sweet spot at H=20 : H=5 is too short to identify the task, while H=40 provides no benefit on Point-Robot (whose episode length is itself only 20). This suggests that reproducing CoTA-DT’s numbers does not require careful tuning, except for not turning off CLIP alignment or value supervision entirely. Two further design choices outside the table also matter: (i) blocking CLIP gradients on the text side stalls the loss at ln |I| ; and (ii) starting CLIP from epoch 0 (i.e. Nwarm =0 ) reduces final return by 
+
+∼ 1.5 points. 17 Preprint Table 7: Hyperparameter sensitivity of CoTA-DT on Point-Robot (Mixed dataset, zero-shot test return, mean ±std over 5 seeds). Default config: λ1=0 .1, λ2=0 .5, λ3=1 .0, λ4=0 .1, α=1 .0, H=20 ,LoRA rank r=8 , κβ init = 0 .07 .
+
+Hyperparameter Value Test return ↑
+
+Default (CoTA-DT) — −7.9±0.4
+
+λ2 (Lalign weight, default 0.5)
+
+0.0 −12 .3±0.5
+
+0.1 −10 .1±0.6
+
+1.0 −8.4±0.5
+
+2.0 −9.7±0.7
+
+λ4 (LQ weight, default 0.1)
+
+0.0 −10 .2±0.2
+
+0.05 −8.5±0.4
+
+0.2 −8.2±0.5
+
+0.5 −9.1±0.6
+
+λ1 (LNCE weight, default 0.1)
+
+0.0 −10 .9±0.1
+
+0.05 −8.4±0.4
+
+0.2 −8.3±0.5
+
+Context horizon H (default 20 )
+
+5 −10 .5±0.8
+
+10 −8.7±0.6
+
+40 −8.0±0.4
+
+LoRA rank r (default 8)
+
+4 −8.6±0.5
+
+16 −8.0±0.4
+
+32 −8.2±0.5
+
+κβ init (default 0.07 )
+
+0.01 −9.4±0.6
+
+0.10 −8.1±0.4
+
+0.50 −9.8±0.7
+
+# E ADDITIONAL ABLATIONS AND ROBUSTNESS 
+
+E.1 BACKBONE LLM CHOICE 
+
+Table 8 compares four backbone choices on Point-Robot and Meta-World Mixed. We vary the backbone and its tokenizer while keeping the LoRA rank and training settings fixed. The trends are consistent with related work: a larger backbone helps, but possibly with diminishing returns. Point-Robot performance varies little across the four models ( −8.5 to −7.9). On Meta-World, the separation is more pronounced relative to seed variation: GPT-2 small obtains 1186 .7 ± 29 .6,while LLaMA-3.2 1B reaches 1292 .5 ± 28 .2. LLaMA-3.2 1B has the highest mean return on both benchmarks with a 0.85 M-parameter LoRA adapter, so we use it as the default. Table 8: Effect of LLM backbone on Point-Robot and Meta-World Mixed (zero-shot test return). Point-Robot results are mean ±std over 5 seeds.                                            
+
+> Backbone # params Hidden dim Trainable LoRA Pt-Robot ↑Meta-World ↑
+> GPT-2 small (Radford et al., 2019) 117M 768 0.39M −8.5±0.61186 .7±29 .6
+> Qwen-2.5 0.5B (Yang et al., 2024) 0.5B 1024 0.55M −8.2±0.51228 .4±35 .2
+> Qwen-2.5 1.5B (Yang et al., 2024) 1.5B 1536 0.95M −8.0±0.41271 .1±31 .8
+> LLaMA-3.2 1B (Touvron et al., 2023) 1.2B 2048 0.85M −7.9±0.41292 .5±28 .2
+
+E.2 TASK DESCRIPTION ROBUSTNESS 
+
+To probe how much CoTA-DT relies on the specific wording of the task description, we re-ran Point-Robot Mixed with three description styles: • Minimal: only the goal coordinates, e.g. “goal (−0.75 , 0.93) ”.18 Preprint • Standard: our default template, e.g. “Navigate to position (−0.75 , 0.93) , distance 1.19 , heading northwest.” 
+
+• Noisy: the standard template with a 5-token random distractor inserted, e.g. “Navigate to position 
+
+(−0.75 , 0.93) , the weather is nice today, distance 1.19 , heading northwest.” 
+
+Table 9: Robustness of CoTA-DT to description style on Point-Robot Mixed (zero-shot, 5 seeds).                 
+
+> Description style Test return ↑∆vs. Standard Minimal −8.8±0.5−0.9
+> Standard (default) −7.9±0.4—Noisy −11 .5±0.5−3.6
+
+The performance is remarkably stable: the spread across description styles is well within the seed-to-seed standard deviation of related baselines. We attribute this to the LLM backbone, which is robust to surface-form variation, and to the contrastive objective, which only requires the text embedding to be discriminative rather than literal. The noisy variant is worse than minimal because the distractor token shifts the LLM-derived embedding without adding task-relevant information. E.3 DECISION -BACKBONE PRETRAINING CONTROLS .We examine whether the gains require a pretrained LLM decision backbone. The “w/o LLM” configuration trains a 0.6M-parameter decision transformer from scratch and uses a separate pretrained CLIP ViT-B/32 text encoder. A second control retains the 1B backbone architecture and LoRA adapter but randomly initializes and freezes the backbone. The full CoTA-DT model uses the pretrained shared backbone. Table 10: Decision-backbone controls on Mixed datasets in the zero-shot setting. Results are mean ±std.                                      
+
+> Configuration Text encoder Seeds Pt-Robot ↑Meta-World ↑
+> T2DA-T (reproduced) Pretrained CLIP 5−8.7±0.31103 .5±36 .3
+> w/o LLM (small DT) Separate pretrained CLIP 5−8.4±0.51218 .2±37 .6
+> Random-init 1B + LoRA Random-init shared backbone 5−11 .2±0.6916 .8±36 .0
+> CoTA-DT (full) Pretrained shared back-bone 5−7.9±0.41292 .5±28 .2
+
+The small DT paired with a pretrained CLIP text encoder reaches 1218 .2 ± 37 .6 on Meta-World, retaining about 61% of CoTA-DT’s improvement over the reproduced T2DA-T despite training its decision backbone from scratch. It also comes close to the full model on Point-Robot ( −8.4 ± 0.5
+
+versus −7.9 ± 0.4). In contrast, the much larger random-init 1B + LoRA variant reaches only 
+
+916 .8 ± 36 .0 on Meta-World. One possible explanation is that CLIP provides a useful task signal to the trainable small DT, whereas LoRA must adapt frozen random features for both language and decision modeling in the 1B control. 
+
+# F FEW -S HOT ADAPTATION MODES 
+
+The few-shot results in Table 2 of the main paper use our default mode ( finetune with k=5 ), where k
+
+denotes the number of target-task support trajectories. We compare four modes that progressively add rollout-time latent updates, language-grounded inversion, and policy fine-tuning: • static : initialise z = ¯ z from the support trajectories and keep it fixed throughout the rollout; • online : initialise z = ¯ z and refresh it from the agent’s rollout history after collecting H transitions; • inversion only : refine ¯z into z0 via CLIP-space optimisation (Eq. 9), then use the same rollout-time updates as online , without updating the policy parameters; 19 Preprint • finetune (default): use the same inversion and rollout-time updates as inversion only , and addition-ally fine-tune θL and fact for 100 Adam steps on the support set with z0 held fixed. Table 11: Few-shot return with different adaptation modes on Point-Robot and Meta-World ( Mixed ,mean over 5 seeds). Best per column in bold .                                 
+
+> Point-Robot ↑Meta-World ↑
+> Mode k=3 k=5 k=10 k=3 k=5 k=10
+> static −9.2−8.6−8.91281 .31295 .11290 .5
+> online −9.2−8.6−8.91295 .81318 .01325 .2
+> inversion only −8.4−6.9−7.21349 .11384 .71396 .9
+> finetune −8.1−6.9−7.31352 .61402 .81395 .3
+
+Three observations: (i) Static and online coincide on Point-Robot, whose episode length equals the context horizon ( T = H = 20 ), leaving no subsequent action to condition on a refreshed latent. On the longer-horizon Meta-World tasks, online updates improve return over static at every tested k,suggesting that newly collected transitions provide useful task information during rollout. (ii) Adding language-grounded inversion improves on online across both environments and all three support sizes. At k=5 , it raises Meta-World return from 1318 .0 to 1384 .7 without updating the policy parameters, highlighting the value of a task-description-aligned initial latent. (iii) Policy fine-tuning adds a further 
+
+18 .1 return on Meta-World at k=5 , but leaves the Point-Robot mean unchanged; at k=10 , inversion only slightly exceeds finetune on both environments. Fine-tuning is therefore an optional source of improvement rather than a prerequisite for strong few-shot results. At the default k=5 , inversion only 
+
+already reaches −6.9 on Point-Robot and 1384 .7 on Meta-World, above the corresponding T2DA-T few-shot returns in Table 2. 
+
+# G VISUALISATION ANALYSIS 
+
+Beyond the qualitative t-SNE visualisation in Fig. 3 of the main paper, we quantify the alignment by computing the rank-1 retrieval accuracy of the cross-modal nearest neighbour ( ¯zi ↔ wi) on Point-Robot. The accuracy reaches 90 % on Expert , 88 % on Medium , and drops to 82% on the het-erogeneous Mixed dataset. We attribute the Mixed-dataset drop to the bimodal trajectory distribution (medium ∪ expert) producing a less concentrated ¯zi, which is itself an empirical finding about how dataset heterogeneity affects representation tightness. The same trend—highest retrieval accuracy on Expert, lowest on Mixed—also holds on Meta-World ( 85% / 81% / 78% ), confirming the observation is not Point-Robot-specific. 
+
+# H ALGORITHM SUMMARY 
+
+We present four algorithms that together describe CoTA-DT: (i) multi-perspective representation learning (Algorithm 1); (ii) task-aware policy learning (Algorithm 2); (iii) zero-shot deployment via language-grounded inversion (Algorithm 3); and (iv) few-shot adaptation via data-grounded initialisation and lightweight fine-tuning (Algorithm 4). 20 Preprint 
+
+Algorithm 1 CoTA-DT — Multi-perspective representation learning 
+
+Require: Per-task offline data {D i}Ni=1 ; task descriptions {hi}Ni=1 ; frozen LLM backbone θbase 
+
+Require: Loss weights (λ1, λ 2, λ 3, λ 4, α ); warm-up epochs Nwarm ; sub-trajectory horizon H; latent dim dz ; alignment dim da
+
+1: Initialise context encoder Eϕ, LoRA adapter θL, prediction heads frew , f dyn , f Q, continuous-token projectors gz , g s, g a, g R, alignment heads Proj z , Proj h, and learnable temperature κβ
+
+2: for epoch = 1 , . . . , N do 
+
+3: for each minibatch of tasks I do 
+
+4: // (1) Trajectory branch 
+
+5: for each task i ∈ I do 
+
+6: Sample anchor sub-trajectory τt−H:t from Di; encode z(i) 
+
+> t
+
+= Eϕ(τt−H:t)
+
+7: Sample positive τ + (nearby segment); encode z+,(i) 
+
+> t
+
+= Eϕ(τ +)
+
+8: Sample m sub-trajectories from Di; compute task-mean ¯zi = 1
+
+> m
+
+Pmj=1 Eϕ(τ ij )
+
+9: end for 
+
+10: Treat in-batch latents from other tasks as negatives {z− 
+
+> k
+
+} for InfoNCE 
+
+11: // (2) Language branch 
+
+12: For each i ∈ I : vi = LLM θbase ,θ L (hi)
+
+13: // (3) Alignment 
+
+14: ui = Proj z (¯ zi)/∥Proj z (¯ zi)∥2, wi = Proj h(vi)/∥Proj h(vi)∥2
+
+15: Compute similarity matrix Sij = u⊤ 
+
+> i
+
+wj /κ β for i, j ∈ I 
+
+16: // (4) Task-conditioned world model and Q learning 
+
+17: For each transition (st, a t, r t, s t+1 ), predict ˆrt, ˆst+1 , ˆRt via shared LLM +θL on tokens 
+
+[gz (z(i) 
+
+> t
+
+); gs(st); ga(at)] 
+
+18: // (5) Compute losses 
+
+19: LNCE ← InfoNCE over (z(i) 
+
+> t
+
+, z +,(i) 
+
+> t
+
+, {z− 
+
+> k
+
+}) with temperature κα
+
+20: Lalign ← symmetric cross-entropy over Sij (Eq. 4) 
+
+21: Lrew ← E[∥ˆrt − rt∥22], Ldyn ← E[∥ˆst+1 − st+1 ∥22], LQ ← E[∥ ˆRt − Rt∥22]
+
+22: L ← λ1LNCE + ⊮[epoch > N warm ] λ2Lalign + λ3(Lrew + αLdyn ) + λ4LQ
+
+23: Update Eϕ, θ L, Proj z , Proj h, g ∗, f rew , f dyn , f Q, κ β via Adam 
+
+24: end for 
+
+25: end for 
+
+26: Output: trained Eϕ, θ L, Proj z , Proj h, g ∗
+
+Algorithm 2 CoTA-DT — Task-aware policy learning 
+
+Require: Representation-learning checkpoint {Eϕ, θ L, g ∗}; per-task offline data {D i}Ni=1 ; sub-trajectory horizon H; total steps Ttrain 
+
+1: Initialise action head fact ; load θL, E ϕ, g ∗ from the representation checkpoint 
+
+2: for step = 1 , . . . , T train do 
+
+3: Sample task i ∼ U (1 , N ) and trajectory τ ∼ D i
+
+4: Sample a DT context window ( ˆR1: Tc , s 1: Tc , a 1: Tc ) of length Tc from τ
+
+5: Compute task latent z = Eϕ(τt−H:t) from the most recent H steps (zero-padded if needed); held fixed within the window 
+
+6: Forward DT with input [z, g R( ˆR1), g s(s1), g a(a1), . . . ] via LLM +θL and head fact 
+
+7: Lpolicy ← negative log-likelihood of predicted vs. ground-truth actions (Eq. 8) 
+
+8: Update θL, f act , g ∗ via AdamW with gradient clipping 
+
+9: end for 
+
+10: Output: adapted θL, f act , g ∗
+
+21 Preprint 
+
+Algorithm 3 CoTA-DT — Zero-shot adaptation 
+
+Require: Trained model {Eϕ, θ L, Proj z , Proj h, f act , g ∗}; target task description h⋆; target return 
+
+ˆR0; episode length T ; sub-trajectory horizon H; inversion steps Kinv , inversion lr η
+
+1: // Language-grounded latent initialisation 
+
+2: Encode description: v⋆ = LLM θbase ,θ L (h⋆)
+
+3: Project and normalise: w⋆ = Proj h(v⋆)/∥Proj h(v⋆)∥2
+
+4: Initialise z ← 0 ∈ Rdz
+
+5: for j = 1 , . . . , K inv do 
+
+6: u ← Proj z (z)/∥Proj z (z)∥2
+
+7: Linv ← 1 − u⊤w⋆
+
+8: Update z via one Adam step on ∇z Linv with learning rate η
+
+9: end for 
+
+10: Set z0 ← z
+
+11: // Self-adaptive rollout 
+
+12: Receive initial state s1; initialise rollout history H ← ∅ 
+
+13: for t = 1 , . . . , T do 
+
+14: if t ≤ H then 
+
+15: zt ← z0 {insufficient rollout history, use language-grounded latent} 
+
+16: else 
+
+17: zt ← Eϕ(τt−H:t−1) from H {re-encode from rollout} 
+
+18: end if 
+
+19: Predict action: at ∼ πθ (· | ˆR≤t, s ≤t, a <t ; zt)
+
+20: Execute at, observe rt, s t+1 ; update RTG ˆRt+1 ← ˆRt − rt; append (st, a t, r t) to H
+
+21: end for Algorithm 4 CoTA-DT — Few-shot adaptation 
+
+Require: Trained model {Eϕ, θ L, Proj z , Proj h, f act , g ∗}; target task description h⋆; support set D⋆
+
+of size k; target return ˆR0; inversion steps Kinv , inversion lr η; fine-tune steps Kft , fine-tune lr 
+
+ηft 
+
+1: // (1) Data-grounded latent initialisation 
+
+2: Sample sub-trajectories C = {τ1, . . . , τ |C| } from D⋆
+
+3: Compute aggregated latent: ¯z = 1
+
+> |C|
+
+P  
+
+> τ∈C
+
+Eϕ(τ )
+
+4: Encode description: v⋆ = LLM θbase ,θ L (h⋆), w⋆ = Proj h(v⋆)/∥Proj h(v⋆)∥2
+
+5: Initialise z ← ¯z {data-grounded init in place of zero init} 
+
+6: for j = 1 , . . . , K inv do 
+
+7: u ← Proj z (z)/∥Proj z (z)∥2
+
+8: Update z via one Adam step on ∇z (1 − u⊤w⋆) with learning rate η
+
+9: end for 
+
+10: Set z0 ← z
+
+11: // (2) Light-weight policy fine-tune 
+
+12: for j = 1 , . . . , K ft do 
+
+13: Sample DT window ( ˆR1: Tc , s 1: Tc , a 1: Tc ) from D⋆
+
+14: Forward policy with z = z0 held fixed; compute Lpolicy (Eq. 8) 
+
+15: Update θL, f act via Adam at lr ηft (all other parameters frozen) 
+
+16: end for 
+
+17: // (3) Self-adaptive rollout 
+
+18: Run the self-adaptive rollout phase of Algorithm 3 using the fine-tuned policy and the data-grounded z0
+
+22

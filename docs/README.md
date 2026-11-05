@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-11-04</span>
+      <span class="dpr-home-dashboard-kicker">2026-11-05</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 18 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-11-04 00:19:24 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-11-05 00:18:00 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今天精读 5 篇，重点关注贝叶斯离线多智能体强化学习与潜世界模型，以及基于子目标规划与图正则化信用分配的智能体强化学习。</p>
-<p>两篇 8.0 分论文分别指向两个方向：用潜世界模型提升离线多智能体学习的稳定性，以及用图结构改进长程子目标的信用分配。</p>
-<p>普通读者可以先从这两篇的摘要与方法框架入手，再顺着“世界模型”和“信用分配”两条线索追踪后续工作。</p>
+<p>今日从18篇论文中精读6篇、速读12篇，重点锁定RLVR训练中的“首要偏差”与跨3D游戏世界的分层目标动作学习。最值得看的是9.0分的《On the Primacy Bias in RLVR Training》，其次是8.0分的AceAction-5M；速读中的奖励缩放与交互式HTML生成也可按兴趣跟进。普通读者可先读9.0分这篇建立问题意识，再结合AceAction-5M理解分层目标如何落地。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models">Bayesian Offline Multi-Agent Reinforcement Learning with Latent World Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning">SGR-OPSD: Learning from Subgoal Plans with Graph-Regularized Credit Assignment for Agentic Reinforcement Learning</span></li><li><span class="dpr-home-dashboard-paper-title" title="RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs">RLiD: Reinforcement Learning in the Decision Plane for Language Agents and LLMs</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="On the Primacy Bias in RLVR Training">On the Primacy Bias in RLVR Training</span></li><li><span class="dpr-home-dashboard-paper-title" title="AceAction-5M: Hierarchical Goals for Generalist Action Learning Across 3D Game Worlds">AceAction-5M: Hierarchical Goals for Generalist Action Learning Across 3D Game Worlds</span></li><li><span class="dpr-home-dashboard-paper-title" title="Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards">Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ReSI-Math: Exploring Recoverable Capability Frontiers for Efficient Reasoning Improvement">ReSI-Math: Exploring Recoverable Capability Frontiers for Efficient Reasoning Improvement</span></li><li><span class="dpr-home-dashboard-paper-title" title="Density-Aware Reward Scaling: A Reinforcement Learning Framework for Reward-Proportional Sampling">Density-Aware Reward Scaling: A Reinforcement Learning Framework for Reward-Proportional Sampling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Catalyzing Interactive HTML Generation Capabilities via High-Fidelity Reinforcement Learning">Catalyzing Interactive HTML Generation Capabilities via High-Fidelity Reinforcement Learning</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>12</strong></span></div>
 </section>
 </div>
 

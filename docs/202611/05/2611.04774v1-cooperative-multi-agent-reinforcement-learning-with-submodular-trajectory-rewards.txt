@@ -1,0 +1,2600 @@
+Title: Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards
+
+URL Source: https://arxiv.org/pdf/2611.04774v1
+
+Published Time: Wed, 04 Nov 2026 02:57:56 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+Yasaman Zolfimoselo Nikolas Geroliminis Maryam Kamgarpour 
+
+EPFL, Switzerland EPFL, Switzerland EPFL, Switzerland 
+
+## Abstract 
+
+We study cooperative multi-agent reinforce-ment learning with decoupled dynamics and a monotone submodular reward function over joint trajectories. Due to the non-additive reward, an optimal policy may depend on the history of all agents. This dependence makes exact optimization exponential in the horizon and the number of agents. To overcome this challenge while retaining theoretical guaran-tees, we introduce pre-window curvature cm,which quantifies how states visited more than 
+
+m steps earlier reduce current marginal gains. Using this curvature to control the error from restricting the policy of each agent to depend only on its last m + 1 states, we propose a greedy algorithm that exploits the decoupled dynamics to optimize local policies sequen-tially. For fixed m, the algorithm achieves a 1−cm 
+
+> 2−cm
+
+approximation guarantee up to es-timation error, and its computation time is polynomial in the number of agents and the horizon. We recover the known 1 /2-factor approximation for time-additive rewards and obtain an approximation factor no smaller than the known total-curvature bound for a single agent. We formulate multi-agent traffic monitoring as an example of this framework and evaluate our algorithm on it. 
+
+## 1 INTRODUCTION 
+
+In standard reinforcement learning (RL), a single agent maximizes an expected sum of stage rewards, which depend on the agent’s current state and action. Ex-tending the single-agent formulation, cooperative multi-agent reinforcement learning (MARL) studies a team of agents that coordinate their actions to maximize a 
+
+Emails: {yasaman.zolfimoselo, nikolas.geroliminis, maryam.kamgarpour}@epfl.ch 
+
+common objective. Each stage reward then depends on the agents’ current joint state and action. A further simplifying assumption is that each stage reward is a sum of the agents’ local rewards [19]. These two forms of additivity separate rewards over time and across agents, respectively. However, in many cooperative applications, the objective is not additive over time or across agents. Without these forms of additivity, an optimal policy may depend on the history of all agents. In this paper, we consider a common monotone submod-ular reward defined over the visits along the trajectories of all agents. A visit is a time-state pair ( t, s ) indicating that at least one agent is in state s at time t. Submod-ularity captures diminishing returns both across agents and over time. This setting is relevant to informative sensing and path planning [10, 22], cooperative cover-age and biodiversity monitoring [16], and multi-agent persistent monitoring [2, 5, 20]. Traffic monitoring with multiple unmanned aerial vehicles (UAVs) [9, 12, 15] is a form of persistent monitoring that we use as a running example. In this example, monitoring a road adds less value if it was monitored recently or if another UAV monitors it at the same time. To study such re-wards, we formulate a submodular multi-agent Markov decision process (MDP) with decoupled dynamics, in which the next state of each agent depends only on its own current state and action. 
+
+1.1 Related Work Submodular maximization and path plan-ning. The greedy algorithm achieves a (1 − 1/e )-approximation for maximizing a monotone submodular set function under a cardinality constraint [14]. This guarantee improves when the function has total curva-ture c < 1 [6]. These results were extended to settings where the objective function depends on the order of selection [13, 23, 25]. In all these works, removing ele-ments from a feasible selection leaves it feasible. In our setting, visits must form trajectories consistent with the dynamics, so removing a visit can make a feasible selec-tion infeasible. Informative path planning maximizes 1arXiv:2611.04774v1 [cs.LG] 3 Nov 2026 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+submodular objectives under such constraints [3, 21]. For multiple robots, sequential allocation yields a team guarantee when each robot’s marginal problem under fixed predecessor policies is solved optimally or with an approximation guarantee [1, 21, 22]. These planning models assume deterministic transition dynamics. Un-der stochastic dynamics, agents must optimize policies that account for uncertain next states. 
+
+Submodular RL. Submodular RL extends these planning models to stochastic dynamics. In this setting, an agent maximizes an expected monotone submodular reward over visits along its trajectory [17, 24]. Global RL generalizes submodular RL to broader classes of trajectory rewards and proposes semi-gradient meth-ods for their optimization [7]. For submodular re-wards, constant-factor approximation is generally in-tractable [17], but a (1 − c)-factor approximation is possible with total curvature c < 1 [7, 17]. These re-sults are limited to a single agent. Treating a team as one agent makes the joint state space exponential in the number of agents. Moreover, diminishing returns across agents at the same time step can make the (1 −c)guarantee vacuous even for time-additive rewards, as we show in Section 3.1. 
+
+Submodular MARL. In the multi-agent setting, Chen et al. [4] consider time-additive rewards that are monotone submodular across agents at each stage. Under known decoupled dynamics, they optimize the policies sequentially and obtain a 12 -approximation in time polynomial in the number of agents. Liu et al. [11] study stage rewards defined as marginal gains of a submodular trajectory reward, but their guarantee requires every choice to remain feasible regardless of earlier actions. Hence, the guarantees of Chen et al. [4] and Liu et al. [11] do not cover rewards with diminishing returns over time when the dynamics constrain future visits. 
+
+Multi-agent persistent monitoring. Persistent monitoring coordinates mobile agents to revisit impor-tant locations [2, 5]. Closest to our setting, Rezazadeh and Kia [20] consider rewards that grow with the time since the last visit and plan over a receding horizon under deterministic dynamics. Their 12 -factor approxi-mation is relative to the optimum within each planning horizon, not to the full-horizon optimal return. To our knowledge, no prior work gives a polynomial-time algorithm with a curvature-dependent guarantee for MARL with submodular trajectory rewards when stochastic dynamics constrain future visits. Our formu-lation addresses this setting under decoupled dynamics and contains the settings of Chen et al. [4] and Prajapat et al. [17] as special cases, as Remark 1 shows. 
+
+1.2 Contributions 
+
+Building on the above past work, our contributions are summarized as follows. 1. We introduce a new notion of curvature called pre-window curvature cm, which measures the maxi-mum relative reduction in marginal gains caused by visits before an m-step window. 2. Using this notion of curvature, we modify the objective so that stage rewards depend only on the visits of all agents in the last m + 1 steps. Jointly maximizing this objective yields a policy that achieves a (1 − cm)-approximation of the op-timal return. 3. We develop Greedy Windowed Policy Optimiza-tion (GWPO), which sequentially optimizes each agent’s policy using marginal rewards based on complete predecessor trajectories and its own m-step history. For fixed m, it runs in polynomial time and achieves the 1−cm 
+
+> 2−cm
+
+approximation guar-antee of Theorem 2 relative to the optimal global history-dependent return. 4. We formulate multi-UAV traffic monitoring as a submodular multi-agent MDP, capturing diminish-ing returns from repeated monitoring across UAVs and time, and we evaluate GWPO in this setting. 
+
+## 2 PROBLEM SETTING 
+
+In this section, we first introduce the notation. We then recall submodularity and curvature, which our analysis builds on. Finally, we define the submodular multi-agent MDP and the optimization problem, and illustrate the framework through traffic monitoring. 
+
+2.1 Notation 
+
+Throughout the paper, we write [ n] = {1, . . . , n } for 
+
+n ≥ 1, and [0] = ∅. Bold symbols denote joint quan-tities over the N agents. For example, x denotes (x1, . . . , x N ). For a function g on a product set X × Y 
+
+and z = ( x, y ), we write g(z) and g(x, y ) interchange-ably. Let D(X ) denote the probability simplex over a finite set X . Fix a set S. For a set B ⊆ { 0, 1, 2, . . . }×S 
+
+and integers t and t′, let 
+
+Bt:t′ = {(u, s ) ∈ B : t ≤ u ≤ t′}. (1) For t′ = t, we write Bt for Bt:t. For a set Bi of agent 
+
+i, we write Bi,t :t′ , and for a tuple B = ( B1, . . . , B N )of such sets, we apply this definition componentwise, 
+
+Bt:t′ = ( B1,t :t′ , . . . , B N,t :t′ ). 2Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+2.2 Submodularity and Curvature 
+
+We recall monotone submodular functions and their total curvature. 
+
+Definition 1 (Monotone submodular function) . Let 
+
+V be a finite ground set and let F : 2 V → R≥0 satisfy 
+
+F (∅) = 0. For X, B ⊆ V , the marginal gain of X given 
+
+B is ∆( X | B) = F (X ∪ B) − F (B),
+
+abbreviated as ∆( x | B) when X = {x}. The function 
+
+F is monotone if ∆( x | B) ≥ 0 for every B ⊆ V and 
+
+x ∈ V . It is submodular if ∆( x | B) ≥ ∆( x | B′) whenever B ⊆ B′ and x ∈ V .
+
+Submodularity states that marginal gains decrease as 
+
+B grows, but it does not quantify how much ∆( x | B)can decrease relative to ∆( x | ∅ ) = F ({x}). Total curvature measures this worst-case relative decrease. 
+
+Definition 2 (Total curvature) . The total curvature of a normalized monotone submodular function F is 
+
+c = 1 − min  
+
+> B⊆V , x ∈V\ BF({x})>0
+
+∆( x | B)
+
+F ({x}) .
+
+For every B ⊆ V and x ∈ V \ B, ∆( x | B) ≥ (1 −
+
+c)F ({x}), including when F ({x}) = 0. An additive function has c = 0. At the other extreme, c = 1 occurs exactly when some element with F ({x}) > 0 has zero marginal gain in the presence of a set of other elements. 
+
+2.3 Submodular Multi-Agent MDP 
+
+With submodularity and curvature defined, we now introduce the submodular multi-agent MDP on which our method builds. 
+
+Definition 3 (Submodular multi-agent MDP) . A sub-modular multi-agent MDP is specified by the tuple 
+
+⟨N, H, S, A, {Pi}i∈[N ], {ρi}i∈[N ], F ⟩,
+
+where N denotes the number of agents and H is the horizon length. The finite state space of each agent is S,also called the local state space. The joint state space is S = SN . The finite action space of each agent is A,and the joint action space is A = AN . The transition dynamics of agent i are Pi = ( Pi, 0, . . . , P i,H −1), where 
+
+Pi,t : S × A → D (S) and Pi,t (· | s, a ) is the distribution of its state at time t + 1. The transition dynamics are decoupled, so the joint transition dynamics P =(P1, . . . , P N ) give the joint next-state distribution 
+
+Pt(s′ | s, a) = Y 
+
+> i∈[N]
+
+Pi,t (s′ 
+
+> i
+
+| si, a i).
+
+The initial state distribution of agent i is ρi ∈ D (S). Initial states are independent, so ρ = Q  
+
+> i∈[N]
+
+ρi. The common reward is a monotone submodular function 
+
+F : 2 V → R≥0 over trajectories . Its ground set V =
+
+{0, . . . , H } × S contains all possible visits, with Vt:t′
+
+defined as in (1). We assume that the reward function satisfies F (B) > 0 for at least one B ⊆ V .Agent i’s trajectory is the set of its visits, 
+
+τi = {(t, s i,t ) : 0 ≤ t ≤ H} ⊆ V ,
+
+and the joint trajectory is τ = ( τ1, . . . , τ N ). In set operations we identify a tuple of trajectories with the union of its components. Using the notation in (1), this gives 
+
+F (τ t:t′ ) := F
+
+ [ 
+
+> i∈[N]
+
+τi,t :t′
+
+
+
+.
+
+For example, if τ1 = {(0 , s 1)} and τ2 = {(0 , s 2)}, then 
+
+τ = ( τ1, τ 2) is treated as {(0 , s 1), (0 , s 2)} whenever it appears in a set operation. The formulation and analysis extend to monotone sub-modular rewards on the ground set {0, . . . , H −1}×S × A by including actions in the trajectories. For simplic-ity, we present the results using V = {0, . . . , H } × S .
+
+Histories and policies. For a memory length m ∈{0, . . . , H } and a time t ∈ { 0, . . . , H }, the m-step his-tory of agent i is 
+
+hmi,t = ( si, max( t−m, 0) , . . . , s i,t −1) ∈ H mt ,
+
+where Hmt = Smin( t,m ). It contains up to m states of agent i before time t. The joint m-step history is 
+
+hmt = ( hm
+
+> 1,t
+
+, . . . , h mN,t ) ∈ Hmt , where Hmt = ( Hmt )N .For m = H, the current state si,t and the history hHi,t 
+
+together form the full history ( si, 0, . . . , s i,t ). For a memory of length m, a global policy of agent i is a sequence πi = ( πi, 0, . . . , π i,H −1) with πi,t : S × Hmt →D(A), and Π m denotes the class of such policies. Here, 
+
+πi,t (a | st, hmt ) denotes the probability that agent i
+
+takes action a ∈ A at time t given st and hmt . A local policy of agent i instead depends only on its local state and m-step history ( si,t , h mi,t ), with πi,t : S × H mt →D(A). We denote the class of such policies by Π loc  
+
+> m
+
+. A joint policy is denoted by π = ( π1, . . . , π N ), where πi
+
+is a global or local policy of agent i. The joint policy at time t is πt = ( π1,t , . . . , π N,t ), and the actions of the agents are independent given ( st, hmt ), 
+
+πt(a | st, hmt ) = Y 
+
+> i∈[N]
+
+πi,t (ai | st, hmt ). (2) We use the notation Πm and Πloc  
+
+> m
+
+for the sets of joint global and joint local policies with memory m, respec-tively. The cases m = 0 and m = H give global Markov and global history-dependent policies. 3Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+Problem statement. Given a submodular multi-agent MDP, our goal is to find a joint policy π ∈ ΠH
+
+that maximizes the expected reward: 
+
+J(π) = Eπ,ρ,P [F (τ )] , π∗ ∈ arg max 
+
+> π∈ΠH
+
+J(π). (3) The expectation is taken over joint trajectories τ in-duced by the policy π under the initial distribution 
+
+ρ and the transition dynamics P. We abbreviate the expectation as Eτ ∼π in the rest of the paper. Similarly, 
+
+Eτi∼πi denotes expectation under agent i’s local policy 
+
+πi, with Pi and ρi implicit. We write J∗ = J(π∗) for the optimal value of (3). Restricting π∗ to the product form (2) does not reduce J∗, because an optimal policy of this form exists (Lemma 2). In this work, we assume known transition dynamics 
+
+{Pi}i∈[N ] and initial distributions {ρi}i∈[N ]. During policy optimization, we also assume that F (B) can be evaluated exactly for every B ⊆ V .
+
+Remark 1. For N = 1, our formulation reduces to rein-forcement learning with a submodular reward over the agent’s trajectory [17]. Chen et al. [4] instead consider a multi-agent setting, but their objective is a sum of monotone submodular stage rewards f : 2 S×A → R≥0,each evaluated on the state-action pairs of all agents at one time step. Their setting is the special case of our framework with ground set {0, . . . , H − 1} × S × A and 
+
+F (B) = 
+
+> H−1
+
+X
+
+> t=0
+
+f  {(s, a ) : ( t, s, a ) ∈ Bt}.
+
+2.4 Traffic-Monitoring Example 
+
+We illustrate the submodular multi-agent MDP with a traffic-monitoring example used throughout the paper. In this example, the N agents are moving UAVs that monitor an urban road network over a horizon of H
+
+time steps. The network is an M × L grid with road set E. The local state s ∈ S of each UAV is its position at a grid node, and its actions move it to an adjacent node or keep it in place. The transition dynamics and initial state distributions of the UAVs are decoupled, since the UAVs move independently and their initial positions are drawn independently. From position s, a UAV monitors the set C(s) ⊆ E of roads connected to 
+
+s. Figure 1 shows C(s) for five positions. Monitoring each road e ∈ E provides information such as its traffic density and occupancy [12]. We call the added value of this information the importance of the road. Before road e is first monitored, its importance takes its maximum value we ≥ 0. When a UAV mon-itors a road e, the importance of the road drops to zero. Its importance then recovers over time as the information becomes outdated. After ℓ time steps, its 
+
+> s1
+> s2
+> s3
+> s4
+> s5
+
+Figure 1: Part of the road grid with five UAV positions 
+
+s1, . . . , s 5. For i ≤ 4, the roads C(si) monitored from 
+
+si share the color of si. Each dashed road in C(s5) is colored, so it is also monitored from one of s1, . . . , s 4.importance is weαℓ, where αℓ = 1 − e−βℓ and β > 0 is the recovery rate. For a set B ⊆ V and a road e ∈ E , the set of times at which road e is monitored by visits in B is 
+
+Te(B) = {t : ( t, s ) ∈ B for some s ∈ S with e ∈ C (s)}.
+
+For t ∈ Te(B), let ℓe(t) = t − max {t′ ∈ Te(B) : t′ < t }
+
+be the number of time steps since road e was previously monitored. If t is the first time in Te(B), we set ℓe(t) = 
+
+∞ and α∞ = 1. The traffic-monitoring reward is 
+
+F (B) = X
+
+> e∈E
+
+X
+
+> t∈Te(B)
+
+we αℓe(t). (4) Thus, F (τ ) is the total value of the information col-lected by the fleet along its joint trajectory τ , and F
+
+has diminishing returns across agents and over time. For example, when two UAVs monitor a road at the same time, the second UAV adds no new information about that road. To complete the formulation, we show in Appendix C that the reward (4) is monotone submodular for a general class of recovery profiles αℓ,and this class includes αℓ = 1 − e−βℓ for every β > 0. 
+
+## 3 HARDNESS AND CURVATURE 
+
+To further motivate our results, we first explain why finding a policy that maximizes J(π) in (3) is compu-tationally hard. This hardness justifies restricting the class of rewards to obtain constant-factor guarantees. We then introduce pre-window curvature cm, a prop-erty of the reward function that our approximation guarantees depend on. 
+
+3.1 Computational Hardness 
+
+Maximizing J poses two computational challenges. First, the single-agent case N = 1 admits no constant-factor approximation in polynomial time under stan-dard complexity assumptions, even with deterministic dynamics [17, Theorem 1]. For stochastic dynamics, 4Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+optimal policies of this case may require history depen-dence, and representing an arbitrary history-dependent policy can require space exponential in the horizon [17]. Second, the joint state and action spaces of N agents have sizes |S| N and |A| N , so optimizing directly over them takes time exponential in N .Constant-factor guarantees therefore require further restricting the class of rewards. For a single agent, existing algorithms achieve a (1 − c)-approximation for submodular trajectory rewards with total curvature c < 
+
+1 [7, 17]. For multiple agents under decoupled dynamics, Chen et al. [4] obtain a 1 /2-approximation for time-additive rewards without any curvature assumption. Our framework contains both settings, so we seek a single curvature condition that yields an approximation guarantee for our problem and recovers or improves the known guarantees when specialized to either setting. Total curvature does not achieve this goal in the multi-agent setting, since simultaneous visits can make c = 1 even for time-additive rewards. Consider Figure 1 with the reward (4) and we > 0 for every road e ∈ E . The visits ( t, s 1), . . . , (t, s 4) monitor every road in C(s5). Thus, x = ( t, s 5) has zero marginal gain given these four visits although F ({x}) = P 
+
+> e∈C (s5)
+
+we > 0, so 
+
+c = 1 regardless of the choice of αℓ in the reward (4). We therefore seek a condition that limits the effect of visits long before the current time on marginal gains. 
+
+3.2 Pre-Window Curvature 
+
+We quantify how visits before an m-step window de-crease the marginal gain of a current visit. For the ground set V of Definition 3, the m-step window at time 
+
+t is Vt−m:t−1 ⊆ V (Figure 4 in Appendix B). For fixed 
+
+xt ∈ V t and Z ⊆ V , adding visits B ⊆ V 0: t−m−1 to Z
+
+changes the marginal gain from ∆( xt | Z) to ∆( xt |
+
+B ∪ Z). We measure this decrease relative to ∆( xt | Z)and exclude cases with ∆( xt | Z) = 0, since monotonic-ity and submodularity then give ∆( xt | B ∪ Z) = 0. We define pre-window curvature as the largest relative decrease over all such xt, Z, and B.
+
+Definition 4 (Pre-window curvature) . For m ∈{0, . . . , H }, the pre-window curvature of F is 
+
+cm = 1 − min 
+
+> t, x t, B, Z
+> ∆( xt|Z)>0
+
+∆( xt | B ∪ Z)∆( xt | Z) , (5) where the minimum ranges over times t ∈ { 0, . . . , H },visits xt ∈ V t, and sets B ⊆ V 0: t−m−1 and Z ⊆ V .Pre-window curvature satisfies 0 ≤ cm ≤ c and is nonincreasing in m, with cH = 0. Moreover, cm = 0 whenever F is additive over time, even if overlap across agents makes c equal one. We prove these properties in Appendix B. Returning to the example of Section 2.4, we show that the reward (4) has pre-window curvature cm < 1 for every β > 0. Proposition 3 in Appendix C.2 gives the explicit expression cm = e−β(m+1) for 0 ≤ m < H .Without recovery ( β = 0), the reward (4) values only the first monitoring of each road and has cm = c = 1 for every m < H . In summary, cm < 1 describes rewards in which visits before an m-step window have a limited effect on the marginal gain of a current visit. 
+
+## 4 ALGORITHMS AND ANALYSIS 
+
+To address the challenges of Section 3.1, we first ap-proximate the objective J by the expected sum of stage rewards that depend only on the current joint state and the joint m-step history. The error of this ap-proximation is controlled by the pre-window curvature 
+
+cm, and the maximizer of this approximated objective achieves at least (1 − cm)J∗. However, maximizing this objective over joint policies is still exponential in the number of agents N . In Section 4.3, we therefore exploit the decoupled dynamics to optimize the policies of the agents sequentially in polynomial time for fixed 
+
+m. The resulting policies achieve a 1−cm 
+
+> 2−cm
+
+guarantee up to estimation error. 
+
+4.1 History-Augmented State 
+
+We introduce the history-augmented state used to de-fine the finite-horizon MDPs in the next two subsec-tions. We fix a memory length m ∈ { 0, . . . , H } and write hi,t = hmi,t for the histories of Section 2. At time 
+
+t, the history-augmented state of agent i is the pair ˜si,t = ( si,t , h i,t ), which lies in the augmented state space ˜St = S × H mt . By definition, policies in Π loc 
+
+> m
+
+and Πm are Markov policies on ˜ si,t and ˜ st ∈ ˜St = ˜SNt ,respectively. For πi ∈ Πloc  
+
+> m
+
+, the input of πi,t takes 
+
+| ˜St| = |S| min( t,m )+1 ≤ |S| m+1 values, compared with 
+
+|S| t+1 values for a full history. The augmented transition dynamics are Markov and remain decoupled across agents. In particular, the next state si,t +1 ∼ Pi,t (· | si,t , a i,t ) depends only on the state and action of agent i. The history updates deterministically by appending si,t to hi,t and dropping the oldest entry if its length exceeds m. Figure 6 in Appendix D.3 illustrates this update. Since the reward function F is defined on sets of vis-its, we map each history to the visits it determines. The map νt : Hmt → 2V assigns to each history 
+
+h = ( smax( t−m, 0) , . . . , s t−1) ∈ H mt the set of visits 
+
+νt(h) = (l, s l) : max( t − m, 0) ≤ l ≤ t − 1 .
+
+For a joint history, νt(ht) = S  
+
+> i∈[N]
+
+νt(hi,t ). Along a trajectory, νt(hi,t ) = τi,t −m:t−1 and νt(ht) = τ t−m:t−1.5Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+4.2 Windowed Objective 
+
+Our goal is to approximate Problem (3) by a finite-horizon MDP with additive stage rewards on the joint augmented states. We therefore need stage rewards 
+
+rt(˜ st) that depend only on the joint augmented state and whose expected sum under each policy π approxi-mates J(π). Adding the team visits one time step at a time decomposes F over time as 
+
+F (τ ) = 
+
+> H
+
+X
+
+> t=0
+
+∆( τ t | τ 0: t−1). (6) The term at time t is the marginal gain of the current team visits τ t given all earlier visits τ 0: t−1. The aug-mented state ˜ st determines only the part τ t−m:t−1 of these earlier visits, so this term is not always a stage reward on the augmented states. We therefore define the stage reward rt : ˜St → R≥0 as the marginal gain of the current team visits given only the visits νt(ht)within the m-step window, 
+
+rt(˜ st) = ∆  {(t, s i,t ) : i ∈ [N ]} | νt(ht). (7) Along a trajectory, rt(˜ st) = ∆( τ t | τ t−m:t−1). Replac-ing each term of Equation (6) by rt(˜ st) and taking the expectation gives the windowed objective ,Φm(π) = Eτ ∼π
+
+" HX
+
+> t=0
+
+rt(˜ st)
+
+#
+
+.
+
+Maximizing Φ m is thus a finite-horizon MDP problem on the augmented states. This problem has a determin-istic optimal policy that lies in Πm [18]. Algorithm 2 in Appendix D.3 computes such a policy. It remains to show that Φ m approximates J.
+
+Lemma 1. For every policy π,(1 − cm) Φ m(π) ≤ J(π) ≤ Φm(π).
+
+Proof sketch. The upper bound holds by submodularity, since rt considers only τ t−m:t−1 ⊆ τ 0: t−1. The lower bound holds by the definition of cm.
+
+Theorem 1. Let π′ ∈ arg max π∈ΠH Φm(π). Then 
+
+J(π′) ≥ (1 − cm) J∗.
+
+Proof sketch. The guarantee follows from Lemma 1 and the optimality of π′ for Φ m. We prove both results in Appendix D.2. For a single agent with m = 0, the windowed objective is the expected modular reward P 
+
+> x∈τ
+
+F ({x}) of Pra-japat et al. [17, Proposition 3], and our proof follows their argument with the factor 1 − c0 ≥ 1 − c. For 
+
+m = H, cH = 0 and Φ H = J, so the theorem yields an optimal policy. However, the MDP has up to |S| N (m+1) 
+
+joint augmented states per time step and |A| N joint actions. This exponential dependence on N motivates the sequential policy optimization introduced next. 
+
+4.3 Sequential Policy Optimization 
+
+We adopt the sequential policy optimization approach of prior work [4, 21] to avoid joint optimization. This approach optimizes the policy of one agent at a time while holding predecessor policies fixed. However, the guarantee of Chen et al. [4] cannot be applied directly to Φ m. The reason is that an added agent’s visits within the window can reduce current marginal gains, which violates the required monotonicity assumption. We illustrate this violation with an example in Ap-pendix D.4. Instead, we sequentially construct local stage re-wards using complete predecessor trajectories and each agent’s own m-step history. We then use pre-window curvature cm to bound the relative overestimate caused by ignoring the agent’s visits before the window, which allows a guarantee relative to the optimal global history-dependent return J∗.We optimize the policies of the agents in the order 1, . . . , N . For agent i, we fix the predecessor policies ¯π[i−1] = (¯ π1, . . . , ¯πi−1) computed so far. Even with fixed policies, predecessor trajectories τ [i−1] can be random because of stochastic dynamics or random initial states. We therefore take the expectation over 
+
+τ [i−1] ∼ ¯π[i−1] to define the local stage reward r ¯π[i−1]  
+
+> i,t
+
+:˜St → R≥0 as 
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) = E∆ (t, s i,t ) | νt(hi,t ) ∪ τ [i−1] 
+
+ . (8) For i = 1, the reward r ¯π[0]  
+
+> 1,t
+
+(˜ s1,t ) = ∆  (t, s 1,t ) | νt(h1,t )
+
+is the stage reward (7) with N = 1. For a policy πi of agent i, the local objective is the expected sum of the rewards r ¯π[i−1]  
+
+> i,t
+
+along the trajectory τi induced by πi,
+
+G¯π[i−1]  
+
+> i
+
+(πi) = Eτi∼πi
+
+" HX
+
+> t=0
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t )
+
+#
+
+. (9) As in Section 4.2, maximizing G¯π[i−1]  
+
+> i
+
+is an MDP prob-lem on the augmented states of agent i. This problem has a deterministic optimal policy that lies in Π loc  
+
+> m
+
+.The exact evaluation of (8) may require summing over up to |S| (i−1)( H+1) predecessor trajectories. For each agent i ≥ 2, we therefore estimate this expectation using K trajectories τ 1[i−1] , . . . , τ K 
+
+> [i−1]
+
+sampled inde-pendently under ¯ π[i−1] ,
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+∆ (t, s i,t ) | νt(hi,t ) ∪ τ k
+
+> [i−1]
+
+.
+
+(10) Replacing r ¯π[i−1]  
+
+> i,t
+
+with br ¯π[i−1]  
+
+> i,t
+
+in (9) defines the empiri-cal local objective bG¯π[i−1]  
+
+> i
+
+. For agent 1, no sampling is required and bG1 = G1.6Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Algorithm 1 GWPO 
+
+Require: submodular multi-agent MDP; memory length m ∈ { 0, . . . , H }; number of samples K ≥ 1 
+
+> 1:
+
+for i ∈ [N ] do  
+
+> 2:
+
+if i = 1 then  
+
+> 3:
+
+br ¯π[0]  
+
+> 1,t
+
+(˜ s1,t ) = ∆  (t, s 1,t ) | νt(h1,t ) ∀t, ˜s1,t  
+
+> 4:
+
+else  
+
+> 5:
+
+τ 1[i−1] , . . . , τ K 
+
+> [i−1]
+
+∼ ¯π[i−1]  
+
+> 6:
+
+Estimate r ¯π[i−1]  
+
+> i,t
+
+(˜ s) by br ¯π[i−1]  
+
+> i,t
+
+(˜ s) in (10) ∀t, ˜s 
+
+> 7:
+
+end if  
+
+> 8:
+
+¯πi ← Algorithm 2  S, A, m, P i, br ¯π[i−1] 
+
+> i,t
+
+ 
+
+> 9:
+
+end for  
+
+> 10:
+
+return ¯π = (¯ π1, . . . , ¯πN )Greedy Windowed Policy Optimization (GWPO), stated in Algorithm 1, solves each agent’s augmented MDP in turn with any exact finite-horizon MDP solver, such as Algorithm 2. For agent i, it maximizes bG¯π[i−1] 
+
+> i
+
+given the fixed predecessors’ policies ¯ π[i−1] , and then fixes ¯ πi before proceeding to agent i + 1. During cen-tralized training, GWPO samples the trajectories of the predecessors and evaluates F exactly, as assumed in Section 2. Execution is decentralized, since each agent’s policy depends only on its own augmented state. The guarantee of GWPO depends on the number of agents. For N = 1, GWPO exactly maximizes Φ m, so Theorem 1 gives J( ¯ π) ≥ (1 − cm)J∗. For N ≥ 2, the following theorem bounds J( ¯ π) relative to J∗ in terms of cm and the reward-estimation error. 
+
+Theorem 2. Let N ≥ 2 and fix m ∈ { 0, . . . , H }. For 
+
+ϵ > 0 and δ ∈ (0 , 1) , choose the number of sampled predecessor trajectories K such that 
+
+K ≥ R2
+
+2ϵ2 ln 2( N − 1)( H + 1) |S| m+1 
+
+δ , (11) 
+
+where R = max v∈V F ({v}) is the largest reward of a single visit. Then, with probability at least 1 − δ, the joint policy ¯π returned by Algorithm 1 satisfies 
+
+J( ¯ π) ≥ 1 − cm
+
+2 − cm
+
+(J∗ − 2( N − 1)( H + 1) ϵ) . (12) The approximation factor 1−cm 
+
+> 2−cm
+
+is positive for cm < 1, equals 12 at cm = 0, and is zero at cm = 1. The additive error comes from GWPO optimizing the estimated rewards br ¯π[i−1]  
+
+> i,t
+
+instead of the rewards r ¯π[i−1]  
+
+> i,t
+
+for each agent i ≥ 2 and time t. By (11), the sample size K
+
+grows only logarithmically in N , H, and 1 /δ .For rewards additive over time, Proposition 1(iv) shows that cm = 0 for every m. Therefore, the factor equals  
+
+> 12
+
+, as in Chen et al. [4, Theorem 1]. The factor 1−cm
+
+> 2−cm
+
+has the form q 
+
+> 1+ q
+
+of sequential allocation [22, Theo-rem 4] with q = 1 − cm. Their theorem assumes a 
+
+q-approximation for the marginal reward of each agent and uses the same policy classes for the returned poli-cies and the optimum. We do not assume such an approximation, and we compare our local policies with the optimal global history-dependent policy. 
+
+Proof sketch of Theorem 2. The proof addresses two challenges that do not arise in the time-additive set-ting [4]. First, the optimal policy π∗ ∈ ΠH may de-pend on the full joint history, while the policy ¯ π ∈ Πloc 
+
+> m
+
+returned by GWPO uses only the current state and 
+
+m-step history of each agent. Second, the return J( ¯ π)is not the sum of the objectives that GWPO maximizes, since the objective of each agent ignores its visits prior to the m-step window. To address the first challenge, we consider an arbitrary joint policy π ∈ ΠH and an arbitrary agent i. We show that there exists a local policy in Π loc  
+
+> m
+
+that reproduces the distribution of the augmented state of agent i under π at every time step. For the second, we use pre-window curvature to lower bound J( ¯ π) by the objectives that GWPO maximizes. The proof proceeds in three steps. First, the optimality gap J∗ − J( ¯ π) is bounded by the sum of the maxi-mum local objectives of the agents. Second, we bound the suboptimality of maximizing the local objective of each agent by the errors of reward estimation. Follow-ing Chen et al. [4], Hoeffding’s inequality and a union bound keep all these errors below ϵ with probability at least 1 −δ. Finally, pre-window curvature lower bounds 
+
+J( ¯ π) by 1 − cm times the sum of the attained local objectives. Together, these three bounds imply (12). Appendix E gives the full proof. GWPO achieves the guarantee of Theorem 2 in poly-nomial time for fixed m. We count oracle evaluations and transition samples as unit-cost operations and first consider the cost for a single agent i. Sampling K
+
+trajectories of its at most N − 1 predecessors costs 
+
+O(N KH ). Estimating the rewards (10) at all times and augmented states costs O(H|S| m+1 K). Solving the MDP of agent i on its augmented states with Al-gorithm 2 costs O(H|S| m+2 |A| ). Summing over the N
+
+agents gives the computation time of Algorithm 1, 
+
+O N H |S| m+1 (K + |S||A| ) + N 2KH  .
+
+## 5 NUMERICAL EXPERIMENTS 
+
+We empirically studied the return and computation time of GWPO with memory length m on the traffic-monitoring example of Section 2.4. Our instance used a 20 × 20 road grid, the horizon H = 20, and ini-tial positions of the agents sampled independently 7Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 0 1 2 3Memory length m               
+
+> 025 50 75 Return improvement over GPO (%)
+> ¯= 0 :1
+> ¯= 0 :4
+> ¯= 0 :8
+> ®`= 1 2610 15 20 25 30 Number of agents N
+> 0100 200 300 Computation time (s)  GWPO m= 3 GWPO m= 0 GPO
+
+(a) Value of memory (b) Computation time 
+
+Figure 2: Performance improvement and computational cost of memory in GWPO. (a) Return improvement of GWPO with different memory lengths m over GPO [4] for N = 20 agents and different recovery rules. (b) Computation time for different numbers of agents N , comparing GWPO with m = 0 , 3 and GPO at β = 0 .4. 2 6 10 15 20 25 30 Number of agents N              
+
+> ¡30
+> ¡20
+> ¡10 0Return gap (% of GWPO)
+> GPO SubPO-M SubPO-NM 2610 15 20 25 30 Number of agents N
+> ¡30
+> ¡20
+> ¡10 02610 15 20 25 30 Number of agents N
+> ¡30
+> ¡20
+> ¡10 0
+
+(a) Computation time TN (b) Computation time 5 TN (c) Computation time 20 TN
+
+Figure 3: Return gap between each baseline and GWPO with m = 3 at β = 0 .4, as a percentage of the GWPO return. Negative values indicate higher returns for GWPO. SubPO-M and SubPO-NM are allowed computation times of (a) TN , (b) 5 TN , and (c) 20 TN , where TN is the computation time of GWPO for N agents. and uniformly. We first studied how memory af-fected the return and the computation time of GWPO, and then compared its performance with two base-lines. The baselines were Greedy Policy Optimiza-tion ( GPO ) [4] and Submodular Policy Optimization (SubPO ) [17]. GPO optimizes a time-additive objec-tive, and SubPO optimizes global policies by policy gra-dient. We used SubPO with Markov ( SubPO-M ) and history-dependent ( SubPO-NM ) policies. SubPO-NM encodes the history with a recurrent neural net-work. We evaluated all policies under the reward (4) on 10 ,000 common initial joint states. Appendix F gives further experimental details. Figure 2 shows how the memory length affects the return and computation time of GWPO. For N = 20 agents, increasing memory improved returns over GPO 
+
+for the non-additive rewards in Figure 2(a). For the recovery rule αℓ = 1 − e−βℓ , smaller β means that road importance recovers more slowly after a visit. Longer memory helped more when recovery was slower, while GWPO approximately matched GPO in the time-additive case αℓ = 1. Figure 2(b) shows that these gains came with higher computation time. Figure 3 compares return gaps relative to GWPO across the number of agents and computation times. With 
+
+TN , GWPO and SubPO achieved comparable returns for N ≤ 6, while GWPO achieved higher returns for 
+
+N ≥ 10. With 20 TN , both SubPO variants achieved up to 6% higher returns than GWPO for N ≤ 15, but lower returns at N = 30. Appendix F.4 reports results over five SubPO seeds and their confidence intervals. 
+
+## 6 CONCLUSION 
+
+We introduced pre-window curvature to quantify how visits before an m-step window affect marginal gains in submodular rewards over trajectories. Using this notion, we developed GWPO, which exploits decoupled dynamics to sequentially optimize local policies. For fixed m, its computation time is polynomial in the number of agents and the horizon. We established a  
+
+> 1−cm
+> 2−cm
+
+approximation guarantee relative to the optimal global history-dependent return, up to estimation er-ror. We formulated multi-agent traffic monitoring as a submodular multi-agent MDP and evaluated GWPO against the time-additive baseline GPO and SubPO ,which optimizes global policies by policy gradient. 8Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Acknowledgements 
+
+This work was supported as a part of NCCR Automa-tion, a National Centre of Competence in Research, funded by the Swiss National Science Foundation (grant number 51NF40 225155). 
+
+AI use statement 
+
+In this work, we used generative AI tools for providing feedback on experimental design, checking proofs and suggesting minor corrections, and assisting with imple-menting and editing code for numerical experiments. We have not used generative AI tools for developing theoretical models or conceptual frameworks, formulat-ing mathematical claims, providing critical ingredients for proofs, proposing or refining hypotheses, or inter-preting results. Generating synthetic datasets, cleaning or reformatting datasets, qualitative or thematic data analysis, and translation are not applicable to this work. Additionally, we used generative AI tools for creating and modifying figures, editing text to improve readability, and finding additional related work. We have reviewed all AI outputs used in the activities men-tioned above. LLM-generated code was verified and tested for correctness by the authors. All related work identified using AI tools was read and checked by the authors. The authors checked all AI-edited text and AI-suggested revisions. We take responsibility for the final content of this work, including text, claims, or artifacts produced with the aid of generative AI. 
+
+References 
+
+[1] Nikolay Atanasov, Jerome Le Ny, Kostas Dani-ilidis, and George J Pappas. Decentralized active information acquisition: Theory and application to multi-robot SLAM. In International Confer-ence on Robotics and Automation (ICRA) , pages 4775–4782. IEEE, 2015. [2] Christos G. Cassandras, Xuchao Lin, and Xu Chu Ding. An optimal control approach to the multi-agent persistent monitoring problem. IEEE Trans-actions on Automatic Control , 58(4):947–961, 2013. [3] Chandra Chekuri and Martin Pal. A recursive greedy algorithm for walks in directed graphs. In 
+
+IEEE Symposium on Foundations of Computer Science (FOCS) , pages 245–253. IEEE, 2005. [4] Wenjing Chen, Chengyuan Qian, Shuo Xing, Yi Zhou, and Victoria Crawford. Multi-agent re-inforcement learning with submodular reward. In 
+
+International Conference on Machine Learning ,2026. [5] Yann Chevaleyre. Theoretical analysis of the multi-agent patrolling problem. In IEEE/WIC/ACM In-ternational Conference on Intelligent Agent Tech-nology (IAT) , pages 302–308, 2004. [6] Michele Conforti and G´ erard Cornu´ ejols. Sub-modular set functions, matroids and the greedy algorithm: Tight worst-case bounds and some gen-eralizations of the Rado-Edmonds theorem. Dis-crete Applied Mathematics , 7(3):251–274, 1984. [7] Riccardo De Santi, Manish Prajapat, and Andreas Krause. Global reinforcement learning: Beyond linear and convex rewards via submodular semi-gradient methods. In International Conference on Machine Learning , pages 10235–10266. PMLR, 2024. [8] Wassily Hoeffding. Probability inequalities for sums of bounded random variables. Journal of the American Statistical Association , 58(301):13–30, 1963. [9] Konstantinos Kanistras, Goncalo Martins, Matthew J Rutherford, and Kimon P Valavanis. A survey of unmanned aerial vehicles (UAVs) for traffic monitoring. In 2013 International Conference on Unmanned Aircraft Systems (ICUAS) , pages 221–234. IEEE, 2013. [10] Andreas Krause, Ajit Singh, and Carlos Guestrin. Near-optimal sensor placements in Gaussian pro-cesses: Theory, efficient algorithms and empirical studies. Journal of Machine Learning Research , 9: 235–284, 2008. [11] Jing Liu, Luca Ballotta, Yangyang Yang, Fangfei Li, Yang Tang, and Ruggero Carli. Submod-ular policy learning for distributed task alloca-tion in open multi-agent systems. arXiv preprint arXiv:2608.14390 , 2026. [12] Marko Maljkovic and Nikolas Geroliminis. On learning-based traffic monitoring with a swarm of drones. In European Control Conference (ECC) ,pages 1842–1847. IEEE, 2025. [13] Marko Mitrovic, Ehsan Kazemi, Moran Feldman, Andreas Krause, and Amin Karbasi. Adaptive sequence submodularity. In Advances in Neural Information Processing Systems , volume 32, 2019. [14] George L. Nemhauser, Laurence A. Wolsey, and Marshall L. Fisher. An analysis of approxima-tions for maximizing submodular set functions—I. 
+
+Mathematical Programming , 14(1):265–294, 1978. [15] Fatma Outay, Hanan Abdullah Mengash, and Muhammad Adnan. Applications of unmanned aerial vehicle (UAV) in road safety, traffic and highway infrastructure management: Recent ad-vances and challenges. Transportation Research Part A: Policy and Practice , 141:116–129, 2020. 9Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+[16] Manish Prajapat, Matteo Turchetta, Melanie Zeilinger, and Andreas Krause. Near-optimal multi-agent learning for safe coverage control. In 
+
+Advances in Neural Information Processing Sys-tems , volume 35, pages 14998–15012, 2022. [17] Manish Prajapat, Mojmir Mutny, Melanie Zeilinger, and Andreas Krause. Submodular rein-forcement learning. In International Conference on Learning Representations , pages 15190–15212, 2024. [18] Martin L. Puterman. Markov Decision Processes: Discrete Stochastic Dynamic Programming . John Wiley & Sons, 1994. [19] Guannan Qu, Adam Wierman, and Na Li. Scal-able reinforcement learning of localized policies for multi-agent networked systems. In Learning for Dynamics and Control , pages 256–266. PMLR, 2020. [20] Navid Rezazadeh and Solmaz S. Kia. A sub-modular receding horizon solution for mobile multi-agent persistent monitoring. Automatica , 127: 109460, 2021. [21] Amarjeet Singh, Andreas Krause, Carlos Guestrin, and William J. Kaiser. Efficient informative sens-ing using multiple robots. Journal of Artificial Intelligence Research , 34:707–755, 2009. [22] Amarjeet Singh, Andreas Krause, and William J. Kaiser. Nonmyopic adaptive informative path planning for multiple robots. In International Joint Conference on Artificial Intelligence , 2009. [23] Sebastian Tschiatschek, Adish Singla, and An-dreas Krause. Selecting sequences of items via submodular maximization. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 31, 2017. [24] Ruosong Wang, Hanrui Zhang, Devendra Singh Chaplot, Denis Garagi´ c, and Ruslan Salakhutdi-nov. Planning with submodular objective func-tions. arXiv preprint arXiv:2010.11863 , 2020. [25] Zhenliang Zhang, Edwin K. P. Chong, Ali Pezeshki, and William Moran. String submod-ular functions with curvature constraints. IEEE Transactions on Automatic Control , 61(3):601–616, 2016. 10 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+# Appendix 
+
+## A CORRELATED POLICIES 
+
+The class ΠH uses the product action distributions in (2) with m = H. We show that allowing joint action distributions that do not factor in this way does not improve the optimal expected reward. The following lemma applies the standard existence result for deterministic optimal policies in finite-horizon MDPs [18, Proposition 4.4.3] to the augmented state ( st, hHt ). 
+
+Lemma 2. There exists a deterministic policy π∗ ∈ ΠH that is optimal among all global history-dependent joint policies, including those with correlated actions. Consequently, allowing correlated action distributions does not increase J∗.
+
+Proof. At each time t ∈ { 0, . . . , H − 1}, allow an arbitrary joint action distribution 
+
+qt : S × HHt → D (A).
+
+For every joint history ( st, hHt ), this means that 
+
+qt(a | st, hHt ) ≥ 0 for all a ∈ A, X
+
+> a∈A
+
+qt(a | st, hHt ) = 1 .
+
+The joint action distribution qt does not necessarily factor across agents as in (2). Taking ( st, hHt ) as the state yields a finite-horizon MDP. The transition dynamics of this MDP draw the next joint state from Pt(· | st, at)and update the history by appending st. Its reward is zero at intermediate stages and equals F (τ ) at time H,when the augmented state determines the full joint trajectory. Fix optimal policies at time steps t + 1 , . . . , H − 1. At each joint state and history, the expected return is linear in qt(· | st, hHt ). Its maximum over the probability simplex D(A) is therefore attained at a vertex, which assigns probability one to a single joint action. Backward induction thus yields a deterministic joint policy that is optimal under any initial distribution, including ρ.Let a∗ 
+
+> t
+
+(st, hHt ) denote the joint action selected by backward induction, and let a∗
+
+> i,t
+
+(st, hHt ) denote its i-th component. For each agent i ∈ [N ], define 
+
+π∗
+
+> i,t
+
+(ai | st, hHt ) = 1
+
+n
+
+ai = a∗
+
+> i,t
+
+(st, hHt )
+
+o
+
+.
+
+The product of these policies assigns probability one to the selected joint action. Hence, this optimal policy belongs to ΠH , and allowing correlated action distributions does not increase J∗.
+
+## B PROPERTIES OF PRE-WINDOW CURVATURE 
+
+Figure 4 illustrates the m-step window and the pre-window part on the trajectories of two agents. 
+
+B.1 Properties of the Pre-Window Curvature Proposition 1. For every m ∈ { 0, . . . , H }:i. 0 ≤ cm ≤ c ≤ 1;ii. cm+1 ≤ cm whenever m < H ;
+
+11 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards            
+
+> 0t−mt−1tt+ 1 pre-window m-step window current time
+
+si, 0 · · · si,t −m · · · si,t −1 si,t agent isj, 0 · · · sj,t −m · · · sj,t −1 sj,t agent j
+
+(a) At time t  
+
+> pre-window m-step window current time
+
+si, 0 · · · si,t −m · · · si,t −1 si,t si,t +1 agent isj, 0 · · · sj,t −m · · · sj,t −1 sj,t sj,t +1 agent j
+
+(b) At time t + 1 
+
+Figure 4: The m-step window moving from time t to time t + 1. Each row is the trajectory of one agent, and the arrows are transitions under its dynamics. (a) At time t, the window covers times t − m to t − 1, and earlier visits form the pre-window part. (b) After the transition to time t + 1, the window shifts by one step, and the visits at time t − m join the pre-window part. Pre-window curvature cm bounds how much pre-window visits, of any agent, reduce the marginal gain of a current visit. 
+
+iii. cH = 0 ;iv. if F is additive across time, then cm = 0 for every m.Proof. i. We first show cm ≥ 0 and c ≤ 1, and then show cm ≤ c. Definition 4 restricts the minimum to 
+
+xt and Z with ∆( xt | Z) > 0, so every ratio is well defined. Since Z ⊆ B ∪ Z, submodularity gives ∆( xt | B ∪ Z) ≤ ∆( xt | Z), so every ratio is at most 1 and cm ≥ 0. In Definition 2, monotonicity makes the numerator of every ratio nonnegative, so every ratio is at least 0 and c ≤ 1. To show cm ≤ c, we prove that every ratio in (5) is at least 1 − c. Fix t, xt ∈ V t, B ⊆ V 0: t−m−1, and Z ⊆ V 
+
+with ∆( xt | Z) > 0. The element xt does not lie in Z, since otherwise ∆( xt | Z) = 0. It does not lie in B
+
+either, since every element of B has a time index l < t − m ≤ t. Moreover, submodularity with ∅ ⊆ Z and 
+
+F (∅) = 0 gives 
+
+F ({xt}) = ∆( xt | ∅ ) ≥ ∆( xt | Z) > 0.
+
+Hence xt ∈ V \ (B ∪ Z) and F ({xt}) > 0. The ratio ∆( xt | B ∪ Z)/F ({xt}) is therefore one of the ratios minimized in Definition 2, so it is at least 1 − c. Since 1 − c ≥ 0 and F ({xt}) ≥ ∆( xt | Z), we obtain ∆( xt | B ∪ Z)∆( xt | Z) ≥ (1 − c) F ({xt})∆( xt | Z) ≥ 1 − c. 
+
+The minimum in (5) is therefore at least 1 − c, so cm ≤ c.ii. Since V0: t−m−2 ⊆ V 0: t−m−1, replacing m by m + 1 shrinks the set of admissible B while the rest of the minimization is unchanged. The minimum over a smaller set can only increase, so cm+1 ≤ cm.iii. For m = H and any t ∈ { 0, . . . , H }, we have t − H ≤ 0, so V0: t−H−1 = ∅ and B = ∅. Every ratio then equals 1, and cH = 0. iv. Suppose F (X) = PHt=0 ft(X ∩ V t). Adding xt ∈ V t changes only the term ft, which depends on X ∩ V t.Since B ⊆ V 0: t−m−1 is disjoint from Vt, we have ( B ∪ Z) ∩ V t = Z ∩ V t. Hence ∆( xt | B ∪ Z) = ∆( xt | Z), every ratio equals one, and cm = 0. 12 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+## C TRAFFIC-MONITORING REWARD PROPERTIES 
+
+Proposition 2 gives sufficient conditions on αℓ under which the reward (4) of Section 2.4 is monotone submodular and has cm < 1. Corollary 1 shows that the exponential profile αℓ = 1 − e−βℓ satisfies these conditions, so the traffic-monitoring reward is monotone submodular. Proposition 3 then computes cm in closed form for this profile. 
+
+C.1 Discretely Concave Recovery Profiles 
+
+We call the sequence α = ( α0, . . . , α H ) the recovery profile. In this subsection, α is general rather than 
+
+αℓ = 1 − e−βℓ . We call α discretely concave if 
+
+αℓ+1 − αℓ ≤ αℓ − αℓ−1, 1 ≤ ℓ < H. (13) Each passing time step therefore recovers no more than the step before it. The concavity is strict when every inequality is strict. 
+
+Proposition 2. Suppose α0 = 0 , αℓ ∈ [0 , 1] for 1 ≤ ℓ ≤ H, and α is nondecreasing and discretely concave. Then the reward in (4) is monotone submodular. If α1 > 0 and the concavity is strict, then cm < 1 for every m < H .Proof. Fix B ⊆ V and consider adding ( t, s ). The reward (4) is a sum over roads, and each term depends on B
+
+only through the monitoring times Te(B). Adding ( t, s ) leaves Te(B) unchanged for e / ∈ C (s), and replaces it by 
+
+Te(B) ∪ { t} otherwise. Hence ∆ (t, s ) | B = X
+
+> e∈C (s)
+
+∆e(t | B),
+
+where ∆ e(t | B) is road e’s contribution. This contribution is zero if t ∈ Te(B). Otherwise, let p and q be the nearest monitoring times in Te(B) before and after t, when they exist. If p exists, let ℓ− = t − p; if q exists, let 
+
+ℓ+ = q − t. The four cases are ∆e(t | B) = we
+
+
+
+1, p, q do not exist ,αℓ− , only p exists ,αℓ+ , only q exists ,αℓ− + αℓ+ − αℓ−+ℓ+ , p, q both exist .
+
+(14) When both p and q exist, adding ( t, s ) replaces the gap ℓ− + ℓ+ with the gaps ℓ− and ℓ+.Since the increments of α are nonincreasing by (13), αℓ−+ℓ+ −αℓ+ ≤ αℓ− −α0 = αℓ− . Moreover, α is nondecreasing, so αℓ−+ℓ+ ≥ max {αℓ− , α ℓ+ }. These inequalities give 0 ≤ αℓ− + αℓ+ − αℓ−+ℓ+ ≤ min {αℓ− , α ℓ+ }. (15) The lower bound shows that the contribution in the last case of (14) is nonnegative. The upper bound shows that it is no greater than the corresponding contribution when only p or only q exists. The four cases in (14) differ only in which neighboring monitoring times exist. The convention α∞ = 1 of Section 2.4 removes this distinction. Set ℓ− = ∞ when p does not exist and ℓ+ = ∞ when q does not exist, so that αℓ−+ℓ+ = 1 whenever a gap is infinite. Every case of (14) then reads ∆e(t | B) = we h(ℓ−, ℓ +), h(ℓ1, ℓ 2) = αℓ1 + αℓ2 − αℓ1+ℓ2 , (16) since h(∞, ∞) = 1, h(ℓ1, ∞) = αℓ1 , and h(∞, ℓ 2) = αℓ2 . The contribution of road e therefore depends on B only through the two gaps. The function h is nondecreasing in each argument over its domain. For finite ℓ1, ℓ 2 with ℓ1 + ℓ2 + 1 ≤ H,
+
+h(ℓ1 + 1 , ℓ 2) − h(ℓ1, ℓ 2) = ( αℓ1+1 − αℓ1 ) − (αℓ1+ℓ2+1 − αℓ1+ℓ2 ) ≥ 0by discrete concavity. When ℓ2 = ∞, h(ℓ1 + 1 , ℓ 2) − h(ℓ1, ℓ 2) ≥ 0 follows from h(ℓ1, ∞) = αℓ1 and the monotonicity of α. Moreover, h(ℓ1, ℓ 2) ≤ αℓ2 = h(∞, ℓ 2), since αℓ1 ≤ αℓ1+ℓ2 . The argument for ℓ2 is symmetric. 13 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+Monotonicity. By (15), h ≥ 0 for finite gaps, and h(ℓ1, ∞) = αℓ1 ≥ 0. Hence ∆(( t, s ) | B) ≥ 0, and F is monotone. 
+
+Submodularity. Let B ⊆ B′ and ( t, s ) /∈ B′, and fix e ∈ C (s). If t ∈ Te(B′), then ∆ e(t | B′) = 0 ≤ ∆e(t | B). Otherwise t / ∈ Te(B) as well, since Te(B) ⊆ Te(B′). Let ( ℓ−, ℓ +) and ( ℓ′−, ℓ ′
+
+> +
+
+) be the gaps under Te(B) and 
+
+Te(B′). Additional monitoring times can only move the nearest monitoring time on each side closer to t, and can only turn an absent neighbor into a present one, so ℓ′− ≤ ℓ− and ℓ′ 
+
+> +
+
+≤ ℓ+. By (16) and the monotonicity of h,∆e(t | B′) = we h(ℓ′−, ℓ ′
+
+> +
+
+) ≤ we h(ℓ−, ℓ +) = ∆ e(t | B).
+
+Summing over e ∈ C (s) proves that F is submodular. 
+
+Curvature. Suppose α1 > 0 and the concavity is strict. Since α is nondecreasing, αℓ ≥ α1 > 0 for every positive gap ℓ. For positive finite gaps ℓ1, ℓ 2 with ℓ1 + ℓ2 ≤ H, strict discrete concavity gives αℓ1+ℓ2 − αℓ2 < α ℓ1 − α0 = αℓ1 .Hence the contribution when both p and q exist is also positive. Consider a ratio in (5) with ∆( xt | Z) > 0, where xt = ( t, s ). At least one road e ∈ C (s) has a positive contribution under Z. Elements of B occur before time t − m, so they cannot add t to the monitoring times of road e. By (14), this road still has a positive contribution under B ∪ Z. Thus, the numerator is positive whenever the denominator is positive. The number of admissible ratios is finite, so their minimum is positive. Therefore, cm < 1. 
+
+Remark. Non-strict discrete concavity alone does not guarantee cm < 1, even when α1 > 0. Fix m ≤ H − 2 and suppose 
+
+αℓ+1 − αℓ = α1 > 0, 0 ≤ ℓ ≤ m + 1 .
+
+Set t = m + 1, Z = {(t + 1 , s )}, and B = {(0 , s )}, where s monitors at least one road with we > 0. Since t − m = 1, 
+
+B ⊆ V 0 is admissible. The marginal gain under Z is positive. Under B ∪ Z, the contribution of each road in C(s)is 
+
+we
+
+ αm+1 + α1 − αm+2 
+
+ = 0 .
+
+Hence the ratio in (5) is zero, and cm = 1. For the exponential profile of Section 2.4, Proposition 2 gives the following result. 
+
+Corollary 1. For every β > 0, the traffic-monitoring reward (4) is monotone submodular. Proof. The exponential profile αℓ = 1 − e−βℓ satisfies α0 = 0, is nondecreasing, and takes values in [0 , 1]. Its increments 
+
+αℓ+1 − αℓ = e−βℓ  1 − e−β 
+
+are strictly decreasing in ℓ, so α is strictly discretely concave. Proposition 2 gives the claim. 
+
+C.2 Pre-Window Curvature of the Exponential Profile Proposition 3. For every β > 0, the traffic-monitoring reward (4) has pre-window curvature 
+
+cm = e−β(m+1) , 0 ≤ m < H. (17) 
+
+Proof. We first show that every ratio ∆( xt | B ∪ Z)/∆( xt | Z) in (5) is at least αm+1 , and then show that this bound is attained. Fix xt = ( t, s ) and a road e ∈ C (s). Let ℓ− and ℓ+ be the gaps to the nearest monitoring times of e in Z before and after t, and let ℓB be the gap to the nearest monitoring time of e in B. Set a gap to infinity when the corresponding monitoring time does not exist. Since B contains only elements before time 
+
+t − m, ℓB ≥ m + 1. Thus, adding B changes ℓ− to min {ℓ−, ℓ B } and leaves ℓ+ unchanged. Figure 5 illustrates these monitoring times. For finite gaps ℓ− and ℓ+, the exponential profile satisfies 
+
+αℓ− + αℓ+ − αℓ−+ℓ+ = (1 − e−βℓ − )(1 − e−βℓ + ) = αℓ− αℓ+ .
+
+With the convention α∞ = 1, the four cases of (14) for t / ∈ Te(Z) can therefore be written as ∆e(t | Z) = weαℓ− αℓ+ . (18) 14 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour  
+
+> m-step window time
+
+t − m tℓ−
+
+ℓB ℓ+
+
+Figure 5: Monitoring times of road e around the added element xt = ( t, s ). Filled circles denote monitoring times from Z, the open square denotes the nearest monitoring time from B, and the cross denotes xt. Elements of B
+
+occur before time t − m, so adding B changes the earlier gap from ℓ− to min {ℓ−, ℓ B } and leaves the later gap ℓ+
+
+unchanged. Consider any admissible ( t, x t, B, Z ) in Definition 4, so that ∆( xt | Z) > 0. For each road with ∆ e(t | Z) > 0, (18) gives ∆e(t | B ∪ Z)∆e(t | Z) = αmin {ℓ−,ℓ B }
+
+αℓ−
+
+=
+
+(
+
+1, ℓB ≥ ℓ−,αℓB /α ℓ− , ℓB < ℓ −.
+
+Both cases are at least αm+1 : the first follows from αm+1 ≤ 1, and the second from αℓ− ≤ 1 and αℓB ≥ αm+1 .To extend this bound to the complete marginal gain, let E+ = {e ∈ C (s) : ∆ e(t | Z) > 0}. A road with zero contribution under Z also has zero contribution under B ∪ Z. Therefore, ∆( xt | B ∪ Z)∆( xt | Z) =
+
+P 
+
+> e∈E+
+
+∆e(t | B ∪ Z)
+
+P 
+
+> e∈E+
+
+∆e(t | Z)
+
+≥ min 
+
+> e∈E+
+
+∆e(t | B ∪ Z)∆e(t | Z) ≥ αm+1 . (19) Hence every admissible ratio is at least αm+1 , and cm ≤ 1 − αm+1 .For m < H , set t = m + 1, Z = ∅, and B = {(0 , s )}, where s monitors at least one road with we > 0. Since 
+
+t − m = 1, the set B ⊆ V 0 is admissible. Under Z, xt = ( t, s ) is the first monitoring of every road in C(s), whereas under B it follows the previous monitoring by m + 1 time steps. Thus ∆( xt | B)∆( xt | Z) = αm+1 .
+
+The lower bound is attained, so 
+
+cm = 1 − αm+1 = e−β(m+1) .
+
+At m = H, no visit can occur before the H-step window, and cH = 0. 
+
+## D ANALYSIS OF THE WINDOWED OBJECTIVE 
+
+D.1 Set Form of the Pre-Window Curvature Inequality 
+
+Definition 4 bounds the effect of visits prior to the window on the marginal gain of a single visit xt ∈ V t given a set Z. The proof of Lemma 1 needs the same bound for a set of visits at time t, so we extend it to any set 
+
+Xt ⊆ V t.
+
+Lemma 3. For every m, t ∈ { 0, . . . , H }, Xt ⊆ V t, B ⊆ V 0: t−m−1, and Z ⊆ V ,∆ Xt | B ∪ Z ≥ (1 − cm) ∆  Xt | Z.
+
+Proof. Elements of Xt ∩ Z add zero marginal gain on both sides, so it suffices to consider the elements of Xt \ Z,enumerated as x1, . . . , x q . No element of Xt lies in B, since Xt ⊆ V t while B contains only elements of earlier 15 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+times. Let Zj = Z ∪ { x1, . . . , x j−1} collect the elements added before xj . Both marginal gains then decompose into single-element gains whose j-th terms differ only in the presence of the set B:∆( Xt | B ∪ Z) = 
+
+> q
+
+X
+
+> j=1
+
+∆( xj | B ∪ Zj ),
+
+∆( Xt | Z) = 
+
+> q
+
+X
+
+> j=1
+
+∆( xj | Zj ).
+
+Each pair of terms is an instance of (5) with xt = xj , the same B, and Z = Zj . Hence ∆( xj | B ∪ Zj ) ≥
+
+(1 − cm)∆( xj | Zj ). When ∆( xj | Zj ) = 0, submodularity and Zj ⊆ B ∪ Zj force ∆( xj | B ∪ Zj ) = 0, so the inequality holds trivially. Summing over j proves the lemma. 
+
+D.2 Proofs of Lemma 1 and Theorem 1 
+
+We first prove Lemma 1, restated below. 
+
+Lemma 1. For every policy π,(1 − cm) Φ m(π) ≤ J(π) ≤ Φm(π).
+
+Proof. Fix a realized joint trajectory τ . Telescoping its marginal gains in chronological order gives 
+
+F (τ ) = 
+
+> H
+
+X
+
+> t=0
+
+∆( τ t | τ 0: t−1).
+
+For every t, the full past decomposes as τ 0: t−1 = τ 0: t−m−1 ∪ τ t−m:t−1, where τ 0: t−m−1 is empty when t ≤ m. For the lower bound, we apply Lemma 3 with Xt = τ t ⊆ V t, B = τ 0: t−m−1 ⊆ V 0: t−m−1, and Z = τ t−m:t−1. Since 
+
+B ∪ Z = τ 0: t−1, this gives ∆( τ t | τ 0: t−1) ≥ (1 − cm) ∆( τ t | τ t−m:t−1).
+
+For the upper bound, submodularity and τ t−m:t−1 ⊆ τ 0: t−1 give ∆( τ t | τ 0: t−1) ≤ ∆( τ t | τ t−m:t−1).
+
+Summing both bounds over t and taking expectations under π proves the lemma. The left-hand sides give J(π)by the telescoping identity above, and the terms ∆( τ t | τ t−m:t−1) = rt(˜ st) give Φ m(π). We then prove Theorem 1, restated below. 
+
+Theorem 1. Let π′ ∈ arg max π∈ΠH Φm(π). Then 
+
+J(π′) ≥ (1 − cm) J∗.
+
+Proof. Applying Lemma 1 to π∗ and π′, and using the optimality of π′ for Φ m, gives (1 − cm)J∗ ≤ (1 − cm)Φ m(π∗)
+
+≤ (1 − cm)Φ m(π′) ≤ J(π′).
+
+The guarantee does not require an exact maximizer of Φ m. Suppose that a policy π satisfies Φ m(π) ≥ Φm(π′) − η
+
+for some η ≥ 0. Combining the first two steps above with the lower bound of Lemma 1 for π gives (1 − cm)J∗ ≤ (1 − cm)Φ m(π′) ≤ (1 − cm) Φm(π) + η ≤ J(π) + (1 − cm)η, 
+
+so J(π) ≥ (1 − cm)( J∗ − η). 16 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+si,t −m si,t −m+1 · · · si,t −1 si,t 
+
+si,t −m si,t −m+1 · · · si,t −1 si,t si,t +1 
+
+˜si,t 
+
+˜si,t +1 
+
+si,t +1 ∼ Pi,t (· | si,t , a i,t )
+
+Figure 6: History-augmented state of agent i with memory length m, for t ≥ m. The augmented state ˜ si,t 
+
+contains the history hi,t (blue) and the current state si,t (orange). The next state si,t +1 is drawn from Pi,t , and the history appends si,t and drops the oldest state si,t −m (dashed). 
+
+Algorithm 2 Backward Induction on the Augmented State Space 
+
+Require: spaces S, A; memory length m; dynamics P = ( P0, . . . , P H−1); rewards rt
+
+1: VH (˜ s) ← rH (˜ s) ∀˜s ∈ ˜SH
+
+2: for t = H − 1, . . . , 0 do 
+
+3: for all ˜s = ( s, h ) ∈ ˜St and a ∈ A do 
+
+4: Qt(˜ s, a ) ← rt(˜ s) + Es′∼Pt(·| s,a )
+
+Vt+1 (s′, φ (h, s )) 
+
+5: end for 
+
+6: Vt(˜ s) ← max a Qt(˜ s, a ) ∀˜s ∈ ˜St
+
+7: πt(˜ s) ∈ arg max a Qt(˜ s, a ) ∀˜s ∈ ˜St
+
+8: end for 
+
+9: return π = ( π0, . . . , π H−1)
+
+D.3 Backward Induction on the Augmented State Space 
+
+Algorithm 2 solves a finite-horizon MDP on the history-augmented states by backward induction [18]. The expectation is over the next state, while the history updates deterministically through the map φ : Hmt ×S → H mt+1 ,which appends a state to a history and drops the first entry if the result has more than m entries. Figure 6 illustrates this update for one agent. Section 4.2 applies the algorithm to the joint augmented states, with S and 
+
+A replaced by S and A. Section 4.3 applies it once per agent, with the estimated rewards br ¯π[i−1]  
+
+> i,t
+
+.Backward induction on the joint augmented MDP computes a Q-value for each of the at most |S| N (m+1) |A| N
+
+pairs in ˜St × A at every stage. Each Q-value sums over at most |S| N next joint physical states, since the histories update deterministically through φ. Over H stages, the total computation time is O(H|S| N (m+2) |A| N ). 
+
+D.4 Non-Monotonicity of the Windowed Stage Reward 
+
+Adding an agent can decrease the windowed objective even when F is monotone submodular and cm < 1. Consider a reward of the form (4) on two states a and b with a single road e of maximum importance we = 1, where C(a) = {e} and C(b) = ∅. Set H = 2, m = 1, and β = ln(4 /3), so that α1 = 1 /4 and α2 = 7 /16. By Corollary 1, the reward is monotone submodular, and (17) gives c1 = 9 /16. Each agent can move between a and 
+
+b deterministically, and two agents with fixed initial states follow the trajectories 
+
+τ1 = {(0 , a ), (1 , b ), (2 , a )}, τ2 = {(0 , b ), (1 , a ), (2 , b )},
+
+shown in Figure 7. Since the dynamics and initial states are deterministic, the windowed objective of the policies that generate these trajectories equals the sum of the stage rewards rt(˜ st) along them. With agent 1 alone, its visit at time 0 lies outside the window at time 2. The stage rewards are then r0(˜ s0) = 1, 
+
+r1(˜ s1) = 0, and r2(˜ s2) = 1, which sum to 2. With both agents, road e is monitored at every time. The stage rewards are then r0(˜ s0) = 1, r1(˜ s1) = α1, and r2(˜ s2) = α1, which sum to 3 /2. Adding agent 2 thus lowers the stage reward at time 2 from 1 to 1 /4, because its visit (1 , a ) enters the window at time 2. The true reward instead 17 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards   
+
+> window at t= 2
+
+0 1 2 time 
+
+agent 1 a b art(˜ st) 1 0 1
+
+P 
+
+> t
+
+rt(˜ st) = 2, F (τ1) = 23 /16 (a) Agent 1 alone   
+
+> window at t= 2
+
+0 1 2 time 
+
+agent 1 agent 2 
+
+a b ab a brt(˜ st) 1 1/4 1/4
+
+P 
+
+> t
+
+rt(˜ st) = 3 /2, F (τ1 ∪ τ2) = 3 /2(b) Both agents 
+
+Figure 7: Adding an agent lowers the windowed objective in the example of Appendix D.4. Shaded nodes are visits to state a, which monitors road e. The gray region denotes the window at time 2, and the values below the axis are the stage rewards, which sum to the windowed objective. (a) With agent 1 alone, the window at time 2 contains no visit to a. (b) With both agents, the window at time 2 contains the visit (1 , a ) of agent 2. This visit lowers the stage reward at time 2, although the true reward F increases. increases, from F (τ1) = 1 + α2 = 23 /16 to F (τ1 ∪ τ2) = 3 /2. Hence, the stage rewards of Φ m are not monotone in the set of agents, and the condition required by the guarantee of Chen et al. [4] fails. 
+
+## E ANALYSIS OF SEQUENTIAL POLICY OPTIMIZATION 
+
+We prove Theorem 2, restated below. 
+
+Theorem 2. Let N ≥ 2 and fix m ∈ { 0, . . . , H }. For ϵ > 0 and δ ∈ (0 , 1) , choose the number of sampled predecessor trajectories K such that 
+
+K ≥ R2
+
+2ϵ2 ln 2( N − 1)( H + 1) |S| m+1 
+
+δ , (11) 
+
+where R = max v∈V F ({v}) is the largest reward of a single visit. Then, with probability at least 1 − δ, the joint policy ¯π returned by Algorithm 1 satisfies 
+
+J( ¯ π) ≥ 1 − cm
+
+2 − cm
+
+(J∗ − 2( N − 1)( H + 1) ϵ) . (12) Throughout this section, we use the following notation. For a joint policy π and a local policy πi of agent i, let 
+
+dπ
+
+> i,t
+
+, d πi 
+
+> i,t
+
+∈ D ( ˜St) denote the distributions of the augmented state of agent i at time t,
+
+dπ
+
+> i,t
+
+(˜ s) = Pr τ ∼π
+
+ ˜si,t = ˜ s, dπi
+
+> i,t
+
+(˜ s) = Pr τi∼πi
+
+ ˜si,t = ˜ s,
+
+for every ˜ s ∈ ˜St. With this notation, the local objective (9) takes the equivalent form 
+
+G¯π[i−1]  
+
+> i
+
+(πi) = 
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπii,t 
+
+h
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t )
+
+i
+
+. (20) 
+
+E.1 Proof of Theorem 2 
+
+Proof. The argument has three steps. Step 1 bounds the optimality gap by the sum of the maximum local objectives of the agents. Step 2 bounds each maximum by the attained local objective, up to the reward-estimation error. Step 3 bounds the attained local objectives by the return J( ¯ π) through cm.The policy ¯ π returned by Algorithm 1 depends on the sampled predecessor trajectories. Throughout the proof, we treat ¯ π as fixed. Since each ¯ πi is deterministic, an expectation over τ ∼ ¯π is then taken over the initial states and the transitions only. 18 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Step 1 (bounding the optimality gap by the maximum local objectives). For τ ∗ ∼ π∗ and τ ∼ ¯π sampled independently, with π∗ an optimal global history-dependent policy of (3) and ¯ π ∈ Πloc  
+
+> m
+
+the policy returned by Algorithm 1, we have 
+
+J∗ = Eτ ∗∼π∗ [F (τ ∗)] ≤ Eτ ∗∼π∗,τ ∼ ¯π [F (τ ∗ ∪ τ )] = Eτ ∗∼π∗,τ ∼ ¯π [F (τ ) + ∆( τ ∗ | τ )] = Eτ ∼ ¯π [F (τ )] + Eτ ∗∼π∗,τ ∼ ¯π [∆( τ ∗ | τ )] = J( ¯ π) + Eτ ∗∼π∗,τ ∼ ¯π [∆( τ ∗ | τ )] ,
+
+where the inequality holds by monotonicity, and the equalities use the definition of the marginal gain, linearity of expectation, and the definition of the return (3). For every fixed realization of τ and τ ∗, the pairs τ ∗ 
+
+> i,t
+
+of τ ∗ are added to τ one at a time in lexicographic order of ( i, t ), meaning τ ∗ 
+
+> [i−1]
+
+∪ τ ∗ 
+
+> i, 0: t−1
+
+is the set of elements added before τ ∗
+
+> i,t
+
+. Telescoping these marginal gains gives ∆( τ ∗ | τ ) = X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+∆ τ ∗ 
+
+> i,t
+
+| τ ∪ τ ∗ 
+
+> [i−1]
+
+∪ τ ∗
+
+> i, 0: t−1
+
+,
+
+where a term whose pair already lies in its given set, τ ∗ 
+
+> i,t
+
+⊆ τ ∪ τ ∗ 
+
+> [i−1]
+
+∪ τ ∗
+
+> i, 0: t−1
+
+, contributes 0, since ∆( x | B) = 0 whenever x ∈ B. The set τ ∪ τ ∗ 
+
+> [i−1]
+
+∪ τ ∗ 
+
+> i, 0: t−1
+
+given in each term contains τ ∗ 
+
+> i,t −m:t−1
+
+∪ τ [i−1] , because τ [i−1] ⊆ τ
+
+and τ ∗ 
+
+> i,t −m:t−1
+
+⊆ τ ∗
+
+> i, 0: t−1
+
+. By submodularity, the marginal gain of τ ∗ 
+
+> i,t
+
+does not decrease when the given set shrinks to τ ∗ 
+
+> i,t −m:t−1
+
+∪ τ [i−1] , so ∆( τ ∗ | τ ) ≤ X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+∆ τ ∗ 
+
+> i,t
+
+τ ∗ 
+
+> i,t −m:t−1
+
+∪ τ [i−1] 
+
+.
+
+It remains to take the expectation of this bound over the two runs. Along the optimal run, the augmented state ˜ s∗ 
+
+> i,t
+
+= ( s∗
+
+> i,t
+
+, h ∗
+
+> i,t
+
+) determines τ ∗ 
+
+> i,t
+
+and τ ∗ 
+
+> i,t −m:t−1
+
+= νt(h∗
+
+> i,t
+
+), so each term depends on agent i’s trajectory only through ˜ s∗
+
+> i,t
+
+. Since ˜ s∗ 
+
+> i,t
+
+∼ dπ∗ 
+
+> i,t
+
+is independent of the predecessors’ set τ [i−1] , the expectation of each term splits into an outer expectation over ˜ s∗ 
+
+> i,t
+
+and an inner expectation over τ [i−1] :
+
+Eτ ∗∼π∗,τ ∼ ¯π
+
+h
+
+∆ τ ∗ 
+
+> i,t
+
+τ ∗ 
+
+> i,t −m:t−1
+
+∪ τ [i−1] 
+
+i
+
+= E˜s∗
+
+> i,t ∼dπ∗
+> i,t
+
+h
+
+Eτ [i−1] ∼ ¯π[i−1] 
+
+h
+
+∆ (t, s ∗
+
+> i,t
+
+) | νt(h∗
+
+> i,t
+
+) ∪ τ [i−1] 
+
+ii 
+
+= E˜s∗
+
+> i,t ∼dπ∗
+> i,t
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ s∗
+
+> i,t
+
+),
+
+where the second equality applies the definition (8) of the reward. The occupancy dπ∗ 
+
+> i,t
+
+is induced under the global history-dependent policy π∗, whereas the algorithm optimizes over local Markov policies. The following lemma closes this gap. 
+
+Lemma 4. Fix an agent i and any π ∈ ΠH . There is a policy π′′  
+
+> i
+
+∈ Πloc  
+
+> m
+
+with dπ′′  
+
+> i
+> i,t
+
+= dπ 
+
+> i,t
+
+for every t.Applying Lemma 4 to π∗ gives a local policy π′′  
+
+> i
+
+∈ Πloc  
+
+> m
+
+with the same distributions dπ′′  
+
+> i
+> i,t
+
+= dπ∗ 
+
+> i,t
+
+of the augmented state of agent i. By (20), it follows that PHt=0 E˜s∗
+
+> i,t ∼dπ∗
+> i,t
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ s∗
+
+> i,t
+
+) = G¯π[i−1]  
+
+> i
+
+(π′′  
+
+> i
+
+) ≤ max πi∈Πloc  
+
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi). Hence, 
+
+J∗ ≤ J( ¯ π) + X 
+
+> i∈[N]
+
+max 
+
+> πi∈Πloc
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi). (21) 
+
+Step 2 (bounding the maximum local objectives by the attained ones). Hoeffding’s inequality and a union bound over the at most ( N − 1)( H + 1) |S| m+1 estimated rewards give the following guarantee. 
+
+Lemma 5. Under (11), with probability at least 1 − δ,
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ s) − r ¯π[i−1]  
+
+> i,t
+
+(˜ s) ≤ ϵ
+
+for all i ≥ 2, t, and ˜ s ∈ ˜St.For the rest of the proof, we assume that the bound of Lemma 5 holds for all i ≥ 2, t, and ˜ s ∈ ˜St, which happens with probability at least 1 − δ. The algorithm maximizes bG¯π[i−1]  
+
+> i
+
+rather than G¯π[i−1]  
+
+> i
+
+. The next lemma bounds the resulting gap. 19 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+Lemma 6. Let ¯ πi ∈ arg max πi∈Πloc 
+
+> m
+
+bG¯π[i−1]  
+
+> i
+
+(πi). If br ¯π[i−1]  
+
+> i,t
+
+(˜ s) − r ¯π[i−1]  
+
+> i,t
+
+(˜ s) ≤ ϵ for all t and ˜ s ∈ ˜St, then 
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) ≥ max 
+
+> πi∈Πloc
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) − 2( H + 1) ϵ. 
+
+For i = 1, ¯ π1 attains the maximum exactly. Applying Lemma 6, each term max πi∈Πloc  
+
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) in (21) satisfies max πi∈Πloc  
+
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) ≤ G¯π[i−1]  
+
+> i
+
+(¯ πi) + 2( H +1) ϵ for i ≥ 2, while max πi∈Πloc  
+
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) = G¯π[i−1]  
+
+> i
+
+(¯ πi) for i = 1. Summing these bounds over the N agents, only the N − 1 agents with i ≥ 2 carry the error term, so 
+
+J∗ ≤ J( ¯ π) + X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) + 2( N − 1)( H + 1) ϵ. (22) 
+
+Step 3 (bounding the attained local objectives by the return). It remains to relate the sum of the attained local objectives to the achieved return J( ¯ π). The following lemma provides this connection and is the only step in which pre-window curvature enters. 
+
+Lemma 7. For the policy ¯ π returned by Algorithm 1, (1 − cm) X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) ≤ J( ¯ π) ≤ X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi).
+
+If cm = 1, the claimed bound reads J( ¯ π) ≥ 0, which holds because F is monotone with F (∅) = 0. Assume cm < 1. The lower bound in Lemma 7 gives 
+
+J( ¯ π) ≥ (1 − cm) X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi), (23) so P  
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) ≤ J( ¯ π)/(1 − cm). Substituting into (22), 
+
+J∗ ≤ J( ¯ π) + J( ¯ π)1 − cm
+
++ 2( N − 1)( H + 1) ϵ
+
+= 2 − cm
+
+1 − cm
+
+J( ¯ π) + 2( N − 1)( H + 1) ϵ, 
+
+which rearranges to (12). Since the bound of Lemma 5 holds with probability at least 1 − δ, so does (12). 
+
+E.2 Proof of Lemma 4 Lemma 4. Fix an agent i and any π ∈ ΠH . There is a policy π′′  
+
+> i
+
+∈ Πloc  
+
+> m
+
+with dπ′′  
+
+> i
+> i,t
+
+= dπ 
+
+> i,t
+
+for every t.
+
+Proof. Fix an agent i and any π ∈ ΠH . Let dπ 
+
+> i,t
+
+and qπ 
+
+> i,t
+
+denote the distributions of agent i’s augmented state and of its (augmented state, action) pair at time t:
+
+dπ
+
+> i,t
+
+(˜ s) = Pr π (˜ si,t = ˜ s), 0 ≤ t ≤ H, qπ
+
+> i,t
+
+(˜ s, a ) = Pr π (˜ si,t = ˜ s, a i,t = a), 0 ≤ t < H, 
+
+so that P 
+
+> a
+
+qπ
+
+> i,t
+
+(˜ s, a ) = dπ
+
+> i,t
+
+(˜ s) for 0 ≤ t < H . We now construct a policy π′′  
+
+> i
+
+∈ Πloc  
+
+> m
+
+and show by induction on t
+
+that dπ′′  
+
+> i
+> i,t
+
+= dπ
+
+> i,t
+
+. Define the local policy π′′  
+
+> i
+
+= ( π′′ 
+
+> i, 0
+
+, . . . , π ′′ 
+
+> i,H −1
+
+). When dπ
+
+> i,t
+
+(˜ s) > 0, set 
+
+π′′ 
+
+> i,t
+
+(a | ˜s) = qπ
+
+> i,t
+
+(˜ s, a ) / d π
+
+> i,t
+
+(˜ s).
+
+When dπ
+
+> i,t
+
+(˜ s) = 0, choose π′′ 
+
+> i,t
+
+(· | ˜s) ∈ D (A) arbitrarily. 
+
+Base case. At t = 0, the history hi, 0 is empty and si, 0 ∼ ρi. Hence, dπ′′  
+
+> i
+> i, 0
+
+(s, h i, 0) = dπ
+
+> i, 0
+
+(s, h i, 0) = ρi(s) for every 
+
+s ∈ S , independently of the policy. 20 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Inductive step. Assume 0 ≤ t < H and the inductive hypothesis dπ′′  
+
+> i
+> i,t
+
+= dπ
+
+> i,t
+
+, and write qπ′′  
+
+> i
+> i,t
+
+for agent i’s (augmented state, action) distribution under π′′  
+
+> i
+
+. If dπ
+
+> i,t
+
+(˜ s) = 0, both state–action occupancies are zero by the hypothesis and the identity P 
+
+> a
+
+qπ
+
+> i,t
+
+(˜ s, a ) = dπ
+
+> i,t
+
+(˜ s). Otherwise, the hypothesis and the definition of π′′  
+
+> i
+
+give 
+
+qπ′′  
+
+> i
+> i,t
+
+(˜ s, a ) = dπ′′  
+
+> i
+> i,t
+
+(˜ s) π′′ 
+
+> i,t
+
+(a | ˜s) = dπ
+
+> i,t
+
+(˜ s) qπ
+
+> i,t
+
+(˜ s, a )
+
+dπ
+
+> i,t
+
+(˜ s) = qπ
+
+> i,t
+
+(˜ s, a ).
+
+It remains to prove the equality at time t + 1. Write ˜ s = ( s, h ). Under decoupled dynamics, agent i moves to s′
+
+with probability Pi,t (s′ | s, a ), and its augmented state becomes ( s′, φ (h, s )). Both depend on the joint state only through agent i’s own pair (˜ s, a ). For an augmented state ( s′, h ′) at time t + 1, summing over the pairs that lead to it therefore gives 
+
+dπ
+
+> i,t +1
+
+(s′, h ′) = X 
+
+> (( s,h ),a ): φ(h,s )= h′
+
+qπ
+
+> i,t
+
+(( s, h ), a ) Pi,t (s′ | s, a ).
+
+The same relation holds for π′′  
+
+> i
+
+with qπ 
+
+> i,t
+
+replaced by qπ′′  
+
+> i
+> i,t
+
+. Since qπ′′  
+
+> i
+> i,t
+
+= qπ
+
+> i,t
+
+, we obtain dπ′′  
+
+> i
+> i,t +1
+
+= dπ
+
+> i,t +1
+
+, completing the induction. By (20) and dπ′′  
+
+> i
+> i,t
+
+= dπ
+
+> i,t
+
+, for every predecessor policy ¯ π[i−1] ,
+
+G¯π[i−1]  
+
+> i
+
+(π′′  
+
+> i
+
+) = 
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπ′′ 
+
+> ii,t
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) =
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπ
+
+> i,t
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ).
+
+E.3 Proof of Lemma 5 Lemma 5. Under (11), with probability at least 1 − δ,
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ s) − r ¯π[i−1]  
+
+> i,t
+
+(˜ s) ≤ ϵ
+
+for all i ≥ 2, t, and ˜ s ∈ ˜St.
+
+Proof. We adapt the concentration argument of Chen et al. [4]. Fix an agent i ≥ 2, a time t, and a history-augmented state ˜ si,t ∈ ˜St. The empirical reward 
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+∆ (t, s i,t ) | νt(hi,t ) ∪ τ k
+
+> [i−1]
+
+
+
+is an average of marginal gains over K newly sampled predecessor trajectories. Conditional on the previously computed policies ¯ π[i−1] , these trajectories are independent and each marginal gain has mean r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ). By monotonicity and submodularity, each marginal gain lies in [0 , R ], where R = max v∈V F ({v}). Applying Hoeffding’s inequality (Lemma 8) conditionally gives Pr 
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) > ϵ ¯π[i−1] 
+
+
+
+≤ 2 exp 
+
+
+
+− 2Kϵ 2
+
+R2
+
+
+
+.
+
+The bound holds for every realization of the predecessor policies. Averaging over the randomness used to compute these policies gives the same bound unconditionally. Pr 
+
+
+
+max 
+
+> i,t, ˜si,t
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) > ϵ 
+
+
+
+≤ X
+
+> i,t, ˜si,t
+
+Pr 
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) > ϵ 
+
+
+
+≤ 2( N − 1)( H + 1) |S| m+1 exp 
+
+
+
+− 2Kϵ 2
+
+R2
+
+
+
+.
+
+This right-hand side is at most δ if and only if 2Kϵ 2 
+
+> R2
+
+≥ ln 2( N −1)( H+1) |S| m+1  
+
+> δ
+
+, that is, if and only if K satisfies (11). Therefore, with probability at least 1 − δ, |br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t )| ≤ ϵ for all i, t, ˜si,t .21 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+E.4 Proof of Lemma 6 Lemma 6. Let ¯ πi ∈ arg max πi∈Πloc 
+
+> m
+
+bG¯π[i−1]  
+
+> i
+
+(πi). If br ¯π[i−1]  
+
+> i,t
+
+(˜ s) − r ¯π[i−1]  
+
+> i,t
+
+(˜ s) ≤ ϵ for all t and ˜ s ∈ ˜St, then 
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) ≥ max 
+
+> πi∈Πloc
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) − 2( H + 1) ϵ. 
+
+For i = 1, ¯ π1 attains the maximum exactly. 
+
+Proof. Fix the predecessor policies ¯ π[i−1] . For any πi ∈ Πloc  
+
+> m
+
+, the exact objective (20) is 
+
+G¯π[i−1]  
+
+> i
+
+(πi) = 
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπii,t 
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ).
+
+Algorithm 1 maximizes the estimated objective 
+
+bG¯π[i−1]  
+
+> i
+
+(πi) = 
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπii,t 
+
+br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ),
+
+obtained from G¯π[i−1]  
+
+> i
+
+by replacing the reward r ¯π[i−1]  
+
+> i,t
+
+with its estimate br ¯π[i−1]  
+
+> i,t
+
+. The state marginal dπi 
+
+> i,t
+
+is identical in both objectives, since it is determined by agent i’s dynamics and policy alone and does not depend on the reward. We bound the difference between the true and estimated objectives: 
+
+G¯π[i−1]  
+
+> i
+
+(πi) − bG¯π[i−1]  
+
+> i
+
+(πi) =
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπii,t 
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) (linearity of expectation) 
+
+≤
+
+> H
+
+X
+
+> t=0
+
+E˜si,t ∼dπii,t 
+
+ r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t )  (triangle inequality) 
+
+≤
+
+> H
+
+X
+
+> t=0
+
+ϵ = ( H + 1) ϵ. (|br ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ) − r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t )| ≤ ϵ)Since the upper bound does not depend on πi, removing the absolute value yields two inequalities that hold for all πi ∈ Πloc  
+
+> m
+
+:
+
+bG¯π[i−1]  
+
+> i
+
+(πi) − (H + 1) ϵ ≤ G¯π[i−1]  
+
+> i
+
+(πi), (24) 
+
+G¯π[i−1]  
+
+> i
+
+(πi) − (H + 1) ϵ ≤ bG¯π[i−1]  
+
+> i
+
+(πi). (25) Because ¯ πi ∈ arg max πi∈Πloc 
+
+> m
+
+bG¯π[i−1]  
+
+> i
+
+(πi), 
+
+bG¯π[i−1]  
+
+> i
+
+(πi) ≤ bG¯π[i−1]  
+
+> i
+
+(¯ πi) for all πi ∈ Πloc  
+
+> m
+
+. (26) Subtracting ( H + 1) ϵ from both sides of (25) gives the left inequality below. Combining (26) with (24) at ¯ πi
+
+gives the right one. Hence, for all πi ∈ Πloc  
+
+> m
+
+,
+
+G¯π[i−1]  
+
+> i
+
+(πi) − 2( H + 1) ϵ ≤ bG¯π[i−1]  
+
+> i
+
+(πi) − (H + 1) ϵ ≤ G¯π[i−1]  
+
+> i
+
+(¯ πi).
+
+Taking the maximum of the left-hand side over πi ∈ Πloc  
+
+> m
+
+gives the desired result: max 
+
+> πi∈Πloc
+> m
+
+G¯π[i−1]  
+
+> i
+
+(πi) − 2( H + 1) ϵ ≤ G¯π[i−1]  
+
+> i
+
+(¯ πi).
+
+For i = 1 the reward r ¯π[0]  
+
+> 1,t
+
+is computed exactly, so bG¯π[0]  
+
+> 1
+
+= G¯π[0]  
+
+> 1
+
+, the error terms vanish, and ¯ π1 attains the maximum exactly. 22 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+E.5 Proof of Lemma 7 Lemma 7. For the policy ¯ π returned by Algorithm 1, (1 − cm) X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi) ≤ J( ¯ π) ≤ X 
+
+> i∈[N]
+
+G¯π[i−1]  
+
+> i
+
+(¯ πi).
+
+Proof. Fix a realization of the returned policy ¯ π and a joint trajectory τ generated under it. The trajectory determines the visited pairs τi,t and the sets τi,t −m:t−1, τi, 0: t−1, and τ [i−1] . Every relation up to the final expectation step holds for each such τ separately, and all expectations below are over the initial states and the transition dynamics with ¯ π held fixed. Adding the visits in lexicographic order of ( i, t ) gives 
+
+F (τ ) = X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+∆ τi,t τi, 0: t−1 ∪ τ [i−1] 
+
+. (27) For each agent i and time t, apply Lemma 3 with Xt = τi,t ⊆ V t, B = τi, 0: t−m−1, and Z = τi,t −m:t−1 ∪ τ [i−1] .Since B ∪ Z = τi, 0: t−1 ∪ τ [i−1] , we obtain ∆ τi,t | τi, 0: t−1 ∪ τ [i−1] 
+
+ ≥ (1 − cm) ∆  τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+,
+
+while submodularity ( τi,t −m:t−1 ⊆ τi, 0: t−1) gives ∆ τi,t | τi, 0: t−1 ∪ τ [i−1] 
+
+ ≤ ∆ τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+.
+
+For every joint trajectory τ , summing the preceding inequalities over i ∈ [N ] and t ∈ { 0, . . . , H } and using (27) yields (1 − cm) X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+∆ τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+ ≤ F (τ ) ≤ X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+∆ τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+.
+
+Taking expectations over τ ∼ ¯π gives E[F (τ )] = J( ¯ π), as defined in (3). By linearity of expectation, each expected sum of marginal gains equals the sum of the corresponding expectations, yielding (1 −cm) X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+Eτ ∼ ¯π
+
+∆ τi,t | τi,t −m:t−1∪τ [i−1] 
+
+ ≤ J( ¯ π) ≤ X 
+
+> i∈[N]
+> H
+
+X
+
+> t=0
+
+Eτ ∼ ¯π
+
+∆ τi,t | τi,t −m:t−1∪τ [i−1] 
+
+ . (28) For each agent i and time t, the marginal gain in (28) depends only on the augmented state ˜ si,t and the predecessors’ visited set τ [i−1] , since ˜ si,t determines τi,t and τi,t −m:t−1 = νt(hi,t ). Under the fixed policy ¯ π ∈ Πloc  
+
+> m
+
+,independent initial states and decoupled dynamics imply that ˜ si,t and τ [i−1] are independent. The expectation therefore decomposes as 
+
+Eτ ∼ ¯π
+
+h
+
+∆ τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+i
+
+= E˜si,t ∼d¯πii,t 
+
+h
+
+Eτ [i−1] ∼ ¯π[i−1] 
+
+h
+
+∆ (t, s i,t ) | νt(hi,t ) ∪ τ [i−1] 
+
+ii 
+
+= E˜si,t ∼d¯πii,t 
+
+r ¯π[i−1]  
+
+> i,t
+
+(˜ si,t ),
+
+where the second equality follows from the definition of the local stage reward in (8). Summing over t ∈ { 0, . . . , H }
+
+and using (20) gives HX
+
+> t=0
+
+Eτ ∼ ¯π
+
+∆ τi,t | τi,t −m:t−1 ∪ τ [i−1] 
+
+ = G¯π[i−1]  
+
+> i
+
+(¯ πi).
+
+Substituting this equality for each i ∈ [N ] into (28) establishes the claimed bounds. 
+
+E.6 Hoeffding’s Inequality 
+
+For completeness, we recall the concentration inequality used in the proof of Lemma 5. 
+
+Lemma 8 (Hoeffding’s inequality [8]) . Let X1, . . . , X n be independent random variables with Xl ∈ [a, b ], and let ¯X = 1
+
+> n
+
+Pnl=1 Xl with mean μ = E[ ¯X]. Then for every ϵ > 0, Pr  | ¯X − μ| ≥ ϵ ≤ 2 exp 
+
+
+
+− 2nϵ 2
+
+(b − a)2
+
+
+
+.
+
+23 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 
+
+## F EXPERIMENTAL DETAILS 
+
+F.1 Environment and Evaluation 
+
+The traffic-monitoring instance uses a 20 × 20 grid and horizon H = 20. Each UAV moves deterministically to an adjacent node or hovers. An action that leaves the grid keeps the UAV in place. Initial positions in the reported comparisons are sampled independently and uniformly over grid nodes. The road map is generated with seed 17 and fixed across methods and algorithm seeds. Road importance is not uniform across the grid. As in real urban networks, a few congested regions require more frequent monitoring than the rest. We model this pattern with two regions of high-importance roads. For roads outside these regions, the maximum importance we is sampled from N (1 .5, 12) and clipped to [0 , 3.5]. For roads inside these regions, 
+
+we is sampled from N (3 .5, 0.52) and clipped to [2 .5, 5.5]. Road importance recovers according to αℓ = 1 − e−βℓ . In the time-additive case, αℓ = 1 for every positive gap. Returns are divided by P 
+
+> e∈E
+
+we, the sum of the maximum importances of all roads. Repeated visits after recovery can contribute additional reward, so the normalized horizon return can exceed one. 
+
+Policy evaluation. Every policy is evaluated by its return J on 10,000 common initial joint states. During evaluation, SubPO selects the action with the highest probability for each UAV, while GWPO and GPO return deterministic policies. All reported confidence intervals are computed across algorithm seeds using Student’s 
+
+t-distribution at the 95% confidence level, with a fixed map and evaluation states. The memory comparison in Figure 2(a) uses N = 20, m ∈ { 0, 1, 2, 3}, and five algorithm seeds. For each seed, we express the return improvement of GWPO over GPO as a percentage of the GPO return, and then average these percentages across seeds. In Figure 3, each SubPO variant uses five training seeds, while GWPO with m = 3 and GPO each use a single seed. In the figure, each return gap is measured relative to the GWPO return from this single seed. The confidence intervals of the gaps therefore reflect only the variation across SubPO seeds. 
+
+F.2 Algorithm Settings and Hyperparameter Selection GWPO and GPO. GWPO estimates local stage rewards using (10) and optimizes each local policy by backward induction on the augmented states. GPO uses the same number of sampled trajectories as GWPO with 
+
+m = 0. GWPO computes marginal gains given full predecessor trajectories and the agent’s own m-step history, whereas GPO uses only predecessor visits at the current time. Thus, the two methods differ even when m = 0. Table 1 reports the pre-window curvature and the multiplicative factor in Theorem 2. These factors exclude the additive error term. 
+
+Number of sampled trajectories. We fix δ = 10 −6. For each sample count K, the sample-size bound (11) then gives the tolerance 
+
+ϵ = R
+
+r 12K ln 2( N − 1)( H + 1) |S| m+1 
+
+δ .
+
+Here R ≈ 0.0105 for the reward. Table 2 reports the return J for five sample counts at each of N = 6 and N = 20. We used GWPO with m = 3, 
+
+β = 0 .4, and uniform initial state distributions. Each setting was run with seeds {1, 2, 3}, and all policies were Table 1: Pre-window curvature cm = e−β(m+1) and the approximation factor (1 − cm)/(2 − cm) of Theorem 2 for the traffic-monitoring reward at the listed recovery rates β and memory lengths m.                     
+
+> βmcmApproximation factor 0.1 00.905 0.087 0.1 30.670 0.248 0.4 00.670 0.248 0.4 30.202 0.444 0.8 00.449 0.355 0.8 30.041 0.490
+
+24 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Table 2: Sample counts K, associated ϵ, and returns J for GWPO with m = 3, β = 0 .4, and uniform initial state distributions. We fix δ = 10 −6. Each return is the mean over seeds {1, 2, 3} with its 95% confidence interval. The second row gives the counts used in the remaining experiments.                                                                          
+
+> N= 6 N= 20
+> KϵJKϵJ
+> 17 1.19 ×10 −20.6635 ±0.0064 17 1.20 ×10 −21.8028 ±0.0116 166 3.79 ×10 −30.6711 ±0.0050 173 3.77 ×10 −31.8050 ±0.0058 1,656 1.20 ×10 −30.6654 ±0.0016 1,730 1.19 ×10 −31.8034 ±0.0067 16,556 3.80 ×10 −40.6663 ±0.0005 17,295 3.77 ×10 −41.8021 ±0.0055 165,556 1.20 ×10 −40.6661 ±0.0002 172,952 1.19 ×10 −41.8015 ±0.0009
+
+Table 3: Selected neural network architectures and hyperparameters for SubPO . Depth denotes the number of ReLU layers; the recurrent policy additionally uses one GRU layer.                                                          
+
+> SubPO-M SubPO-NM
+> NDepth Width Learning rate Depth Width Learning rate 21512 10 −32256 10 −3
+> 61256 10 −31512 3×10 −4
+> 10 1512 10 −31512 3×10 −4
+> 15 1512 3×10 −41512 10 −3
+> 20 1256 10 −31512 10 −3
+> 25 1256 10 −31512 10 −3
+> 30 1512 10 −31512 3×10 −4
+
+evaluated on the same 10 ,000 initial joint states. As increasing K did not noticeably change the return, we ran the remaining experiments with ϵ ≈ 3.8 × 10 −3 for all N to reduce computation. 
+
+SubPO architectures. Both SubPO variants receive one-hot encodings of the joint state and time. SubPO-M 
+
+processes these inputs with a feedforward ReLU network, while SubPO-NM uses a ReLU encoder followed by a single-layer GRU with the same hidden width as the encoder. Both networks output a probability distribution over the actions of each UAV. 
+
+SubPO hyperparameter selection. For each team size and SubPO variant, we considered networks with 
+
+{1, 2} ReLU layers, hidden widths {256 , 512 }, and learning rates {10 −3, 3 × 10 −4}. For SubPO-NM , these layers precede the GRU. Batch sizes were 128 for SubPO-M and 256 for SubPO-NM . An epoch is one gradient update on a fresh batch of trajectories. Table 3 reports the selected hyperparameters. Hyperparameter selection used β = 0 .1 and independent nonuniform initial distributions concentrated around a fixed grid node for each UAV. Each configuration was trained for 10,000 epochs and evaluated every 500 epochs on 4,000 fixed validation initial joint states. For each team size and variant, we selected the configuration with the highest validation return and used it for all comparisons with uniform initial positions and β ∈ { 0.1, 0.4, 0.8}. Hyperparameter selection time is excluded from the computation-time budgets. 
+
+F.3 Computation-Time Budgets and Policy Selection Computation-time budgets. Let TN be the measured computation time of GWPO with m = 3 for N agents. GWPO and GPO run one job at a time on one AMD Ryzen 9 9950X3D CPU core, while SubPO uses an NVIDIA RTX PRO 6000 GPU with one CPU thread per run. For all methods, the computation time covers algorithm setup and policy optimization. For GWPO and GPO, it includes trajectory sampling and reward estimation, as well as building the augmented state spaces for GWPO. For SubPO , it includes training and the validations during training. Environment initialization and final test evaluation are excluded. The GWPO and GPO policies are held fixed across the budgets TN , 5 TN , and 20 TN .25 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 2 6 10 15 20 25 30 Number of agents N                   
+
+> 012Return  J
+> GWPO m= 3 GPO SubPO-M SubPO-NM 2610 15 20 25 30 Number of agents N
+> 0122610 15 20 25 30 Number of agents N
+> 012
+> (a) Time budget TN(b) Time budget 5 TN(c) Time budget 20 TN
+
+Figure 8: Returns of GWPO with m = 3, GPO, and the two SubPO variants at β = 0 .4. From left to right, the allowed computation times for SubPO are TN , 5 TN , and 20 TN . SubPO curves show means over five training seeds with 95% confidence intervals. GWPO and GPO each use a single seed. We train several SubPO runs in parallel, so the elapsed time of each run may overstate its computation time. We therefore convert each computation-time budget into a number of epochs, using separate calibration runs executed one at a time. For each team size and variant, the calibration process uses three seeds at β = 0 .4. Using the number of epochs completed by TN , we estimate the counts at 5 TN and 20 TN by extrapolating the number of epochs completed between TN /2 and TN . We take the largest estimate across calibration seeds and add a 10% allowance. We use the same epoch budgets for all training seeds and recovery rates, assuming that the cost of an epoch does not change across recovery rates or over training. 
+
+Training and policy selection. During each SubPO training run, we evaluated the greedy policy every 500 epochs on a fixed validation set of 4,000 uniformly sampled initial joint states, generated independently of the test set. We used these validation returns both to decide when to stop training and to select a policy for each epoch budget. After at least 10,000 epochs, training stopped once ten consecutive validations showed no significant improvement. An improvement was significant if the return exceeded Jref by more than max {10 −4, 10 −3|Jref |} .Each such improvement updated Jref and reset the counter. For each computation-time budget, we selected the policy with the highest validation return reached within that budget. If a run stopped early because of the stopping criterion, we used its policy with the highest validation return for every larger budget. The selected policies were then evaluated on the test set. 
+
+F.4 Additional Results 
+
+Figure 8 and Table 4 report returns J at β = 0 .4 corresponding to the return gaps in Figure 3. Figure 9 extends the comparison of Figure 3 to β = 0 .1 and β = 0 .8. Figure 10 shows the training curves. Among the runs shown, all except SubPO-NM at N = 20 stopped before the 20 TN budget. 26 Yasaman Zolfimoselo, Nikolas Geroliminis, Maryam Kamgarpour 
+
+Table 4: Returns of the selected policies at β = 0 .4 with uniform initial state distributions. The SubPO budgets use the isolated timing calibration and 10% allowance described above. Each SubPO entry is the mean over five training seeds ± the half-width of its 95% confidence interval. GWPO with m = 3 uses seed 1. Intervals describe training-seed variation on the fixed map and evaluation states. 
+
+N GWPO Policy TN 5TN 20 TN
+
+2 0.2484 SubPO-M 0.2526 ± 0.0019 0.2551 ± 0.0014 0.2560 ± 0.0014 
+
+SubPO-NM 0.2552 ± 0.0008 0.2570 ± 0.0003 0.2578 ± 0.0003 6 0.6691 SubPO-M 0.6747 ± 0.0026 0.6888 ± 0.0013 0.6909 ± 0.0020 
+
+SubPO-NM 0.6714 ± 0.0027 0.6979 ± 0.0019 0.7095 ± 0.0029 10 1.0312 SubPO-M 1.0254 ± 0.0041 1.0545 ± 0.0035 1.0583 ± 0.0021 
+
+SubPO-NM 0.9884 ± 0.0054 1.0657 ± 0.0040 1.0841 ± 0.0033 15 1.4427 SubPO-M 1.2984 ± 0.0055 1.4664 ± 0.0054 1.4780 ± 0.0046 
+
+SubPO-NM 1.3292 ± 0.0028 1.4374 ± 0.0058 1.4744 ± 0.0038 20 1.8076 SubPO-M 1.6249 ± 0.0027 1.8058 ± 0.0086 1.8261 ± 0.0034 
+
+SubPO-NM 1.6320 ± 0.0013 1.6998 ± 0.0050 1.7679 ± 0.0070 25 2.1429 SubPO-M 1.8882 ± 0.0022 2.0536 ± 0.0114 2.1417 ± 0.0073 
+
+SubPO-NM 1.9175 ± 0.0024 1.9608 ± 0.0010 1.9669 ± 0.0043 30 2.4447 SubPO-M 2.1526 ± 0.0024 2.2518 ± 0.0054 2.3213 ± 0.0089 
+
+SubPO-NM 2.1775 ± 0.0040 2.2517 ± 0.0017 2.2763 ± 0.0230 
+
+β = 0 .12 6 10 15 20 25 30 Number of agents N              
+
+> ¡40
+> ¡20 0Return gap (% of GWPO)
+> GPO SubPO-M SubPO-NM 2610 15 20 25 30 Number of agents N
+> ¡40
+> ¡20 02610 15 20 25 30 Number of agents N
+> ¡40
+> ¡20 0
+
+(a) Computation time TN (b) Computation time 5 TN (c) Computation time 20 TN
+
+β = 0 .82 6 10 15 20 25 30 Number of agents N              
+
+> ¡20
+> ¡10 0Return gap (% of GWPO)
+> GPO SubPO-M SubPO-NM 2610 15 20 25 30 Number of agents N
+> ¡20
+> ¡10 02610 15 20 25 30 Number of agents N
+> ¡20
+> ¡10 0
+
+(d) Computation time TN (e) Computation time 5 TN (f) Computation time 20 TN
+
+Figure 9: Return differences between each baseline and GWPO with m = 3, expressed as percentages of the GWPO return, at β = 0 .1 (top) and β = 0 .8 (bottom). Negative values indicate higher returns for GWPO. From left to right, the allowed computation times for SubPO are TN , 5 TN , and 20 TN . SubPO curves show means over five training seeds with 95% confidence intervals. GWPO and GPO each use a single seed. 27 Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards 0 20 40 60 Training epochs (thousands) 0.9 1.0 Return  J      
+
+> SubPO-M SubPO-NM GWPO m= 3 050 100 Training epochs (thousands) 1.4 1.6 1.8 050 100 Training epochs (thousands) 1.8 2.0 2.2 2.4
+
+(a) N = 10 (b) N = 20 (c) N = 30 
+
+Figure 10: Training of SubPO-M and SubPO-NM at β = 0 .4. Curves show the highest validation return reached by each epoch, averaged over five training runs with 95% confidence intervals. A curve ends when all five runs have stopped. Markers indicate the epoch budgets corresponding to TN , 5 TN , and 20 TN that fall within each curve. The horizontal line shows the test return of GWPO with m = 3. 28
