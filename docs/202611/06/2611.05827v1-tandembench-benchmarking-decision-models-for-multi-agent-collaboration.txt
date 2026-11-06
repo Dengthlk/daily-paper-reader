@@ -1,0 +1,2058 @@
+Title: TandemBench: Benchmarking Decision Models for Multi-Agent Collaboration
+
+URL Source: https://arxiv.org/pdf/2611.05827v1
+
+Published Time: Thu, 05 Nov 2026 01:45:33 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+TandemBench:  Benchmarking  Decision  Models 
+
+## for  Multi-Agent  Collaboration 
+
+Baohang  Li 1 Xiaocheng  Feng 1,2  Bing  Qin 1
+
+> 1
+
+Harbin  Institute  of  Technology  2Peng  Cheng  Laboratory 
+
+baohangli@ir.hit.edu.cn 
+
+Abstract 
+
+Decision  models  choose  among  predefined  op-
+
+tions  in  tasks  such  as  routing  and  action  se-
+
+lection.  In  multi-agent  collaboration,  a deci-
+
+sion  determines  how  members  divide  work,  ex-
+
+change  resources,  and  act  in  parallel.  We  in-
+
+troduce  TandemBench , a benchmark  of  1,200 
+
+questions  in  multi-agent  cooking  scenarios 
+
+where  coordination  choices  affect  goal  com-
+
+pletion.  Models  receive  complete  global  in-
+
+formation  and  candidate  team  plans,  with  ref-
+
+erence  answers  established  through  execution 
+
+and  exact  search.  Models  select  an  optimal 
+
+team  plan  and,  in  paired  variants  that  retain  or 
+
+remove  it,  judge  whether  better  arrangements 
+
+exist  beyond  the  supplied  options.  We  evaluate 
+
+40  native  decision  models  and  compare  them 
+
+with  10  general-purpose  language  models.  The 
+
+best  native  decision  model  achieves  62.50%  de-
+
+cision  accuracy.  Native  decision  models  re-
+
+main  close  to  chance  in  optimality  verification. 
+
+Paired  tests  reveal  that  some  report  better  alter-
+
+natives  regardless  of  whether  an  optimal  plan 
+
+is  already  present.  These  findings  show  that 
+
+team-plan  decision  accuracy  alone  can  con-
+
+ceal  systematic  errors  in  judging  whether  the 
+
+supplied  options  contain  an  optimal  arrange-
+
+ment.  The  dataset  and  evaluation  code  are 
+
+publicly  available  at  https://github.com/ lililibaohang/TandemBench .
+
+1 Introduction 
+
+Decision  models  choose  among  predefined  options 
+
+in  tasks  such  as  routing  and  action  selection  (Duan 
+
+et  al. , 2026 ; Geuter  et  al. , 2026 ). In  multi-agent 
+
+collaboration,  a single  decision  can  determine  how 
+
+team  members  coordinate  their  actions  toward  a
+
+shared  goal.  For  example,  an  assistant  can  supply 
+
+an  ingredient  before  preparing  plates,  allowing  the 
+
+chef  to  cook  while  the  assistant  continues  prepa-
+
+ration.  Preparing  plates  first  delays  the  handoff 
+
+and  leaves  the  chef  waiting  (Figure  1).  Judging  a
+
+team  plan  therefore  requires  considering  how  mem-Shared state    
+
+> (a) Handoff first (b) Plates first
+> Assistant Assistant Chef Chef Give Prepare plates Cook Overlap Prepare plates Give Wait Cook
+> Earlier finish Later finish
+
+Figure  1: One  member’s  action  order  affects  the  whole 
+
+team.  (a)  Handing  over  ingredients  first  enables  parallel 
+
+cooking  and  plate  preparation.  (b)  Preparing  plates  first 
+
+leaves  the  chef  waiting. 
+
+bers’  actions  depend  on  one  another  and  jointly 
+
+contribute  to  the  goal. 
+
+Existing  decision  benchmarks  examine  accu-
+
+racy,  calibration,  and  robustness  (Duan  et  al. ,
+
+2026 ; Zhuang  et  al. , 2026 ; Lan  et  al. , 2026 ),
+
+while  AgentDecisionBench  evaluates  tool  and  ac-
+
+tion  choices  in  agent  workflows  (Zhu  et  al. , 2026 ).
+
+We  focus  on  decisions  that  specify  joint  plans  for 
+
+multiple  team  members.  Several  plans  may  be  fea-
+
+sible,  yet  their  coordination  choices  can  lead  to 
+
+different  outcomes  for  the  team.  Evaluating  these 
+
+choices  requires  a reference  for  the  best  achievable 
+
+outcome  from  the  given  state,  since  even  the  best 
+
+supplied  plan  may  be  suboptimal.  We  therefore  as-
+
+sess  whether  models  select  an  optimal  team  plan 
+
+and  recognize  when  better  arrangements  exist  be-
+
+yond  the  supplied  options. 
+
+We  introduce  TandemBench , comprising  1,200 
+
+questions  from  200  scenarios  across  30  recipe 
+
+tasks  in  Collab-Overcooked  (Sun  et  al. , 2025 ). We 
+
+select  states  where  action  ordering  or  resource 
+
+handoffs  affect  task  completion  even  when  the  re-
+
+maining  actions  are  optimized.  Each  question  pro-
+
+vides  complete  global  information  and  a candidate 
+
+set  containing  multiple  feasible  team  plans.  Ex-
+
+ecution  and  exact  search  establish  candidate  out-arXiv:2611.05827v1 [cs.CL] 4 Nov 2026 Decision models (n=40; DA-ranked) General models (n=10)  
+
+> 025 50 75 Accuracy (%)  VA ≈ 46–56%
+> Qwen3.8
+> VA 71.88% KnowLine
+> DA VA
+
+Figure  2: Decision  accuracy  (DA)  and  verification  accu-
+
+racy  (VA),  with  models  sorted  by  increasing  DA  within 
+
+each  family. 
+
+comes  and  the  best  achievable  result  from  each 
+
+state.  Paired  variants  retain  or  remove  the  optimal 
+
+plan  while  keeping  the  state  and  goal  fixed,  allow-
+
+ing  us  to  distinguish  correct  reports  of  better  alter-
+
+natives  from  false  alarms. 
+
+We  evaluate  40  native  decision  models  and  com-
+
+pare  them  with  10  general-purpose  language  mod-
+
+els.  KnowLine  leads  the  native  models  in  deci-
+
+sion  accuracy  (DA)  at  62.50%  (Figure  2; Tables  1
+
+and  2),  while  their  verification  accuracy  (VA)  re-
+
+mains  near  chance  (50%).  Paired  tests  reveal  two 
+
+contrasting  errors:  some  models  report  a better 
+
+plan  whether  or  not  the  optimum  is  supplied,  while 
+
+others  select  a supplied  plan  even  when  it  is  subop-
+
+timal.  Thus,  DA  alone  misses  systematic  errors  in 
+
+optimality  judgments. 
+
+Our  contributions  are  as  follows. 
+
+• We  introduce  TandemBench , a 1,200-
+
+question  benchmark  for  evaluating  decision 
+
+models  on  how  multiple  agents  coordinate 
+
+their  actions  toward  a shared  goal,  given 
+
+complete  global  information. 
+
+• We  ground  comparisons  among  candidate 
+
+coordination  plans  in  execution  and  exact 
+
+search,  and  use  paired  tests  to  assess  whether 
+
+models  recognize  when  the  supplied  options 
+
+omit  the  optimal  arrangement. 
+
+• We  show  that  decision  accuracy  alone  misses 
+
+systematic  errors  in  optimality  verification, 
+
+and  analyze  how  these  decisions  vary  across 
+
+short- and  long-horizon  goals  and  option  or-
+
+ders. 
+
+2 Related  Work 
+
+Decision  Models.  Decision-model  evaluation 
+
+covers  both  individual  choices  and  decisions 
+
+within  agent  workflows.  JEVal  and  OpenDeci-
+
+sions  assess  accuracy,  calibration,  and  inference 
+
+efficiency  (Duan  et  al. , 2026 ; Geuter  et  al. , 2026 ),
+
+while  DecisionRobust  and  DecisionPivot  exam-
+
+ine  adversarial  robustness  and  controlled  input 
+
+changes,  respectively  (Lan  et  al. , 2026 ; Zhuang 
+
+et  al. , 2026 ). AgentBench  and  AgentBoard  eval-
+
+uate  sequential  decisions  through  task  success  and 
+
+progress  (Liu  et  al. , 2024 ; Ma  et  al. , 2024 ); Agent-
+
+DecisionBench  spans  isolated  choices,  recorded 
+
+agent  states,  and  online  control  (Zhu  et  al. , 2026 ).
+
+TandemBench  takes  a joint  team  plan  as  the  deci-
+
+sion  unit,  so  one  choice  specifies  actions  for  multi-
+
+ple  members  toward  a shared  goal. 
+
+Multi-Agent  Collaboration.  CoELA  and  RoCo 
+
+study  communication  and  coordinated  execution, 
+
+while  MultiAgentBench  and  PARTNR  evaluate 
+
+collaboration  in  interactive  settings  (Zhang  et  al. ,
+
+2024 ; Mandi  et  al. , 2024 ; Zhu  et  al. , 2025 ; Chang 
+
+et  al. , 2025 ). CoordQA  and  RoCoBench-Text  as-
+
+sess  coordination  choices  and  reasoning  through 
+
+static  questions  (Agashe  et  al. , 2025 ; Mandi  et  al. ,
+
+2024 ). ParaCook  supplies  CP-SAT  optimal  ref-
+
+erences  for  abstract  scheduling  (Zhang  et  al. ,
+
+2026 ), while  CoCoBench  evaluates  coordination 
+
+against  optimal  makespan  under  a skill  abstrac-
+
+tion  (Chen  et  al. , 2026 ). TandemBench  builds 
+
+on  Collab-Overcooked’s  asymmetric  cooking  en-
+
+vironment  (Sun  et  al. , 2025 ). It  evaluates  a single 
+
+model’s  choices  among  executable  team  plans  un-
+
+der  complete  global  information,  using  an  exact  op-
+
+timality  reference  from  the  same  state. 
+
+Planning  and  Verification.  Planning  bench-
+
+marks  assess  plan  generation  and  reasoning 
+
+about  actions,  state  transitions,  and  con-
+
+straints  (Valmeekam  et  al. , 2023 ; Kokel  et  al. ,
+
+2025 ; Xie  et  al. , 2024 ; Zheng  et  al. , 2024 ). Plan-
+
+optimality  verification  asks  whether  a given  plan 
+
+is  optimal  (Lin  et  al. , 2024 ), while  optimality 
+
+certificates  provide  independently  checkable 
+
+evidence  (Dold  et  al. , 2025 ). DecisionPivot  uses 
+
+controlled  contrasts  to  examine  how  decisions 
+
+respond  to  input  changes  (Zhuang  et  al. , 2026 ).
+
+TandemBench  asks  whether  any  supplied  joint 
+
+team  plan  attains  the  state  optimum.  Paired 
+
+variants  retain  or  remove  the  optimal  plan  while 
+
+keeping  the  state  and  goal  fixed,  testing  whether 
+
+model  judgments  track  its  presence. 3 Multi-Agent  Collaborative 
+
+Decision-Making 
+
+3.1  Task  Definition 
+
+A single  decision  model  receives  a complete  global 
+
+state,  the  environment  rules,  a shared  goal,  and  can-
+
+didate  team  plans.  Each  candidate  specifies  an  ac-
+
+tion  program  for  each  of  two  team  members.  The 
+
+global  state  records  both  members’  configurations, 
+
+task-relevant  resources,  and  ongoing  processes. 
+
+The  two  programs  execute  concurrently  under 
+
+the  environment  rules.  Their  dependencies  and  re-
+
+source  handoffs  determine  when  each  member  can 
+
+proceed  (Figure  1).  A candidate  may  cover  the  full 
+
+task  or  prescribe  a stage  that  ends  before  the  final 
+
+goal.  Appendix  A specifies  the  execution  seman-
+
+tics. 
+
+3.2  Decision  Objectives 
+
+We  evaluate  a team  plan  against  either  an  interme-
+
+diate  milestone  or  the  final  task  goal,  referred  to  as 
+
+short- and  long-horizon  goals.  Completion  cost  is 
+
+measured  in  joint  execution  steps. 
+
+Short-horizon  goals.  We  count  the  steps  un-
+
+til  the  specified  intermediate  milestone  is  first 
+
+reached. 
+
+Long-horizon  goals.  We  count  the  steps  until 
+
+the  final  goal  is  reached.  If  the  prescribed  stage 
+
+ends  before  completion,  the  cost  is  its  executed 
+
+steps  plus  the  minimum  remaining  steps  from  the 
+
+resulting  state. 
+
+Both  goal  settings  apply  to  team-plan  deci-
+
+sions  and  optimality  verification.  Short- and  long-
+
+horizon  questions  from  the  same  state  use  their  re-
+
+spective  execution  protocols  and  may  have  differ-
+
+ent  candidate  programs.  Appendix  A.2  provides 
+
+the  formal  definitions. 
+
+3.3  Optimal  Decisions 
+
+Both  tasks  use  the  state  optimum:  the  minimum 
+
+completion  cost  of  any  legal  joint  execution  from 
+
+the  given  state  under  the  specified  goal  and  action 
+
+domain. 
+
+For  team-plan  decision-making , the  model 
+
+chooses  among  four  candidate  plans.  Exactly  one 
+
+attains  the  state  optimum  and  is  the  correct  answer. 
+
+Plan-optimality  verification  asks  whether  a
+
+given  plan  is  optimal  (Lin  et  al. , 2024 ). We  eval-
+
+uate  whether  the  supplied  set  contains  such  a plan. 
+
+Each  verification  question  includes  three  concrete 
+
+plans  and  a fourth  option  stating  that  a feasible  plan 
+
+can  reach  the  goal  in  fewer  joint  steps  than  all  three. 
+
+This  statement  is  true  exactly  when  none  of  the  sup-
+
+plied  plans  attains  the  state  optimum. 
+
+The  two  tasks  are  scored  separately.  Decision 
+
+accuracy  scores  the  optimal  concrete  choice.  Ver-
+
+ification  accuracy  scores  whether  the  better-plan 
+
+statement  is  correctly  accepted  or  rejected;  any 
+
+valid  concrete  choice  counts  as  rejection.  Section  5
+
+defines  the  metrics,  and  Appendix  A.2  gives  the 
+
+formal  decision  criteria. 
+
+4 TandemBench 
+
+We  construct  TandemBench  from  states  where  co-
+
+ordination  choices  affect  task  completion.  Alterna-
+
+tive  team  plans  make  these  choices  explicit,  and  ex-
+
+ecution  and  exact  search  establish  their  outcomes 
+
+and  the  state  optimum.  Each  verified  base  question 
+
+yields  paired  variants  that  retain  or  remove  the  op-
+
+timal  plan  (Figure  3). 
+
+4.1  Environment  and  Tasks 
+
+We  use  30  recipe  tasks  from  Collab-
+
+Overcooked  (Sun  et  al. , 2025 ), where  a chef 
+
+and  an  assistant  work  in  separate  kitchen  regions 
+
+with  asymmetric  access  to  ingredients,  appli-
+
+ances,  and  counters.  Access  restrictions  make 
+
+some  actions  depend  on  resources  supplied  by 
+
+the  other  member,  while  recipe  dependencies 
+
+constrain  action  order.  Automatic  processing 
+
+allows  preparation  to  overlap  with  cooking 
+
+(Figure  1).  Carrying  limits  and  shared-counter 
+
+availability  constrain  handoff  locations  and  timing. 
+
+Appendix  A gives  the  execution  rules. 
+
+4.2  Scenario  Selection 
+
+We  select  states  where  fixing  a coordination  choice 
+
+changes  the  best  achievable  completion  cost.  Can-
+
+didate  states  come  from  verified  optimal  delivery 
+
+trajectories,  at  events  that  change  available  materi-
+
+als,  processing  status,  or  handoff  opportunities.  Ex-
+
+ecution  prefixes  establish  reachability. 
+
+At  each  state,  we  compare  alternative  orders  of 
+
+two  required  events  performed  by  the  same  mem-
+
+ber  or  alternative  locations  for  a required  hand-
+
+off.  Exact  search  determines  the  minimum  deliv-
+
+ery  cost  subject  to  each  choice,  optimizing  all  re-
+
+maining  actions.  A state  qualifies  when  two  fea-
+
+sible  choices  are  established:  one  attains  the  state 
+
+optimum,  while  the  other  requires  at  least  three  ad-
+
+ditional  joint  steps. 
+
+We  select  200  qualifying  scenarios  across  all 
+
+30  tasks,  prioritizing  coverage  of  event  orderings, Figure  3: Construction  of  TandemBench . We  select  scenarios  with  consequential  coordination  choices  and  con-                   
+
+> struct candidate team plans. Execution and exact search establish reference answers. Retaining or removing the
+> optimal plan yields paired verification questions.
+
+handoff  directions,  comparison  families,  and  ma-
+
+terial  stages.  Screening  uses  the  final  delivery 
+
+goal  and  constraints  on  individual  coordination 
+
+choices.  Concrete  candidate  programs  are  con-
+
+structed  and  evaluated  separately  for  the  short-
+
+and  long-horizon  questions.  Algorithm  1 in  Ap-
+
+pendix  B details  screening  and  coverage. 
+
+4.3  Instance  Construction 
+
+Each  scenario  supplies  a short-horizon  and  a
+
+long-horizon  base  question.  From  each  verified 
+
+base  question,  we  derive  a pair  of  optimality-
+
+verification  variants. 
+
+4.3.1  Question  Construction 
+
+Candidate  plans  express  different  ways  to  coordi-
+
+nate  the  same  team  toward  the  specified  goal.  They 
+
+vary  in  work  order,  handoff  location,  preparation 
+
+scope,  work  overlap,  or  waiting  conditions.  For  ex-
+
+ample,  changing  the  order  of  ingredient  supply  and 
+
+utensil  preparation  affects  when  processing  can  be-
+
+gin  and  which  work  can  overlap.  Handoff  choices 
+
+also  depend  on  members’  positions  and  counter 
+
+availability.  Appendix  A.3  gives  concrete  candi-
+
+date  descriptions  and  costs. 
+
+Each  base  question  contains  four  plans,  with  at 
+
+least  three  feasible  and  exactly  one  attaining  the 
+
+state  optimum.  Multiple  feasible  alternatives  re-
+
+quire  comparing  arrangements  that  can  complete 
+
+the  goal.  We  aim  to  include  alternatives  with  small 
+
+cost  gaps  when  they  express  distinct  coordination 
+
+choices.  Candidate  programs  may  differ  between 
+
+the  short- and  long-horizon  objectives. 
+
+To  construct  a verification  pair,  we  remove  the 
+
+optimal  plan  in  one  variant  and  a predetermined 
+
+nonoptimal  plan  in  the  other.  Both  add  the  same 
+
+statement  that  a feasible  plan  can  reach  the  goal 
+
+in  fewer  joint  steps  than  all  three  remaining  plans. 
+
+The  state,  goal,  execution  rules,  and  retained  pro-
+
+grams  remain  unchanged.  The  resulting  four-
+
+option  pair  supports  comparison  of  correct  reports 
+
+when  the  optimum  is  missing  and  false  alarms 
+
+when  it  is  present. 
+
+4.3.2  Answer  Annotation 
+
+Candidate  execution  records  the  steps  taken,  goal 
+
+attainment,  and  resulting  state.  Exact  search  es-
+
+tablishes  the  state  optimum  and  any  optimal  con-
+
+tinuation  needed  for  long-horizon  evaluation.  To-
+
+gether,  these  determine  candidate  costs  under  the 
+
+objectives  in  Section  3. Matching  candidate  costs 
+
+to  the  state  optimum  identifies  the  correct  base  an-
+
+swer.  In  the  verification  pair,  the  better-plan  state-
+
+ment  is  false  when  the  optimum  is  retained  and  true 
+
+when  it  is  removed. 
+
+Noncompletion  requires  evidence  under  the  pre-
+
+scribed  program  and  protocol;  unresolved  searches 
+
+do  not  supply  answer  labels.  Appendix  B.2  details 
+
+candidate  validation  and  content  review. 
+
+4.4  Benchmark  Statistics 
+
+TandemBench  contains  1,200  questions  from  200 
+
+scenarios  across  30  tasks:  400  team-plan  decisions 
+
+and  800  optimality-verification  variants.  The  200 
+
+short- and  200  long-horizon  questions  form  200 
+
+pairs  sharing  the  initial  state.  The  variants  form 
+
+400  pairs,  each  containing  one  question  with  the 
+
+optimum  retained  and  one  with  it  removed.  Both 
+
+types  of  pairs  derive  from  the  same  200  scenar-
+
+ios.  The  two  evaluation  dimensions  are  scored  sep-
+
+arately,  and  option  rotations  do  not  count  as  addi-
+
+tional  questions. In  64  scenarios,  the  short- and  long-horizon 
+
+questions  use  identical  candidate  programs  and  re-
+
+tain  the  same  optimal  choice,  supporting  compar-
+
+isons  across  goals  and  execution  protocols.  In  15 
+
+long-horizon  questions,  a feasible  alternative  fin-
+
+ishes  its  prescribed  stage  sooner  than  the  optimal 
+
+candidate  but  has  a higher  total  completion  cost. 
+
+These  cases  support  analysis  of  choices  where 
+
+stage  length  and  final  cost  favor  different  plans. 
+
+Appendix  B.3  reports  structural  groups  for  related 
+
+recipe  variants  and  programs,  with  grouping  rules 
+
+and  full  counts. 
+
+5 Experiments  and  Analysis 
+
+5.1  Experimental  Setup 
+
+TandemBench  uses  English  inputs.  We  evaluate  40 
+
+native  decision  models  and  report  reference  results 
+
+from  10  general-purpose  language  models.  Un-
+
+resolved  answers  from  these  models  count  as  in-
+
+correct  under  the  scoring  policy.  Each  general-
+
+purpose  model  contributes  19,200  outputs  across 
+
+questions,  option  rotations,  and  samples. 
+
+Each  question  is  evaluated  under  four  cyclic  op-
+
+tion  rotations,  so  each  candidate  appears  once  in 
+
+each  position.  Native  decision  models  produce  one 
+
+response  per  rotation,  and  general-purpose  models 
+
+produce  four.  Each  response  is  scored  separately, 
+
+without  voting.  Models  use  their  native  decision 
+
+or  generation  interfaces;  Appendix  C details  rea-
+
+soning  modes  and  sampling  parameters. 
+
+Decision  accuracy  (DA)  measures  selection  of 
+
+the  optimal  concrete  plan.  Verification  accuracy 
+
+(VA)  averages  the  correct-detection  rate  when  the 
+
+optimum  is  removed  and  the  correct-rejection  rate 
+
+when  it  is  retained.  Any  valid  concrete-plan  choice 
+
+counts  as  rejecting  the  better-plan  statement.  In-
+
+valid  or  truncated  responses  count  as  incorrect  for 
+
+both  metrics.  Uniform  option  selection  yields  25% 
+
+DA  and  50%  VA.  Appendix  D gives  the  metric  for-
+
+mulas. 
+
+5.2  Overall  Performance 
+
+Native  decision  models  vary  widely  in  team-plan 
+
+decision  accuracy,  from  15.44%  to  62.50%  (Ta-
+
+ble  1).  Their  verification  accuracy  remains  near 
+
+chance,  ranging  from  45.94%  to  56.28%. 
+
+The  highest-DA  model,  KnowLine,  does  not 
+
+lead  in  verification:  D3-Ultra  achieves  the  highest 
+
+VA  despite  lower  DA.  Thus,  plan-selection  accu-
+
+racy  alone  does  not  capture  how  well  models  judge 
+
+whether  better  arrangements  exist  beyond  the  sup-
+
+plied  options. 
+
+Among  general-purpose  models  (Table  2; Ap-
+
+pendix  D.2 ),  Qwen3.8-27B  leads  with  82.80%  DA 
+
+and  71.88%  VA. 
+
+5.3  Optimality  Verification 
+
+Many  models  report  a better  plan  at  similar  rates 
+
+whether  the  optimal  plan  is  present  or  absent  (Fig-
+
+ure  4(a)).  Tacit-2B  detects  98.38%  of  cases  where 
+
+the  optimum  is  absent,  but  also  raises  false  alarms 
+
+in  97.88%  of  cases  where  it  is  present. 
+
+Paired  responses  show  two  recurring  patterns: 
+
+some  models  report  a better  plan  in  both  variants, 
+
+while  others  select  a concrete  plan  in  both  (Fig-
+
+ure  4(b)).  Both  patterns  produce  a correct  judg-
+
+ment  in  one  condition  and  an  incorrect  judgment 
+
+in  the  other. 
+
+The  better-plan  probabilities  also  discriminate 
+
+weakly  between  the  two  conditions,  with  a median 
+
+AUROC  of  0.537  and  a maximum  of  0.598  across 
+
+native  models  (Appendix  G). 
+
+5.4  Short- and  Long-Horizon  Goals 
+
+We  compare  64  matched  pairs  that  share  the  initial 
+
+state,  candidate  programs,  and  optimal  choice,  but 
+
+differ  in  their  goal  and  execution  rules. 
+
+Across  native  decision  models,  mean  DA  de-
+
+creases  from  49.58%  for  short-horizon  goals  to 
+
+46.75%  for  long-horizon  goals,  although  individ-
+
+ual  models  vary  (Figure  5).  Full  model-level  re-
+
+sults  appear  in  Appendix  E.2 .
+
+Earlier  stage  completion  can  leave  more  work  for 
+
+the  team.  Appendix  E reports  model-level  choices 
+
+on  15  long-horizon  questions  where  an  alternative 
+
+finishes  its  prescribed  stage  sooner  but  requires 
+
+more  joint  steps  to  reach  the  final  goal. 
+
+5.5  Position  Sensitivity 
+
+We  measure  position  sensitivity  as  the  difference 
+
+between  a model’s  highest  and  lowest  accuracy 
+
+across  four  option  rotations.  The  median  range 
+
+across  native  models  is  10.38  percentage  points,  in-
+
+dicating  that  option  order  affects  measured  accu-
+
+racy  (Figure  6(a) ). 
+
+Choice  consistency  measures  how  often  the 
+
+same  underlying  plan  is  selected  across  all  four  ro-
+
+tations  (Figure  6(b) ).  CLM  selects  the  same  plan 
+
+in  92.00%  of  questions  despite  a DA  of  15.44%. 
+
+Stable  choices  can  therefore  still  be  consistently  in-
+
+correct. Rank  Model  Params.  (B)  DA  ↑ VA  ↑
+
+1 KnowLine-31B-Gen1  31  62.50  51.44 
+
+2 Basal-Omni-1.0-Ultra  31  60.75  51.97 
+
+3 Quyet-1.0-Large  31  60.75  52.06 
+
+4 DOPEST-1.0-31B  31  60.38  52.16 
+
+5 PPLX-Decider-v1.2  27  60.38  55.31 
+
+6 PPLX-Decider-v1.1-27B  27  59.44  54.28 
+
+7 Torchcast-4B-v1.2  4 58.94  50.66 
+
+8 H2O-Lightning-31B  (BF16)  31  58.69  50.19 
+
+9 D3  27  58.69  52.19 
+
+10  GLiDE-1.2-Open  27  58.13  54.72 
+
+11  StartLux-v1.1-27B-Instant  27  57.44  54.00 
+
+12  René-31B  (dequant.  BF16)  31  55.56  53.41 
+
+13  PPLX-Decider-Flash-v1.2  4 52.94  53.19 
+
+14  D3-Turbo  27  52.94  49.97 
+
+15  Torchcast-4B-v1.3  4 52.75  51.28 
+
+16  deck31b  (BF16)  31  52.19  49.72 
+
+17  Wald-26B-A4B  26/4  50.63  51.09 
+
+18  Jeff-1.1-Medium  12  50.50  50.69 
+
+19  Vega-27B  27  50.25  52.28 
+
+20  Tacit-9B  9 48.63  49.94 
+
+21  D3-Ultra  27  47.50  56.28 
+
+22  MeTask-Rain-31B  31  47.44  50.56 
+
+23  MeTask-Rain-12B  12  47.38  50.66 
+
+24  Liquid  AI  d1-3B  3.12  47.19  53.47 
+
+25  Torchcast-12B  12  46.75  52.69 
+
+26  Tacit-4B  4 46.31  50.00 
+
+27  Mapika-Decider-12B  12  44.25  50.78 
+
+28  Mammoth-1  27  43.88  52.34 
+
+29  Torchcast-4B-v1.1  4 43.50  52.34 
+
+30  Clef  27  40.94  52.91 
+
+31  Joey-1  2 40.69  50.53 
+
+32  Tacit-2B  2 39.44  50.25 
+
+33  H2O-Lightning-4B  4 39.06  51.19 
+
+34  Nox-4B  4 39.00  50.00 
+
+35  Clef-Flash  9 35.81  49.91 
+
+36  Lux-9B  9 34.56  51.97 
+
+37  Tacit-1.7B  1.7  29.44  49.59 
+
+38  Laya-421M  0.421  25.88  49.69 
+
+39  Kai-0.6B  0.6  21.81  50.00 
+
+40  CLM-8B  8 15.44  45.94 
+
+Table  1: DA  and  VA  (%)  for  40  native  decision  models,  averaged  over  four  option  rotations.  Parameters  are  in 
+
+billions;  “26/4”  denotes  total/active  parameters. 
+
+Rank  Model  Avg.  output  tokens  DA  ↑ VA  ↑
+
+1 Qwen3.8-27B  8652  82.80  71.88 
+
+2 Gemma4-31B  1072  73.11  57.03 
+
+3 Gemma4-26B-A4B  1516  60.58  53.66 
+
+4 Muse-Glimmer-30B  1415  59.64  60.35 
+
+5 Qwen3-32B  925  46.33  49.45 
+
+Table  2: DA  and  VA  (%)  and  mean  output  length  for  the  five  highest-DA  general-purpose  models. 0 25 50 75 100 
+
+False alarms (%) 
+
+> 025 50 75 100
+> Detection (%)
+> Equal report rates
+> Basal PPLX D3 Tacit-2B
+
+Basal PPLX D3 Tacit-2B 
+
+12.44 15.00 64.06 8.50 20.94 31.50 35.19 12.38 12.75 70.50 8.38 8.38 1.06 97.31 1.06 0.56   
+
+> 050 100
+
+(a) Detection and false alarms 
+
+> Both correct
+> No / Yes
+> Both report
+> Yes / Yes
+> Neither reports
+> No / No
+> Both wrong
+> Yes / No
+
+(b) Paired responses (%) 
+
+> Report a better plan: retained / removed Share (%)
+
+Figure  4: Optimality-verification  behavior.  (a)  Detection  versus  false-alarm  rates.  (b)  Paired  responses  when  the 
+
+optimal  plan  is  retained  or  removed,  in  that  order.  Yes  reports  a better  plan;  No  selects  a concrete  plan. 20 40 60 80 100 
+
+Decision accuracy (%) 72.3 59.8 72.3 65.2 56.6 61.3 86.2 74.1 84.1 75.8 72.9 58.9 
+
+KnowLine −12.5 
+
+Basal −7.0 
+
+Quyet +4.7 
+
+Qwen3.8-27B −12.1 
+
+Gemma4-31B −8.3 
+
+Gemma4-26B-A4B −14.1 
+
+Decision models General models  
+
+> Change (pp)
+> Short horizon Long horizon
+
+Figure  5: Short- and  long-horizon  DA  with  identical 
+
+candidate  programs  but  different  goals  and  execution 
+
+rules.  The  three  models  with  the  highest  overall  DA  in 
+
+each  family  are  shown.  Changes  are  long  minus  short, 
+
+in  percentage  points. 
+
+6 Conclusion 
+
+TandemBench  evaluates  decision  models  on  team 
+
+plans  involving  task  dependencies,  resource  hand-
+
+offs,  and  parallel  work.  Execution  and  exact  search 
+
+establish  reference  answers,  while  paired  candi-
+
+date  sets  test  whether  models  recognize  when  bet-
+
+ter  arrangements  exist  beyond  the  supplied  op-
+
+tions.  Native  decision  models  differ  widely  in  plan-
+
+choice  accuracy,  but  their  reports  of  better  alterna-
+
+tives  often  fail  to  distinguish  whether  an  optimal 
+
+plan  is  present.  Performance  also  varies  across 
+
+goal  settings  and  option  orders.  TandemBench 
+
+therefore  supports  comparisons  that  assess  both  the 
+
+selected  team  plan  and  judgments  about  the  avail-
+
+able  alternatives. 
+
+Limitations 
+
+Our  findings  concern  team-plan  decisions  for  two 
+
+agents  in  one  kitchen  with  global  information. 
+
+Questions  share  scenarios,  and  inference  budgets 
+
+vary  across  models. 0 10 20 30       
+
+> Accuracy range (pp)
+> Decision (n=40) Median 10.38
+> General (n=10) Median 7.34
+> 025 50 75 100
+> Choice consistency (%)
+> 025 50 75 100
+> Decision accuracy (%)
+> 25% reference
+> CLM Basal
+> Qwen3.8-27B
+
+(a) Variation across rotations (b) Consistency versus accuracy  
+
+> Decision General
+
+Figure  6: Sensitivity  to  option  order.  (a)  DA  range  across  four  rotations;  bars  mark  group  medians.  (b)  DA  versus 
+
+choice  consistency,  the  percentage  of  questions  selecting  the  same  underlying  plan  across  all  rotations.  General-
+
+model  scores  average  four  samples  per  rotation  and  include  sampling  variability. 
+
+References 
+
+Saaket  Agashe,  Yue  Fan,  Anthony  Reyna,  and  Xin  Eric 
+
+Wang.  2025.  LLM -coordination:  Evaluating  and 
+
+analyzing  multi-agent  coordination  abilities  in  large 
+
+language  models . In  Findings  of  the  Association 
+
+for  Computational  Linguistics:  NAACL  2025 , pages 
+
+8053–8072. 
+
+Matthew  Chang,  Gunjan  Chhablani,  Alexander  Clegg, 
+
+Mikael  Dallaire  Cote,  Ruta  Desai,  Michal  Hlavac, 
+
+Vladimir  Karashchuk,  Jacob  Krantz,  Roozbeh  Mot-
+
+taghi,  Priyam  Parashar,  Siddharth  Patki,  Ishita 
+
+Prasad,  Xavier  Puig,  Akshara  Rai,  Ram  Ramrakhya, 
+
+Daniel  Tran,  Joanne  Truong,  John  Turner,  Eric  Un-
+
+dersander,  and  Tsung-Yen  Yang.  2025.  PARTNR : A
+
+benchmark  for  planning  and  reasoning  in  embodied 
+
+multi-agent  tasks . In  International  Conference  on 
+
+Learning  Representations .
+
+Yang  Chen,  Ye-Xin  Xie,  Lirong  Che,  Danyang  Peng, 
+
+Yuzhe  Yang,  Peiwen  Lin,  Xu  Cao,  Chuang  Wang, 
+
+Lei  Yuan,  Jian  Su,  and  Lan-Zhe  Guo.  2026.  Co-
+
+CoBench:  A Cooperative  Coordination  Benchmark 
+
+for  Embodied  Multi-Agent  Task  Planning . Preprint ,
+
+arXiv:2608.28266. 
+
+Simon  Dold,  Malte  Helmert,  Jakob  Nordström, 
+
+Gabriele  Röger,  and  Tanja  Schindler.  2025.  Pseudo-
+
+boolean  proof  logging  for  optimal  classical  planning .
+
+Preprint , arXiv:2504.18443. 
+
+Feiyu  Duan,  Jiayu  Lin,  Jia  Wang,  Jun  Xiang,  Jialiang 
+
+Wu,  Xinnong  Zhang,  Hanqi  Yan,  Siyuan  Wang, 
+
+and  Zhongyu  Wei.  2026.  General  decision  models: 
+
+Benchmarking  and  insights  beyond  Jev . Preprint ,
+
+arXiv:2610.03935.  Version  2,  12  October  2026. 
+
+Jonathan  Geuter,  Andrew  Cheng,  and  David  Alvarez-
+
+Melis.  2026.  Releasing  the  inner  Jev : A sim-
+
+ple  recipe  for  open  decision  models . Preprint ,
+
+arXiv:2610.17205.  Version  1,  12  October  2026. 
+
+Harsha  Kokel,  Michael  Katz,  Kavitha  Srinivas,  and 
+
+Shirin  Sohrabi.  2025.  ACPBench : Reasoning  about 
+
+action,  change,  and  planning . In  Proceedings  of 
+
+the  AAAI  Conference  on  Artificial  Intelligence , vol-
+
+ume  39,  pages  26559–26568. 
+
+Yifan  Lan,  Zhongye  Liu,  Yurui  Chang,  Hanyu 
+
+Wang,  Yongkang  Du,  Lu  Lin,  and  Jinghui  Chen. 
+
+2026.  DecisionRobust : Benchmarking  robustness 
+
+for  JEV  style  decision  models  across  text  and  vision .
+
+Preprint , arXiv:2610.19118.  Version  1,  13  October 
+
+2026. 
+
+Songtuan  Lin,  Conny  Olz,  Malte  Helmert,  and  Pascal 
+
+Bercher.  2024.  On  the  computational  complexity  of 
+
+plan  verification,  (bounded)  plan-optimality  verifica-
+
+tion,  and  bounded  plan  existence . In  Proceedings  of 
+
+the  AAAI  Conference  on  Artificial  Intelligence , vol-
+
+ume  38,  pages  20203–20211. 
+
+Xiao  Liu,  Hao  Yu,  Hanchen  Zhang,  Yifan  Xu,  Xuanyu 
+
+Lei,  Hanyu  Lai,  Yu  Gu,  Hangliang  Ding,  Kaiwen 
+
+Men,  Kejuan  Yang,  Shudan  Zhang,  Xiang  Deng,  Ao-
+
+han  Zeng,  Zhengxiao  Du,  Chenhui  Zhang,  Sheng 
+
+Shen,  Tianjun  Zhang,  Yu  Su,  Huan  Sun,  and  3 oth-
+
+ers.  2024.  AgentBench : Evaluating  LLMs  as  agents .
+
+In  International  Conference  on  Learning  Represen-
+
+tations .
+
+Chang  Ma,  Junlei  Zhang,  Zhihao  Zhu,  Cheng  Yang, 
+
+Yujiu  Yang,  Yaohui  Jin,  Zhenzhong  Lan,  Lingpeng 
+
+Kong,  and  Junxian  He.  2024.  AgentBoard : An  an-
+
+alytical  evaluation  board  of  multi-turn  LLM  agents .
+
+In  Advances  in  Neural  Information  Processing  Sys-
+
+tems , volume  37. 
+
+Zhao  Mandi,  Shreeya  Jain,  and  Shuran  Song.  2024. 
+
+RoCo:  Dialectic  Multi-Robot  Collaboration  with 
+
+Large  Language  Models . In  IEEE  International  Con-
+
+ference  on  Robotics  and  Automation .Haochen  Sun,  Shuwen  Zhang,  Lujie  Niu,  Lei  Ren,  Hao 
+
+Xu,  Hao  Fu,  Fangkun  Zhao,  Caixia  Yuan,  and  Xiao-
+
+jie  Wang.  2025.  Collab-Overcooked : Benchmarking 
+
+and  evaluating  large  language  models  as  collabora-
+
+tive  agents . In  Proceedings  of  the  2025  Conference 
+
+on  Empirical  Methods  in  Natural  Language  Process-
+
+ing , pages  4922–4951. 
+
+Karthik  Valmeekam,  Matthew  Marquez,  Alberto  Olmo, 
+
+Sarath  Sreedharan,  and  Subbarao  Kambhampati. 
+
+2023.  PlanBench : An  extensible  benchmark  for  eval-
+
+uating  large  language  models  on  planning  and  rea-
+
+soning  about  change . In  Advances  in  Neural  Infor-
+
+mation  Processing  Systems , volume  36. 
+
+Jian  Xie,  Kai  Zhang,  Jiangjie  Chen,  Tinghui  Zhu,  Renze 
+
+Lou,  Yuandong  Tian,  Yanghua  Xiao,  and  Yu  Su. 
+
+2024.  TravelPlanner : A benchmark  for  real-world 
+
+planning  with  language  agents . In  Proceedings  of  the 
+
+41st  International  Conference  on  Machine  Learning ,
+
+volume  235  of  Proceedings  of  Machine  Learning  Re-
+
+search , pages  54590–54613. 
+
+Hongxin  Zhang,  Weihua  Du,  Jiaming  Shan,  Qinhong 
+
+Zhou,  Yilun  Du,  Joshua  B.  Tenenbaum,  Tianmin 
+
+Shu,  and  Chuang  Gan.  2024.  Building  Cooperative 
+
+Embodied  Agents  Modularly  with  Large  Language 
+
+Models . In  International  Conference  on  Learning 
+
+Representations .
+
+Shiqi  Zhang,  Xinbei  Ma,  Yunqing  Xu,  Zouying  Cao, 
+
+Pengrui  Lu,  Haobo  Yuan,  Tiancheng  Shen,  Zhu-
+
+osheng  Zhang,  Hai  Zhao,  and  Ming-Hsuan  Yang. 
+
+2026.  ParaCook : On  time-efficient  planning  for 
+
+multi-agent  systems . In  Findings  of  the  Association 
+
+for  Computational  Linguistics:  ACL  2026 , pages 
+
+27683–27701.  Association  for  Computational  Lin-
+
+guistics. 
+
+Huaixiu  Steven  Zheng,  Swaroop  Mishra,  Hugh  Zhang, 
+
+Xinyun  Chen,  Minmin  Chen,  Azade  Nova,  Le  Hou, 
+
+Heng-Tze  Cheng,  Quoc  V.  Le,  Ed  H.  Chi,  and 
+
+Denny  Zhou.  2024.  NATURAL  PLAN:  Benchmark-
+
+ing  LLMs  on  Natural  Language  Planning . Preprint ,
+
+arXiv:2406.04520. 
+
+Kunlun  Zhu,  Hongyi  Du,  Zhaochen  Hong,  Xiaocheng 
+
+Yang,  Shuyi  Guo,  Zhe  Wang,  Zhenhailong  Wang, 
+
+Cheng  Qian,  Xiangru  Tang,  Heng  Ji,  and  Jiaxuan 
+
+You.  2025.  Multi Agent Bench  : Evaluating  the 
+
+collaboration  and  competition  of  LLM  agents . In 
+
+Proceedings  of  the  63rd  Annual  Meeting  of  the 
+
+Association  for  Computational  Linguistics  (Volume 
+
+1:  Long  Papers) , pages  8580–8622,  Vienna,  Austria. 
+
+Association  for  Computational  Linguistics. 
+
+Kunlun  Zhu,  Tao  Feng,  Xu  Han,  Heng  Wang,  Ling 
+
+Yang,  Xiangru  Tang,  Jiaxuan  You,  and  Heng  Ji. 
+
+2026.  JevAgentHarness : Benchmarking,  deploying 
+
+and  training  decision  models  that  share  control  with 
+
+LLMs . Preprint , arXiv:2610.21412.  Version  1,  15 
+
+October  2026. 
+
+Xialie  Zhuang,  Mingcong  Lei,  Zunhai  Su,  Ri  Liu,  Jian-
+
+jin  Li,  Peixian  Ma,  Jia  Pan,  Ngai  Wong,  Guanhua 
+
+Chen,  and  Chuan-Wei  Kuo.  2026.  DecisionPivot : A
+
+diagnostic  benchmark  for  decision  models  in  LLM 
+
+systems . Preprint , arXiv:2610.28522.  Version  1,  20 
+
+October  2026. Appendix 
+
+A Execution  and  Decision  Criteria 
+
+A.1  Execution  Rules 
+
+Each  joint  step  resolves  chef  interaction,  assistant 
+
+interaction,  movement,  then  appliance  processing. 
+
+Processing  includes  its  start  step;  finished  products 
+
+await  retrieval.  Waits  are  checked  at  step  bound-
+
+aries.  An  assistant  interaction  can  retrieve  an  item 
+
+placed  by  the  chef  in  the  same  step;  an  explicit  wait 
+
+cannot. 
+
+Domains  define  role  permissions,  retrieval,  and 
+
+counter  access.  The  canonical  processing-chain 
+
+domain  permits  retrieval  before  processing  starts 
+
+and  plated-product  transfers.  Search  records  re-
+
+quire  matching  states,  goals,  domains,  and  execu-
+
+tion  rules. 
+
+A.2  Goal-Dependent  Costs 
+
+Let  spt be  the  state  after  t joint  steps  of  plan  p =(p(1) , p (2) ), and  V ∗ 
+
+> g
+
+(s; D) the  minimum  legal  cost 
+
+to  reach  goal  g in  domain  D. Short-horizon  cost 
+
+stops  at  the  intermediate  goal: 
+
+CS(s, p ) = min {t ≥ 0 : gS(spt ) = 1 }. (1 )
+
+If  both  programs  finish  at  step  τp before  final  de-
+
+livery,  long-horizon  cost  includes  optimal  continu-
+
+ation: 
+
+CL(s, p ) = τp + V ∗ 
+
+> gL
+
+(spτp ; D). (2 )
+
+Delivery  during  the  prescribed  stage  instead  uses 
+
+its  first  hitting  time.  Members  remain  idle  after 
+
+their  programs  end,  while  appliances  advance  each 
+
+step.  A plan  that  cannot  complete  under  this  pro-
+
+tocol  has  Cg = + ∞, even  if  abandoning  it  would 
+
+permit  recovery. 
+
+For  the  four  base  candidates,  i∗ =
+
+arg min i∈{ 1,2,3,4} Cg(s, p i) is  unique  and  sat-
+
+isfies 
+
+Cg(s, p i∗ ) = V ∗ 
+
+> g
+
+(s; D). (3 )
+
+State  optimality  ranges  over  all  legal  joint  execu-
+
+tions,  with  uniqueness  required  among  the  sup-
+
+plied  candidates.  For  three  retained  plans  P′, the 
+
+better-plan  statement  is  true  exactly  when 
+
+min  
+
+> p∈P ′
+
+Cg(s, p ) > V ∗ 
+
+> g
+
+(s; D). (4 )
+
+A.3  Concrete  Example 
+
+In  the  long-horizon  point024  example  (taro– 
+
+bean–bell-pepper  pie),  B attains  the  13-step  opti-
+
+mum;  C ends  its  stage  sooner  but  requires  15  steps 
+
+overall  (Table  3).  Inputs  contain  full  programs 
+
+without  costs;  Figure  1 is  schematic.                                           
+
+> Plan Program ID Stage Remaining Total
+> Aopt04 13 821
+> Bopt01 10 313
+> Copt02 7815
+> Dopt03 9615
+> Table 3:Long-horizon plan costs in joint steps. Stage is
+> the prescribed-program cost; Remaining is the optimal
+> continuation cost. Bold marks the minimum total.
+
+B Construction  and  Dataset  Details 
+
+B.1  Scenario  Screening 
+
+Algorithm  1 selects  states  where  coordination 
+
+choices  affect  completion  cost  even  when  all  re-
+
+maining  actions  are  optimized.  A constraint  c fixes 
+
+the  order  of  two  required  events  by  one  member  or 
+
+the  location  of  a required  handoff.  Alternatives  for 
+
+the  same  events  form  a comparison  family.  With 
+
+all  remaining  actions  optimized,  their  cost  penalty 
+
+is 
+
+∆( s, c ) = J(s, c ) − V ∗ 
+
+> gL
+
+(s; D). (5 )
+
+where  J(s, c ) is  the  constrained  optimal  delivery 
+
+cost.  An  examined  family  must  contain  two  proven 
+
+feasible  choices  satisfying 
+
+∆( s, c +) = 0 , ∆( s, c −) ≥ 3. (6 )
+
+States  match  by  positions,  orientations,  carried 
+
+items,  material  locations,  and  processing  progress. 
+
+Up  to  eight  comparison  families  alternate  member-
+
+specific  event  orders  and  both  handoff  directions 
+
+at  dependency  depths  1–3.  Alternatives  are  fixed 
+
+before  cost  queries. 
+
+Grouping  preserves  task,  domain,  goal,  compar-
+
+ison  family,  alternatives,  feasibility,  penalties,  and 
+
+timing  relative  to  partner  events.  Materials  and  pro-
+
+cessing  progress  remain  fixed  across  intervening 
+
+trajectory  states;  positions  may  vary.  The  represen-
+
+tative  is  nearest  a certified  divergence,  with  earlier 
+
+trajectory  position  breaking  ties. Algorithm  1 Scenario  Selection                                                                                                    
+
+> Input: Reachable states Swith domains {D s};
+> trajectory lengths {Ti},budget B= 200 ;
+> comparison-family limit K= 8
+> Output: Selected scenarios Q
+> 1: R← ∅
+> 2: for s∈Sdo
+> 3: vs←V∗
+> gL(s;Ds)
+> 4: Fs←COMPARISONFAMILIES (s, K )
+> 5: for F∈ F sdo
+> 6: J(s, c )←optimal delivery cost subject to c,for
+> c∈F
+> 7: PF←choices in Fwith proven finite costs
+> 8: ∆( s, c )←J(s, c )−vsfor c∈PF
+> 9: if ∃c+, c −∈PFsatisfying Eq. 6then
+> 10: R←R∪ { s}
+> 11: (Gi)←GROUPCOMPARISONS (R)
+> 12: (qi)←ALLOCATEQUOTAS (( Gi),{Ti}, B )
+> 13: Q← ∅
+> 14: for each task ido
+> 15: Q←Q∪GREEDYCOVERAGE (Gi, q i)
+> 16: return Q
+
+B.2  Coverage  and  Candidate  Verification 
+
+For  representative  states  Si and  optimal  trajectory 
+
+length  Ti, task  capacity  is 
+
+bi = min (|Si|, ⌊Ti/3 ⌋). (7 )
+
+Capacity  limits  counts,  not  spacing.  Each  task 
+
+receives  one  scenario;  the  remaining  170  fol-
+
+low  largest-remainder  allocation  proportional 
+
+to  bi − 1, with  ties  by  task  ID.  Coverage  pri-
+
+oritizes  event-ordering  or  handoff  directions, 
+
+family/optimal-arrangement-set  combinations, 
+
+then  material  stages.  Keys  include  all  optimal 
+
+arrangements;  processing  progress  alone  does  not 
+
+define  a stage. 
+
+Ties  use  trajectory  distance,  proximity  grade, 
+
+earlier  position,  then  candidate  ID.  Grades  order 
+
+certified  common  optimal  prefixes  of  0,  1,  2,  or 
+
+≥ 3 steps,  then  unknown  and  uncomputed  cases. 
+
+Source  levels  L1–L6  contribute  10,  5,  40,  35,  50, 
+
+and  60  scenarios;  these  are  recipe-complexity  la-
+
+bels,  not  calibrated  item  difficulties. 
+
+Base  questions  contain  a unique  state-optimal 
+
+plan  and  at  least  two  feasible  alternatives.  Subopti-
+
+mal  gaps  are  at  least  one  joint  step  for  short  goals 
+
+and  two  for  long  goals;  short-goal  contrasts  act  be-
+
+fore  first  attainment.  Rationales  link  state  facts  and 
+
+program  differences  to  execution  outcomes.  Paral-
+
+lelism  tags  require  different  productive  overlap. 
+
+B.3  Dataset  Composition 
+
+Table  4 separates  questions,  scenarios,  and  struc-
+
+tures.  Of  200  cross-goal  pairs,  64  share  pro-
+
+grams  and  the  optimum;  136  use  different  pro-
+
+grams.  Normalization  replaces  ingredient/product 
+
+names  while  preserving  dependencies,  states,  pro-
+
+grams,  goals,  and  domains.                                                      
+
+> Unit or property Count
+> Recipe tasks 30
+> Decision scenarios 200
+> Short-/long-horizon question pairs 200
+> Total evaluation questions 1,200
+> Base team-plan decision questions 400
+> Optimality-verification variants 800
+> Base short-/long-horizon questions 200 /200
+> Base candidate plans 1,600
+> Base questions with 3/4feasible plans 246 /154
+> Normalized question structures 181
+> Normalized paired-scenario structures 97
+> Pairs with identical candidate programs 64
+> Long-horizon questions with stage/total rank re-
+> versals
+> 15
+
+Table  4: Dataset  composition.  Candidate  and  feasibil-
+
+ity  counts  cover  base  questions;  normalized  structures 
+
+cover  base  questions  and  short-/long-horizon  pairs.  Op-
+
+tion  rotations  do  not  create  additional  questions. 
+
+The  public  dataset  release  is 
+
+tandembench-en-v1.0.0 . Original  gold 
+
+positions  A–D  contain  200,  69,  62,  and  69 
+
+questions;  cyclic  rotations  balance  positions. 
+
+C Models  and  Inference  Protocols 
+
+Native  interfaces.  Models  retain  native  inputs 
+
+and  readouts:  Tacit  inference;  Decision-2  for 
+
+Vega/Lux/Kai/Nox;  CLM’s  prediction  head  and 
+
+last-token  pooling;  Laya  state  inputs  and  short 
+
+labels;  KnowLine’s  read _twice ; and  GLiDE’s 
+
+non-causal  text  interface.  Mammoth,  PPLX,  and 
+
+D3  retain  calibration;  StartLux  uses  Instant  infer-
+
+ence.  MeTask-Rain-31B  uses  W4A16  with  un-
+
+merged  LoRA,  routing,  and  calibration. 
+
+Weights  and  reasoning.  H2O-Lightning-31B 
+
+and  deck31b  use  BF16;  René  uses  FP8  dequan-
+
+tized  to  BF16.  H2O  disables  online  FP8  quanti-
+
+zation.  D3  sizes  round  26.09B  to  27B;  Wald  lists 
+
+total/active  parameters.  Muse-Glimmer-30B  uses 
+
+low  reasoning,  and  the  evaluated  Qwen  conditions 
+
+disable  thinking. 
+
+Response  scoring.  Truncated,  missing-choice, 
+
+and  multiple-choice  outputs  count  as  incorrect. Rank  Model  Avg.  output  tokens  DA  ↑ VA  ↑                                           
+
+> 1Qwen3.8-27B 8652 82.80 71.88
+> 2Gemma4-31B 1072 73.11 57.03
+> 3Gemma4-26B-A4B 1516 60.58 53.66
+> 4Muse-Glimmer-30B 1415 59.64 60.35
+> 5Qwen3-32B 925 46.33 49.45
+> 6Gemma4-E4B 2564 45.03 51.16
+> 7Qwen3-8B 1092 41.03 49.85
+> 8Ministral 314B Instruct 1762 39.89 51.45
+> 9Llama3.3-70B 661 39.50 48.92
+> 10 Qwen3-0.6B 25 17.19 40.61
+
+Table  5: DA  and  VA  (%)  and  mean  output  length  for  ten  general-purpose  models,  ranked  by  DA.  Unresolved  answers 
+
+count  as  incorrect;  shading  marks  the  top  three  and  bold  marks  the  best  score  in  each  metric. 
+
+D Evaluation  Metrics  and  Full  Results 
+
+D.1  Coverage  and  Scoring 
+
+For  N questions,  decision  accuracy  (denoted 
+
+Acc 4,S  below)  compares  stable  candidate  IDs  ˆiqrs 
+
+with  gold  i∗ 
+
+> q
+
+:
+
+Acc 4,S = 14SN 
+
+> N
+
+∑
+
+> q=1 3
+
+∑
+
+> r=0
+> S
+
+∑
+
+> s=1
+
+I[ˆ iqrs = i∗ 
+
+> q
+
+]. (8 )
+
+Each  model  contributes  1,600  native  or  6,400 
+
+general-model  base  outputs.  Uniform  selec-
+
+tion  or  a fixed  display  letter  yields  25%  DA. 
+
+Truncated,  missing-choice,  multiple-choice,  and 
+
+infrastructure-failure  outputs  count  as  incorrect 
+
+and  are  recorded  separately. 
+
+Verification  uses  800  paired  variants.  Reporting 
+
+a better  plan  is  TP  when  the  optimum  is  removed; 
+
+selecting  any  valid  concrete  plan  is  TN  when  it  is 
+
+retained: 
+
+VA = 12
+
+( TP 
+
+Nremove 
+
++ TN 
+
+Nretain 
+
+)
+
+. (9 )
+
+VA  is  balanced  binary  accuracy  and,  with  equal 
+
+group  sizes,  pooled  judgment  accuracy.  Invalid 
+
+responses  count  as  neither  TP  nor  TN.  Uniform 
+
+selection,  always  reporting,  or  always  choosing  a
+
+concrete  plan  yields  50%  VA.  TN  does  not  require 
+
+selecting  the  optimal  retained  plan. 
+
+D.2  Full  Model  Comparison 
+
+Table  5 reports  results  for  the  ten  general-purpose 
+
+models  evaluated  on  the  English  inputs. 
+
+D.3  Interpretation  Scope 
+
+The  benchmark  evaluates  centralized  plan  deci-
+
+sions  from  complete  global  information;  it  does 
+
+not  test  communication  or  adaptation  to  indepen-
+
+dent  partners.  Option  rotations  balance  answer  po-
+
+sitions,  while  program  length  and  waiting  patterns 
+
+remain  observable  cues.  Models  use  their  native  in-
+
+terfaces  and  inference  budgets,  so  results  compare 
+
+evaluated  systems  under  their  respective  protocols. 
+
+E Costs  and  Goal  Comparisons 
+
+E.1  Decision  Costs  and  Choice  Stability 
+
+Figure  7 covers  40  native  models  and  10  general-
+
+purpose  models;  Table  6 lists  six  native  models. 
+
+For  feasible  selections,  regret  is 
+
+Rq = Cgq (sq, p ˆiq ) − V ∗ 
+
+> gq
+
+(sq; Dq). (10 )
+
+Regret  includes  optimal  choices  at  zero.  Feasi-
+
+ble,  noncompletion,  and  invalid  rates  use  all  out-
+
+puts  and  sum  to  one.  The  246  questions  with  non-
+
+completing  candidates  give  exposure  counts  of  984 
+
+(S = 1 ) or  3,936  (S = 4 ). 
+
+Position  sensitivity.  For  general-purpose  mod-
+
+els,  averaging  four  samples  per  position  yields  a
+
+median  DA  range  of  7.34  points.  Averaging  the 
+
+four  within-sample  ranges  for  each  model  and  tak-
+
+ing  the  median  across  models  gives  8.47  points. 
+
+Consistency  tracks  the  same  candidate  across  rota-
+
+tions  within  each  sample  index.  Both  include  gen-
+
+eration  randomness  (Figure  6; Table  6). 
+
+E.2  Goal  Comparisons 
+
+Figure  8 compares  64  pairs  sharing  initial  states, 
+
+programs,  and  optimal  choices,  with  different 
+
+goals  and  execution  rules.  Mean  short/long 
+
+DA  is  49.58/46.75%  for  40  native  models  and 
+
+56.68/48.04%  for  10  general-purpose  models, 
+
+weighting  models  equally. 
+
+A disjoint  set  of  15  long-horizon  questions 
+
+offers  feasible  alternatives  with  τi < τi∗ but 20 30 40 50 60 70 80 DA (%) 1234Steps 
+
+Feasible-choice regret 
+
+Decision General 
+
+20 30 40 50 60 70 80 DA (%) 0510 15 20 25 30 Outputs (%) 
+
+Noncompletion and invalid outputs 
+
+Decision: noncompletion Decision: invalid General: noncompletion General: invalid Figure  7: Execution  consequences  of  selected  plans.  Left:  mean  extra  joint  steps  above  the  state  optimum  among 
+
+feasible  selections.  Right:  the  percentage  of  all  outputs  selecting  a noncompleting  plan;  invalid  responses  form  a
+
+separate  category. 0 20 40 60 80 100 DA (%) 
+
+Basal-Omni-1.0-Ultra René-31B (dequant. BF16) Quyet-1.0-Large H2O-Lightning-31B (BF16) DOPEST-1.0-31B KnowLine-31B-Gen1 deck31b (BF16) PPLX-Decider-v1.1-27B Tacit-9B Jeff-1.1-Medium D3 PPLX-Decider-v1.2 Vega-27B StartLux-v1.1-27B-Instant GLiDE-1.2-Open PPLX-Decider-Flash-v1.2 Tacit-4B Wald-26B-A4B MeTask-Rain-12B Torchcast-4B-v1.2 Mapika-Decider-12B Torchcast-12B D3-Turbo Mammoth-1 Tacit-2B Torchcast-4B-v1.3 MeTask-Rain-31B Lux-9B D3-Ultra Torchcast-4B-v1.1 Clef Liquid AI d1-3B Joey-1 H2O-Lightning-4B Nox-4B Clef-Flash Laya-421M Kai-0.6B Tacit-1.7B CLM-8B 
+
+Decision models 
+
+Short Long 
+
+0 20 40 60 80 100 DA (%) 
+
+Gemma4-31B Qwen3.8-27B Muse-Glimmer-30B Gemma4-26B-A4B Gemma4-E4B Qwen3-32B Qwen3-8B Ministral 3 14B Instruct Llama3.3-70B Qwen3-0.6B 
+
+General models 
+
+Short Long 
+
+Figure  8: Short- and  long-horizon  DA  with  identical  candidate  programs  but  different  goals  and  execution  rules. 
+
+Models  are  ordered  by  decreasing  long-horizon  DA  within  each  family. Model  Feasible  (%)  Noncompletion  (%)  Regret  Consistency  (%)  Range  (pp)                               
+
+> Basal-Omni-1.0-Ultra 99.75 0.25 1.44 31.75 11.25
+> KnowLine-31B-Gen1 99.94 0.06 1.68 45.25 11.75
+> Quyet-1.0-Large 98.75 1.25 1.22 37.25 25.75
+> PPLX-Decider-v1.1-27B 100.00 0.00 1.74 37.00 9.00
+> Torchcast-4B-v1.2 95.69 4.31 1.25 43.25 2.00
+> CLM-8B 78.56 21.44 4.50 92.00 1.00
+
+Table  6: Execution  outcomes  and  choice  stability.  Regret  is  mean  extra  joint  steps  among  feasible  selections. 
+
+Consistency  is  the  percentage  of  questions  selecting  the  same  plan  across  all  rotations;  Range  is  maximum  minus 
+
+minimum  rotation  DA.                                 
+
+> Model Same-plan short Same-plan long Conflict DA Fast-stage choice
+> Basal-Omni-1.0-Ultra 72.27 65.23 35.00 36.67
+> KnowLine-31B-Gen1 72.27 59.77 55.00 0.00
+> Quyet-1.0-Large 56.64 61.33 48.33 10.00
+> PPLX-Decider-v1.1-27B 58.20 57.81 45.00 35.00
+> Torchcast-4B-v1.2 55.47 47.66 73.33 15.00
+> CLM-8B 4.30 5.86 0.00 66.67
+
+Table  7: DA  and  fast-stage  choice  rates  (%).  Same-plan  columns  compare  short  and  long  goals  with  identical 
+
+programs.  Conflict  columns  cover  a separate  set  where  an  earlier  stage  finish  can  require  more  total  steps;  Fast-
+
+stage  choice  is  the  rate  of  selecting  such  alternatives. 
+
+CL(s, p i) > CL(s, p i∗ ). Table  7 reports  their 
+
+DA  and  selection  rates.  Basal  selects  these  earlier-
+
+finishing  but  higher-total-cost  alternatives  in  22/60 
+
+presentations;  Qwen3.8-27B  in  13/240,  including 
+
+rotations  and  samples. 
+
+F Coordination-Group  Analysis 
+
+Figure  9 compares  five  native  models  across  over-
+
+lapping  coordination  groups  defined  by  the  union 
+
+of  candidate  tags. 
+
+Work  order  covers  processing/supply  order  (300 
+
+questions,  156  scenarios);  handoffs  cover  transfer 
+
+locations/conditions  (376,  188);  parallel  work  cov-
+
+ers  productive  overlap  (355,  182);  resource  con-
+
+straints  cover  carrying/counter  capacity  (141,  77). 
+
+These  tags  capture  intended  coordination  contrasts. 
+
+Because  groups  may  overlap  and  differ  in  task 
+
+and  goal  composition,  their  scores  describe  perfor-
+
+mance  on  these  subsets  rather  than  isolated  mech-
+
+anism  effects. 
+
+G Probability  Analysis 
+
+Figure  10  uses  128,000  outputs:  40  models,  400 
+
+pairs,  four  rotations.  Probabilities  are  aligned 
+
+by  option  letter  or  text,  correcting  sums  within 
+
+10 −4 rounding  tolerance  and  excluding  interface-
+
+specific  confidence  fields. 
+
+AUROC  ranks  removed- against  retained-
+
+optimum  examples  by  better-plan  probability, 
+
+with  half  credit  for  ties.  Median/maximum 
+
+AUROC  is  0.537/0.598  (GLiDE);  Basal  scores 
+
+0.520. 
+
+Panel  (a)  averages  all  pairs.  For  pairs  reporting 
+
+twice  in  (b),  mean  shifts  are  +3.26  points  for  Basal 
+
+(240  pairs),  +2.05  for  PPLX  (504),  and  +0.55  for 
+
+Tacit-2B  (1,557).  Figure  4(b)  gives  unconditional 
+
+choices. 
+
+H Task  Weighting               
+
+> Model Item-weighted Task-macro
+> Basal-Omni-1.0-Ultra 60.75 65.45
+> KnowLine-31B-Gen1 62.50 66.96
+> Quyet-1.0-Large 60.75 61.00
+> PPLX-Decider-v1.1-27B 59.44 62.90
+> Torchcast-4B-v1.2 58.94 56.95
+> CLM-8B 15.44 10.52
+
+Table  8: DA  (%)  under  two  weighting  schemes.  Item-
+
+weighted  gives  equal  weight  to  questions;  Task-macro 
+
+averages  task-level  accuracies  equally. 
+
+Task  weighting  and  uncertainty.  After  averag-
+
+ing  four  rotations  per  question,  we  bootstrap  200 
+
+scenarios  with  both  goals  retained  (10,000  repli-
+
+cations;  seed  20261027).  KnowLine  minus  Basal 
+
+is  1.75  points:  the  percentile  95%  interval  is  [-
+
+1.56,  5.00],  or  [-2.10,  5.56]  when  resampling  the 
+
+30  tasks.  Intervals  condition  on  the  recorded  runs; 
+
+structure  IDs  record  further  cross-scenario  rela-
+
+tionships. Work order Handoffs Parallel work Resource constraints 
+
+Basal-Omni-1.0-Ultra KnowLine-31B-Gen1 Quyet-1.0-Large PPLX-Decider-v1.1-27B Torchcast-4B-v1.2 
+
+57.6 62.6 60.4 64.9 57.4 64.4 61.3 56.6 64.0 63.1 60.6 79.1 54.0 61.2 59.0 59.8 62.1 60.0 57.7 74.5 Figure  9: DA  (%)  across  coordination  groups.  Darker  cells  indicate  higher  accuracy.  A question  may  belong  to 
+
+more  than  one  group. 0.450 0.475 0.500 0.525 0.550 0.575 0.600 AUROC −2.5 0.0 2.5 5.0 7.5 Mean probability shift (pp)  (a) Discrimination 
+
+−20 −10 0 10 20 30 Probability shift (pp) Basal PPLX Tacit-2B 
+
+(b) Both report 
+
+> CLM-8B Kai-0.6B Tacit-1.7B Laya-421M deck31b (BF16) MeTask-Rain-31B KnowLine-31B-Gen1 Mapika-Decider-12B Tacit-4B Tacit-2B MeTask-Rain-12B Basal-Omni-1.0-Ultra H2O-Lightning-4B Quyet-1.0-Large Clef-Flash Torchcast-12B Wald-26B-A4B Tacit-9B DOPEST-1.0-31B Lux-9B Joey-1 Torchcast-4B-v1.1 René-31B (dequant. BF16) Clef Jeff-1.1-Medium Vega-27B Nox-4B Mammoth-1 H2O-Lightning-31B (BF16) Liquid AI d1-3B PPLX-Decider-v1.1-27B PPLX-Decider-Flash-v1.2 D3-Turbo Torchcast-4B-v1.3 StartLux-v1.1-27B-Instant PPLX-Decider-v1.2 D3 Torchcast-4B-v1.2 D3-Ultra GLiDE-1.2-Open
+
+r0 r1 r2 r3 
+
+(c) AUROC by rotation 
+
+47.5 50.0 52.5 55.0 VA (%) 
+
+0.5 0.6 AUROC 
+
+Figure  10 : Better-plan  probabilities.  (a)  AUROC  versus  mean  shift,  colored  by  VA.  (b)  Shifts  for  pairs  reporting 
+
+twice;  boxes  show  quartiles  and  central  lines  the  median.  (c)  AUROC  by  rotation.  Shifts  are  removed  minus 
+
+retained,  in  percentage  points.

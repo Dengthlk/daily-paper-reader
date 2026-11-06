@@ -1,0 +1,1392 @@
+Title: Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning
+
+URL Source: https://arxiv.org/pdf/2611.05942v1
+
+Published Time: Thu, 05 Nov 2026 01:58:51 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning 
+
+Mengni Jia 2, Mengyu Zhou †1, Xiaoxi Jiang 1 and Guanjun Jiang 1 
+
+> 1Qwen Business Unit, Alibaba, 2University of Cambridge
+
+RL for LLM reasoning often reaches an early performance plateau as the policy distribution becomes increasingly sharp. Recent work has studied policy entropy as both a diagnostic and a control signal for this behavior. In our experiments, however, increasing entropy alone does not reliably change the eventual plateau. We analyze RL through its implicit target policy and derive a sharpness factor 𝜅 , together with an effective counterpart 𝜅 eff , that describes how strongly reward or advantage gaps are translated into probability-ratio gaps. Motivated by this view, we introduce reward budgeting , a plug-in advantage construction that assigns a fixed total reward budget to each prompt. For binary rewards and independent on-policy rollouts, its unclipped score-function estimator follows the gradient of an exact finite-𝐺 concave objective with diminishing returns, while its advantage gap decreases as more rollouts become correct. For general rewards, a shifted log-mean interpretation holds asymptotically under the stated regularity conditions. These results motivate, rather than establish exact objective equivalence for, the clipped implementations. On Qwen3-8B and Llama3.2-3B-Instruct, reward budgeting consistently improves a range of RL baselines, with gains up to +12.50 on AMC23 and +10.00 on AIME24 and AIME25. Overall, our results support an update-dynamics view of premature convergence and show that strong gains can be obtained without explicitly preserving entropy. 
+
+# 1. Introduction 
+
+Policies trained with RL for LLM reasoning often improve rapidly at first and then enter a plateau where further training brings little gain. Such a plateau need not reflect an intrinsic limit of the model or data: optimization choices can change the performance reached under otherwise similar training conditions. For example, [12] report that, in their scaling study, GSPO [35] and CISPO [18] reach higher fitted asymptotic performance than DAPO [31]. This motivates us to distinguish natural convergence from algorithm-induced premature convergence : training may stop making useful progress, even when a different algorithm can reach a better solution. 
+
+Figure 1 | Average training entropy and validation accuracy across 12 runs for Llama3.2-3B-Instruct. 
+
+This phenomenon has been commonly referred to as “en-tropy collapse”. This name arises from the observation that the policy seems to stop learning and converge prematurely once its entropy drops to a relatively low level [3]; see Fig-ure 1. Consequently, many proposed remedies focus on explicit 
+
+entropy control, typically by encouraging higher entropy or keeping it within a prescribed range [3, 26, 2, 24, 10, 4, 7, 32, 25, 19, 28, 20, 5, 13, 33, 31, 22, 30, 32, 15, 11]; see 2 for a discussion. These studies provide substantial evidence that entropy is related to RL training dynamics. Here, we ask a narrower question: is changing entropy itself sufficient to change the eventual performance plateau? 
+
+Our results suggest caution. First, the familiar entropy– accuracy pattern is often observed after averaging across runs, while individual methods have different entropy trajectories (§3.3). Second, in the intervention study of §3.1, two different entropy-promoting interventions  
+
+> †Corresponding author: Mengyu Zhou (zhoumengyu.zmy@alibaba-inc.com) arXiv:2611.05942v1 [cs.LG] 4 Nov 2026 Reward Budgeting for LLM Reasoning
+
+substantially change entropy during early training, yet the trajectories return toward the same baseline behavior after the interventions are removed and do not reach a better final plateau. This does not imply that entropy-based methods cannot be effective: such methods may alter optimization in useful ways beyond simply raising entropy. It does suggest that, in our setting, entropy promotion alone is not a sufficient intervention for premature convergence. Conceptually, entropy measures how dispersed the policy distribution is, but it does not indicate whether the resulting responses are correct or whether their diversity is useful. A high-entropy policy can produce diverse but unproductive outputs, while a low-entropy policy can be confidently correct. We therefore view entropy as an informative diagnostic of policy concentration rather than, by itself, an explanation of why training plateaus. For this reason, we use the term premature convergence rather than entropy collapse throughout the paper. Once we question whether entropy is the primary cause behind the plateau, a natural question follows: if we do not control entropy directly, how can we sustain meaningful learning signals so that training can continue to realize incremental gains? In fact, reduced entropy (and the resulting sharper policy distribution) is expected, since it indicates that the policy is learning and becoming more confident on the training data. We just wish to avoid improper sharpening that locks the policy into cheap pseudo-modes and leaves little room for further gains. This matters because RL is inherently mode-seeking , and once a policy collapses onto a narrow set of modes, it becomes empirically difficult to re-expand it [14]. However, simply delaying convergence does 
+
+not guarantee stronger performance: gentler dynamics can slow training and require more data for sufficient learning. What we need is a mechanism that maintains gentler training dynamics to prevent premature sharpening, while adaptively relaxing control when genuine learning signals appear. To describe the training dynamics more directly, we analyze RL through its implicit target policy in §3. For KL-regularized RL, the optimal target takes the reward-weighted form 𝜋 ∗ (𝛾 ) ∝ 𝜋 ref (𝛾 ) exp (𝑅 (𝛾 )/ 𝛽 ). This view isolates a sharpness factor 𝜅 , which determines how strongly reward gaps are amplified into probability-ratio gaps between higher- and lower-reward responses. We further define an effective version, 𝜅 eff , for practical algorithms with normalized advantages, clipping, and other implicit constraints. In this sense, 𝜅 and 𝜅 eff 
+
+describe the sharpening pressure induced by the update itself, rather than the resulting uncertainty of the policy. Motivated by this, we introduce reward budgeting . For each prompt, we allocate a fixed total reward budget across sampled rollouts according to their positive reward gaps. In the binary-reward setting, if 𝑘 out of 𝐺 rollouts are correct, each correct rollout receives a reward share proportional to 1 /𝑘 . As a result, the advantage gap decreases as a prompt becomes easier, producing stronger sharpening when successes are rare and gentler sharpening when successes are already common. Importantly, this behavior emerges without explicitly constraining policy entropy. We also discuss reference-free optimization in §4.2: removing a fixed KL reference avoids permanently anchoring the target policy to a static prior, while importance-ratio clipping can still provide local regularization. Theoretically, reward budgeting admits a principled interpretation rather than a heuristic tweak. First, it regulates the 𝜅 trajectory, distinguishing it from most existing methods. As more rollouts become correct, each correct rollout receives a smaller share of the reward, which implicitly reduces the sharpness factor 𝜅 
+
+and automatically relaxes the sharpening pressure. Second, under binary rewards, which match our main RLVR experiments, the expected update of the proposed estimator is exactly the gradient of a finite-𝐺 concave objective with diminishing returns (§A.3). Thus, repeatedly solving an already-easy prompt contributes progressively less marginal benefit than under a linear expected-reward objective. Under general rewards, the gap-normalized estimator admits a shifted log-mean interpretation in the large-𝐺 limit under suitable support assumptions (§A.4). Empirically, our method substantially improves on Qwen3-8B and Llama3.2-3B-Instruct across various RL baselines (up to +12.50 on AMC 23 and +10.00 on AIME24 & AIME25). The gains do not require higher entropy; after applying reward budgeting, entropy often decreases while final performance improves. Collectively, these results suggest that regulating algorithm-induced sharpening is a practical way to mitigate premature convergence, while entropy remains a useful diagnostic rather than a necessary quantity to preserve. 
+
+> 2Reward Budgeting for LLM Reasoning
+
+# 2. Related Work 
+
+Premature convergence in RL for LLM reasoning is often accompanied by a rapid decline in policy entropy. Recent studies have examined this behavior from different perspectives, including entropy dynamics, token selection, reward shaping, and regularization. While these approaches share an interest in improving exploration, they differ in how entropy enters the policy update. 
+
+Entropy Dynamics and Token-Level Interventions. [3] establish an empirical relationship between policy entropy and validation performance, and analyze entropy changes through the covariance between action log-probabilities and policy updates. Their analysis motivates Clip-Cov and KL-Cov, which selectively constrain high-covariance token updates to slow entropy reduction. From another perspective, [26] find that a small fraction of high-entropy tokens act as important forks in reasoning. They show that restricting policy-gradient updates to these tokens can match or outperform full-token training. Both works highlight the importance of where and how policy updates are applied. However, they focus on different signals: covariance characterizes contributions to entropy change, while token entropy identifies uncertain decision points. Our analysis instead examines how the RL objective and advantage construction determine the sharpening pressure of policy updates. 
+
+Entropy-Guided Credit Assignment. Other studies use entropy to improve the learning signal rather than directly regularizing the policy distribution. [2] associate high-entropy regions with exploratory reasoning behaviors, such as reflection and correction. They add a clipped, gradient-detached entropy term to token advantages, encouraging such behaviors without directly optimizing an entropy bonus. Similarly, [24] propose GTPO and GRPO-S to address coarse-grained credit assignment in GRPO. Their methods use entropy to assign greater rewards to uncertain decisions in successful responses and stronger penalties to confident errors, at the token and sequence levels, respectively. These approaches show that entropy can help identify where learning signals may be more useful. Our method also modifies reward allocation, but uses the relative rewards of rollouts within each prompt rather than their entropy. The goal is to adjust how strongly each prompt contributes to learning as its sampled success rate changes. 
+
+Selective Entropy Regularization. Direct entropy regularization provides another way to encourage explo-ration, but increasing entropy indiscriminately can also destabilize training. [10] study this issue and propose SIREN, which combines top-𝑝 action masking, high-entropy token selection, and a self-anchored regularizer. Rather than simply maximizing entropy, SIREN maintains a more controlled level of uncertainty over selected actions and positions. This distinction is important: the effectiveness of entropy-based methods can depend on which parts of the policy are regularized and how the updates are constrained, not only on the resulting entropy level. 
+
+Group-Relative Optimization and Reward Allocation. Our work is also related to the design of group-based RL objectives. GRPO [21] estimates advantages from relative rewards within each prompt group. Dr. GRPO [16] shows that group standard-deviation normalization can introduce difficulty-dependent weighting, and removes this normalization along with response-length normalization. DAPO [31] improves training through several changes, including dynamic sampling that excludes groups with uniformly correct or incorrect rollouts. These methods improve advantage estimation or group selection. In contrast, reward budgeting changes how rewards are allocated within each group. Instead of assigning each successful rollout an independent unit reward, it distributes a fixed budget across the group according to reward gaps. Under binary rewards, this makes the advantage gap decrease as the number of correct rollouts increases. 
+
+Relation to Our Work. The above studies show that entropy can be useful for understanding and improving RL, but its role depends on how it is used. We examine a related question: whether increasing entropy itself is sufficient to change the final performance plateau. Our intervention experiments suggest that this is not reliable in the settings we study. We therefore focus on the sharpening pressure induced by policy updates, characterized by 𝜅 and its effective counterpart 𝜅 eff . Reward budgeting provides a simple way to adjust this pressure through advantage construction, without explicitly controlling entropy. Moreover, under binary rewards, its expected policy-gradient update corresponds to a finite-𝐺 concave objective with diminishing returns. Our results suggest that prompt-level reward allocation is another useful way to address premature convergence, alongside existing entropy-guided approaches. 
+
+> 3Reward Budgeting for LLM Reasoning
+
+# 3. Sharpness Analysis 
+
+Premature convergence is common in RL training, but its underlying dynamics remain unclear. In this section, we examine policy sharpening as a more direct description of RL updates than entropy alone. In §3.1, we show that increasing entropy alone does not reliably improve the final performance plateau in our settings. In §3.2, we derive a sharpness factor 𝜅 from the RL objective, which characterizes how reward gaps are exponentially amplified in the implicit target policy. Finally, controlled experiments in §3.2.1 and individual-run analyses in §3.3 show how sharpening strength relates to convergence dynamics, while averaging can obscure inconsistencies in the entropy–accuracy relationship. 
+
+3.1. Entropy 
+
+Due to the observation that policies often plateau as their entropy drops, many remedies propose to control entropy. However, this correlation does not establish that entropy reduction causes the plateau. Before taking any action, we must first ask: is entropy truly the cause, or more like a correlate? This question is highly important, because treating the correlational signal as causal can lead to ineffective interventions. Entropy may instead serve as a useful diagnostic of convergence dynamics, without being a sufficient target for intervention. We test this hypothesis as follows. Let 𝐻 (𝜋 𝜃 ) denote entropy on training data. We train Qwen3-8B in three runs that differ only by an early entropy-based intervention . For the first 500 steps, we use (1) Baseline : GRPO [21]. (2) Add Entropy to Loss : 
+
+> 𝐽 RL
+
+(𝜃 ) + 0.01 𝐻 (𝜋 𝜃 ), and (3) Add Entropy to Reward : 𝑅 (𝑜 ) + 0.01 𝐻 (𝜋 𝜃 (𝑜 )) . After 500 steps, all runs revert to the baseline and train for another 500 steps. If early entropy promotion is sufficient to overcome premature convergence, the interventions should lead to higher post-intervention plateaus. Otherwise, the runs may return to similar performance once the interventions are removed.    
+
+> (a) Entropy over training steps. (b) Validation accuracy over training steps.
+> Figure 2 |Entropy-intervention test: each method uses its own setting for the first 500 steps and then switches back to the same baseline for steps 500–1000.
+
+From Figure 2a, both interventions increase entropy, yet neither improves final performance. Figure 2b shows no post-intervention after-effect: the trajectories return toward the baseline once the interventions are removed, with early intervention-runs even lagging behind initially. These interventions act through different mechanisms and increase entropy by different amounts, yet neither produces a lasting performance gain. This suggests that entropy is a useful diagnostic correlate of convergence dynamics, but increasing it alone is not sufficient to improve the final plateau in our settings. This does not rule out a causal role for entropy in other interventions.       
+
+> Entropy View Supported? What it suggests A Sufficient Causal Lever ✗The tested early entropy interventions did not improve the final observed plateau.
+> A Diagnostic Correlate ✓Entropy can indicate over-converging dynamics.
+> 4Reward Budgeting for LLM Reasoning
+
+3.2. Sharpness Factor 
+
+Consider the RL objective  
+
+> 𝐽 RL
+
+(𝜃 ) = 𝔼 𝑅 (𝛾 ) − 𝛽 𝐷 KL 
+
+ 𝜋 𝜃 ∥ 𝜋 ref 
+
+,
+
+where 𝜋 ref is the reference policy, 𝑅 (𝛾 ) is the reward of a trajectory 𝛾 , and 𝛽 > 0 penalizes deviation from 𝜋 ref .Prior works often explain premature convergence by analyzing its local gradients. Here, we take a global view: this objective is equivalent to minimizing the reverse KL between 𝜋 𝜃 and the target policy 𝜋 ∗ (§A.6):  
+
+> 𝜋 ∗
+
+(𝛾 ) ∝ 𝜋 ref (𝛾 ) exp (𝑅 (𝛾 )/ 𝛽 ) , (1) This view makes the effect of RL transparent: it pushes 𝜋 𝜃 toward a reward-weighted version of 𝜋 ref . On a finite response space, as 𝛽 → 0+, this target concentrates on reward-maximizing responses within the support of  
+
+> 𝜋 ref
+
+. The limit is deterministic only when the supported maximizer is unique; with ties, it retains the reference policy’s relative weights among the maximizers. Consider two responses 𝑜 + and 𝑜 − to a prompt 𝑝 that receive a higher reward 𝑟 + and a lower one 𝑟 − ,respectively. From Eq 1, the relative probability that 𝜋 ∗ assigns to 𝑜 + over 𝑜 − is exponentially controlled by the 
+
+(principled) sharpness factor 𝜅 : 
+
+> 𝜋 ∗
+
+(𝑜 + | 𝑝 ) 
+
+> 𝜋 ∗
+
+(𝑜 − | 𝑝 ) = 𝜋 ref (𝑜 + | 𝑝 ) 
+
+> 𝜋 ref
+
+(𝑜 − | 𝑝 ) exp 
+
+ 𝑟 + − 𝑟 −
+
+> 𝛽
+
+  
+
+> ,𝜅
+
+:= 𝑟 + − 𝑟 −  
+
+> 𝛽 ,
+
+(2) For 𝛽 > 0, 𝜅 controls the multiplicative amplification of higher- versus lower-reward response odds relative to the reference policy. For example, 𝛽 = 0.001, 𝑟 + = 1, and 𝑟 − = 0 give 𝜅 = 1000, so the target odds are the reference odds multiplied by 𝑒 1000 ≈ 1.97 × 10 434 . This characterizes the idealized target, rather than the speed with which a parameterized optimizer reaches it. Strong concentration can reduce probability assigned to lower-reward responses, some of which may contain useful reasoning segments. The target-policy calculation above describes a KL-regularized objective. Practical algorithms also use normalized advantages and importance-ratio clipping, so their realized updates need not equal that idealized target. For a chosen higher- and lower-advantage response pair, we define an operational effective sharpness factor as the change in log odds:  
+
+> 𝜅 eff
+
+(𝑠 ; 𝑎 +, 𝑎 − ) := log 𝜋 new (𝑎 + | 𝑠 ) 
+
+> 𝜋 new
+
+(𝑎 − | 𝑠 ) − log 𝜌 (𝑎 + | 𝑠 )
+
+> 𝜌
+
+(𝑎 − | 𝑠 ) . (3) Here 𝜌 is the policy before the update, and all four probabilities must be positive. In the reported measurements, each response is a full sequence: after updating a batch, we recompute log-probabilities for the same sampled responses and sum token log-probability changes relative to their stored rollout policy. For each prompt, we select one maximum-advantage and one minimum-advantage response and subtract their sequence log-probability changes. We skip groups with fewer than two responses or a nonpositive advantage gap, and report the mean across valid prompts. For an idealized KL mirror step with temperature 𝜏 > 0, this statistic equals  
+
+> Δ
+
+˜𝐴 (𝑠 )/ 𝜏 (Appendix A.1). For a general update, 𝜏 eff := Δ ˜𝐴 (𝑠 )/ 𝜅 eff is only a pair-specific diagnostic when the denominator is nonzero; it need not be positive. PPO-style surrogate clipping alone does not establish an exact positive-temperature projection or a hard bound on this statistic. Intuitively, 𝜅 eff measures how aggressively RL turns advantage gaps into log-odds gaps after a single update. Hence a larger 𝜅 eff implies more sharpening pressure on 𝜋 𝜃 . Loosely speaking, although larger 𝜅 often indicates a more converging model that may give better performance, an ideal training trajectory should have large 𝜅 
+
+mainly for genuine learning signals, and preserve room for lower-reward ones that may still contain useful segments to support better overall convergence. Later, in §4.1, we compare how different advantage constructions shape 𝜅 and examine their implications for training dynamics. This motivates reward budgeting, which regulates sharpening pressure through reward allocation rather than explicit entropy control. Generally speaking, entropy, 𝜅 and 𝜅 eff differ in granularity and the use of response-quality signals. Entropy measures stepwise output randomness on training data and does not indicate response quality. 𝜅 includes 𝑟 +,−
+
+to distinguish good and bad responses, but it is a global metric shared across all steps. 𝜅 eff extends 𝜅 to the step level, preserving quality distinction while providing finer discrimination. 
+
+> 5Reward Budgeting for LLM Reasoning
+
+3.2.1. Sharpness Factor Controlled Studies 
+
+Compared with the tested entropy interventions in §3.1, changes to reward scale and KL strength produce clearer differences in finite-horizon training trajectories. We summarize these configurations through 𝜅 below; the comparison does not isolate it as a unique causal mediator or determine an asymptotic endpoint.      
+
+> Figure 3 |Validation accuracy as training progresses. The three vertical dashed lines mark the convergence step 𝑡 conv .Overall, smaller 𝜅 results in later convergence but also slows training.
+
+Specifically, we train Qwen3-8B [29] on DAPO-Math-17K [31] with DRGRPO [16], under three con-figurations: (𝑟 + − 𝑟 − , 𝛽 ) = (5, 0.001 ), (2, 0.001 ), and 
+
+(1, 0.005 ), yielding decreasing sharpening pressures of 𝜅 = 5000 , 2000 , 200. To simplify the analysis, we use 𝜅 instead of 𝜅 eff , since the two serve as proxies for each other. We vary only 𝜅 and the related quantities 
+
+> 𝑟 +
+
+, 𝑟 − , and 𝛽 , while keeping other hyper-parameters fixed. For each configuration, we define 𝑡 conv as the first point where performance plateaus (§B.3). We visual-ize 𝑡 conv by vertical lines. In Figure 3, larger 𝜅 indeed exhibits markedly earlier 𝑡 conv , but smaller 𝜅 also yields lower final performance. This aligns with §3.2, where 𝜅 
+
+(and 𝜅 eff ) are derived from sharpening pressure. Mak-ing 𝜅 globally small can slow learning substantially 
+
+without guaranteeing higher final accuracy; see more discussion in §4.1. Under the same set-up, we provide a complementary conditional association analysis in C, showing that entropy is much less predictive of future accuracy once variation in 𝜅 is controlled for. 
+
+3.3. The Averaging Effect 
+
+When plotting entropy and accuracy, “entropy collapse” appears striking: accuracy plateaus as entropy drops. However, this observation is usually based on heavily averaged curves, such as 11 runs in [3] and 12 runs in our Figure 1. Although averaging reduces noise, it also introduces a subtle statistical risk : by smoothing away run-level heterogeneity, it can make weak or inconsistent trends appear visually robust. Therefore, averaged plots and individual runs can show markedly different trends. This distinction is particularly important for causal interpretation. The relationship between a strongly tied metric and accuracy should remain visible within individual runs, not only after averaging.        
+
+> (a) Entropy over training steps. (b) 𝜅 eff over training steps.
+> Figure 4 |Training dynamics for DRGRPO, KLCov, CLIPCov, GSPO, and DAPO. The left axes show entropy in (a) and 𝜅 eff in (b); the right axes show averaged validation accuracy in (a) and DAPO validation accuracy in (b).
+
+Figure 4 shows method-specific diagnostic trajectories, with averaged validation accuracy in panel (a) and DAPO validation accuracy in panel (b). The diagnostic trajectories differ substantially across methods. These plots provide descriptive comparisons and do not establish a general within-run relationship or a causal connection between entropy, effective sharpness, and accuracy. 
+
+> 6Reward Budgeting for LLM Reasoning
+
+# 4. Method 
+
+We propose a plug-and-play advantage construction method, reward budgeting , to regulate RL training dynamics. Despite its simplicity, reward budgeting has a principled theoretical effect. First, for binary rewards and independent on-policy rollouts, its unclipped score-function estimator follows the gradient of a concave finite-group objective. After subtracting a parameter-independent constant, this objective approaches the logarithm of success probability as 𝐺 → ∞ . Second, it yields a 𝜅 trajectory that is different from most existing RL methods which may better allocate training focus. Its empirical gains are further verified in §5. Reward budgeting changes how advantages are constructed and can be used with a fixed-reference KL penalty. Section 4.2 discusses the reference-free variant, which we evaluate separately in the Qwen3-8B GRPO ablation. 
+
+4.1. Fixed Per-Prompt Reward Budgets Algorithm 1 Advantage Construction in Fixed Per-Prompt Reward Budgets 
+
+1. Initialize the policy 𝜋 𝜃 and set the reference policy 𝜋 ref ← 𝜋 𝜃 ; initialize training data D and the number of rollouts per prompt 𝐺 .2. For each training step 𝑡 = 1, 2, . . . :(a) Sample 𝐵 prompts { 𝑝 𝑖 }𝐵 𝑖 =1 from D.(b) Generate 𝐺 rollouts {𝑜 ( 𝑗 ) 
+
+> 𝑖
+
+}𝐺 𝑗 =1 ∼ 𝜋 𝜃 for each 𝑝 𝑖 .(c) Assign raw rewards 𝑟 ( 𝑗 ) 
+
+> 𝑖
+
+to each 𝑜 ( 𝑗 ) 
+
+> 𝑖
+
+.(d) Compute per-prompt minimum 𝑟 − 
+
+> 𝑖
+
+:= min 1≤ 𝑗 ≤𝐺 𝑟 ( 𝑗 ) 
+
+> 𝑖
+
+.(e) Subtract the minimum 𝑔 ( 𝑗 ) 
+
+> 𝑖
+
+:= 𝑟 ( 𝑗 ) 
+
+> 𝑖
+
+− 𝑟 − 
+
+> 𝑖
+
+.(f) If a prompt 𝑝 𝑖 has 𝑔 ( 𝑗 ) 
+
+> 𝑖
+
+= 0 for all 𝑗 ∈ { 1, . . . , 𝐺 }, skip the prompt; otherwise: i. Redesign rewards 𝑅 ( 𝑗 ) 
+
+> 𝑖
+
+:= 𝑔 ( 𝑗 ) 
+
+> 𝑖
+
+/Í𝐺 𝑘 =1 𝑔 (𝑘 ) 
+
+> 𝑖 .
+
+ii. Compute 𝐴 ( 𝑗 ) 
+
+> 𝑖
+
+:= 𝑅 ( 𝑗 ) 
+
+> 𝑖
+
+− 1
+
+> 𝐺
+
+Í𝑗 𝑅 ( 𝑗 ) 
+
+> 𝑖
+
+.
+
+Reward budgeting constructs advantages as follows: for each prompt 𝑝 , let 𝜋 𝜃 sample 𝐺 rollouts {𝑜 𝑖 }𝐺 𝑖 =1
+
+with raw rewards {𝑟 𝑖 }𝐺 𝑖 =1. It first removes a per-group minimum 𝑟 − := min 𝑖 𝑟 𝑖 and keeps only the positive “gaps” 𝑔 𝑖 := 𝑟 𝑖 − 𝑟 − . If all 𝑔 𝑖 = 0, it skips the update. Otherwise it redistributes a unit total reward across the rollouts, proportional to their gaps: 𝑅 (𝑜 𝑖 ) := 𝑔 𝑖 /Í𝐺 𝑗 =1 𝑔 𝑗 so that Í𝑖 𝑅 (𝑜 𝑖 ) = 1. Finally, it defines the advantage as 𝐴 𝑖 := 𝑅 (𝑜 𝑖 ) − 1
+
+> 𝐺
+
+Í𝑖 𝑅 (𝑜 𝑖 ) to center the normalized rewards within the group; see Algorithm 1. The objective analysis below retains this centering and the group-skipping rule. 
+
+Global Optimization Objectives. To interpret fixed reward budgets, we first compare their idealized score-function update with the standard expected-reward policy gradient [23], whose objective is 
+
+𝐽 lin = 𝔼 𝑝 𝔼 𝑦 ∼𝜋 𝜃 (· | 𝑝 ) [𝑅 ( 𝑦 )] .
+
+For binary rewards, a sampled group of 𝐺 rollouts has total raw reward 𝑘 when 𝑘 rollouts are correct. Reward budgeting instead assigns a fixed total redistributed reward of 1 to each mixed group. All-correct and all-incorrect groups are skipped because their reward gaps are zero. Thus additional correct rollouts within a mixed group share the same budget; the exact calculation below shows how this produces diminishing returns as success probability increases. For binary rewards and independent on-policy rollouts, let 𝑝 correct := 𝑝 𝜃 (correct | 𝑝 ). Appendix A.3 shows that the expected centered score-function estimator of Algorithm 1, before clipping and other implementation-specific modifications, is the gradient of 
+
+𝐽 𝐺 −1 = 𝔼 𝑝 ∼D 
+
+ 𝑓 𝐺 −1 ( 𝑝 correct ), 𝑓 𝐺 −1 (𝑥 ) =
+
+> 𝐺 −1
+
+∑︁ 
+
+> 𝑚 =1
+
+1 − ( 1 − 𝑥 )𝑚 
+
+𝑚 . (4) This objective is approximately linear up to scale near zero and gives diminishing returns as success probability grows. The result is exact for this estimator at 𝐺 = 8; only its logarithmic limit requires large 𝐺 .
+
+> 7Reward Budgeting for LLM Reasoning
+
+For general rewards, Appendix A.5 gives sufficient conditions under which the actual gap-normalized estimator has the limiting expected direction associated with 
+
+𝐽 gap = 𝔼 𝑝 ∼D 
+
+log  𝔼 𝑦 ∼𝜋 𝜃 [𝑅 ( 𝑦 ) | 𝑝 ] − 𝑎 ( 𝑝 ) , (5) where 𝑎 ( 𝑝 ) is the finite, locally policy-independent essential infimum of the reward distribution. This is an asymptotic interpretation, not an exact finite-𝐺 objective for arbitrary graded rewards. The 𝑂 (1/𝐺 ) mean-squared error and variance bounds in Appendix A.4 concern a separate idealized, non-shifted estimator under stronger assumptions; the resulting bias bound is 𝑂 (𝐺 −1/2). They neither establish a rate for the actual gap-normalized estimator nor guarantee approximation accuracy at 𝐺 = 8. Clipping, importance weighting, and token-level optimization further limit equivalence to the evaluated implementations. 
+
+Sharpness Factor. Although reward budgeting applies only a fixed per-prompt reward re-allocation, it turns out to implicitly regulate 𝜅 in a way that differs from existing RL methods. Specifically, we consider three representative forms of advantage construction: • DRGRPO uses 𝐴 = 𝑟 − ¯𝑟 , giving 𝜅 DR = 1/𝛽 ;• GRPO, GSPO, DAPO, ClipCov and KLCov use 𝐴 = (𝑟 − ¯𝑟 )/ 𝜎 , giving 𝜅 GRPO = 1 
+
+> 𝛽𝜎
+
+;• Reward budgeting gives 𝜅 𝑅𝐵 = 1 
+
+> 𝛽𝑘
+
+.
+
+Table 1 | Correct/incorrect samples’ advantages in 2 decimal places across different constructions: Reward Budget, DrGRPO and GRPO (most RL methods fall into this type). 𝐺 is the group size and 𝑘 is the number of correct rollouts.                                                                               
+
+> Reward Budget DrGRPO GRPO (Most)
+> 𝑘 /𝐺 +−𝜅 +−𝜅 +−𝜅
+> 1/8 0.88 -0.13 1000 0.88 -0.13 1000 2.65 -0.38 3024 2/8 0.38 -0.13 500 0.75 -0.25 1000 1.73 -0.58 2309 3/8 0.21 -0.13 333 0.63 -0.38 1000 1.29 -0.78 2066 4/8 0.13 -0.13 250 0.50 -0.50 1000 1.00 -1.00 2000 5/8 0.08 -0.13 200 0.38 -0.63 1000 0.78 -1.29 2066 6/8 0.04 -0.13 167 0.25 -0.75 1000 0.58 -1.73 2309 7/8 0.02 -0.13 143 0.13 -0.88 1000 0.38 -2.65 3024
+> 𝜅 form 1/𝛽𝑘 1/𝛽 1/𝛽𝜎
+
+These 𝜅 values show how different methods pose sharpening pressure. First, DRGRPO applies uni-form sharpening pressure, which is stable but may risk under-convergence. Second, GRPO-style advan-tages maximize 𝜅 at extreme 𝑘 ∈ { 1, 𝐺 − 1}, so the strongest sharpening occurs when a batch is almost all correct or almost all incorrect. While this can speed convergence, when a batch is almost all cor-rect, such sharpening is less necessary, because the model is already near perfect. Finally, reward bud-geting gives 𝜅 = 1 
+
+> 𝑘𝛽
+
+, assigning stronger sharpening to harder prompts. Thus, “easy” prompts do not keep generating increasingly sharp updates, reducing the incentive to overfit to cheaply repeatable templates. This sharpness view complements the scoped objective analysis: reward budgeting adjusts the advantage gaps governing idealized sharpening. This provides a mechanism consistent with the observed gains, while the diagnostics do not isolate the causal contribution of each implementation component. 
+
+Stepwise KL. Fixed reward budgeting also permits a local surrogate interpretation. For a fixed non-constant sampled group and detached budget weights, consider 
+
+∇𝜃 𝐺 ∑︁ 
+
+> 𝑖 =1
+
+𝑅 (𝑜 𝑖 ) log 𝜋 𝜃 (𝑜 𝑖 | 𝑝 ).
+
+The nonnegative weights sum to one and define an empirical target distribution, combining weights for duplicate responses. Maximizing this fixed-sample weighted log-likelihood minimizes the KL divergence from that empirical target to the policy, up to a constant. This interpretation concerns only the uncentered weighted term; it omits group-relative centering and clipping and is not an exact scalar objective for the full implemented update. 
+
+4.2. The Prior Never Fades 
+
+Usually 𝜋 ref is introduced to promote stability by penalizing the current policy for drifting too far, but it in fact plays a deeper role: 𝜋 ∗ ∝ 𝜋 ref exp ( 1 
+
+> 𝛽
+
+𝐴 ) permanently depends on 𝜋 ref , so 𝜋 ref shapes what the policy is trained to approximate, and its impact never vanishes no matter how long we train.   
+
+> 8Reward Budgeting for LLM Reasoning
+> Table 2 |Benchmark scores (%) from eight responses per prompt at temperature 0 .7. Qwen3-8B uses mean accuracy across responses and Llama3.2-3B-Instruct uses pass@8. Shaded rows give the change in percentage points after adding reward budgeting (RB) to each baseline. GRPO retains its reference-policy KL penalty in this comparison.
+
+Method AMC23 AIME24 AIME25 MATH500 Olympiad (Physics) Average Qwen3-8B GRPO 82.50 26.67 43.33 95.60 51.27 59.87 + RB +10.00 +10.00 +10.00 +1.20 +2.12 +6.66 DrGRPO 82.50 30.00 43.33 97.20 47.46 60.10 + RB +5.00 +6.67 +3.33 -0.20 +1.27 +3.21 GSPO 90.00 26.67 36.67 96.80 47.04 59.44 + RB +5.00 +6.67 +6.67 +1.00 +1.69 +4.21 DAPO 87.50 36.67 40.00 96.40 49.15 61.94 + RB +7.50 +6.67 +6.67 +1.60 +0.85 +4.66 ClipCov 85.00 26.67 33.33 96.60 48.31 57.98 + RB +2.50 +10.00 +6.67 +1.40 +1.27 +4.37 KLCov 82.50 33.33 43.33 96.80 49.58 61.11 + RB +5.00 +10.00 +6.67 +0.80 +2.12 +4.92 Llama3.2-3B-Instruct GRPO 7.50 3.33 0.00 67.60 20.31 19.75 + RB +12.50 +0.00 +3.33 +3.20 +1.53 +4.11 DrGRPO 30.00 10.00 0.00 68.60 14.94 24.71 + RB +12.50 +6.67 +6.67 +2.00 +1.15 +5.80 GSPO 22.50 3.33 0.00 72.20 14.83 22.57 + RB +7.50 +3.33 +3.33 +5.00 +1.27 +4.01 DAPO 17.50 6.67 3.33 70.40 21.84 23.95 + RB +7.50 +3.33 +0.00 +2.20 +1.47 +2.90 ClipCov 22.50 10.00 0.00 69.80 13.98 23.26 + RB +12.50 +3.33 +3.33 +3.40 +1.27 +4.77 KLCov 30.00 10.00 0.00 71.60 13.98 25.12 + RB +10.0 +6.67 +3.33 +2.40 +1.69 +4.82 The reference-free variant removes the KL penalty while retaining importance-ratio clipping. Removing the fixed-reference penalty changes the unconstrained target to reward maximization, whose optima need not be deterministic when rewards tie. Clipping modifies the incentive for large sampled importance-ratio changes around the previous policy; it does not impose a hard global trust region or guarantee a bound on 𝜅 eff . The empirical effects of removing KL and adding reward budgeting are distinguished in the ablation study. 
+
+# 5. Experiment 
+
+5.1. Setup Data. We train on DAPO-Math-17K [31] and evaluate on five benchmarks: AMC23 [1], AIME24 [9], AIME25 [34], MATH500 [8], and OlympiadBench (Physics) [6]. 
+
+Models. We train (1) Llama3.2-3B-Instruct [17] and (2) Qwen3-8B [29]. 
+
+Hyper-parameters. We sample eight rollouts per prompt and use 32 prompts per update. We train each method until its validation accuracy reaches a plateau. The benchmark comparisons in Table 2 therefore describe accuracy at the evaluated checkpoints within each model family. During evaluation, we set the maximum response length to 8192 tokens and generate 8 responses per prompt at temperature = 0.7. We report their average accuracy for Qwen3-8B and pass@8 for Llama3.2-3B-Instruct (see detailed settings in §B). 
+
+Baselines. We apply our method to six RL methods in two types: (1) Four Representative RL Methods: GRPO [21], DrGRPO [16], GSPO [35], and DAPO [31]; (2) Two Entropy-Based RL Methods: ClipCov and KLCov [3], which are entropy-based variants of DAPO. 
+
+> 9Reward Budgeting for LLM Reasoning
+
+5.2. Key Insights More robust gains than entropy control. Table 2 includes two remedies: entropy (ClipCov and KLCov as entropy-based variants of DAPO) and our method. However, within each dataset, results of entropy-control methods are mixed. On average, on Qwen3-8B, DAPO even outperforms its variants (DAPO 61.94 vs. ClipCov 57.98 vs. KLCov 61.11); on Llama3.2-3B, KLCov marginally outperforms DAPO (25.12 vs. 23.95) while ClipCov slightly under-performs (23.26 vs. 23.95). In contrast, our method consistently improves in almost all cases. 
+
+Impact of advantage construction on 𝜅 -dynamics. Apart from reward budgeting, the RL baselines in Table 2 construct advantages in mainly two ways: DRGRPO uses 𝐴 = 𝑟 − ¯𝑟 , while others use 𝐴 = (𝑟 − ¯𝑟 )/ 𝜎 (in fact, DAPO and its variants also includes length-based reward, but its magnitude is typically much smaller than 𝑟 , thus we omit this for simplicity). These different advantage constructions then induce different 𝜅 -trajectories (§4.1). Specifically, DRGRPO tends to exhibit slightly lower 𝜅 , thus gentler sharpening pressure. Comparing DRGRPO to the others, we observe that its performance remains in the top tier. This agrees with our earlier discussion: well-regulated 𝜅 can deliver better final convergence, though our method continues to improve even in this case. 
+
+5.3. Training Dynamics      
+
+> (a) Entropy changes after applying our method (b) 𝜅 eff vs validation accuracy
+> Figure 5 |Effect of reward budgeting on Qwen3-8B. (a) Training-entropy differences relative to each baseline; most trajectories lie below zero. (b) Effective-sharpness trajectories alongside the mean validation accuracy across methods (black curve). These diagnostics describe the observed training dynamics and do not by themselves identify the cause of the accuracy gains.
+
+From Figure 5a, after applying our method, entropy generally decreases, since most curves remain below the black zero line. This indicates that higher entropy is not necessary for improving final performance, and that our method does not achieve its gains by implicitly boosting entropy. Comparing Figures 5b and 4b, our method also regulates the 𝜅 eff trajectories with noticeably smaller oscillations, which is consistent with our discussion in §4.1. These trajectories accompany accuracy gains without a sustained increase in entropy. 
+
+5.4. Ablation 
+
+The Qwen3-8B GRPO comparison in Table 2 retains the reference-policy KL penalty both with and without reward budgeting. To assess how this penalty affects the result, Table 3 crosses reward budgeting with KL retention or removal. Table 3 provides a complete ablation. Removing the KL penalty alone changes the average score from 59.87% to 60.27%, with mixed effects across benchmarks. In contrast, reward budgeting improves the average by +6.66 percentage points when KL is retained and by +5.38 percentage points when KL is removed. It also improves every evaluated benchmark under both KL settings. These results indicate that the gains are primarily attributable to reward budgeting, rather than to KL removal.   
+
+> 10 Reward Budgeting for LLM Reasoning
+> Table 3 |Qwen3-8B GRPO ablation of the reference-policy KL penalty and reward budgeting (RB). The first two rows give the absolute scores for the GRPO comparison in Table 2.
+
+KL RB AMC23 AIME24 AIME25 MATH500 Olympiad (Physics) Average 
+
+✓ × 82.50 26.67 43.33 95.60 51.27 59.87 
+
+✓ ✓ 92.50 36.67 53.33 96.80 53.39 66.53 
+
+× × 85.00 30.00 40.00 96.00 50.35 60.27 
+
+× ✓ 95.00 36.67 46.67 97.00 52.89 65.65 
+
+5.5. Limitations 
+
+Our experiments concern verifiable reasoning tasks with predominantly binary rewards. The general-reward analysis requires additional assumptions and does not establish performance for noisy, learned, or open-ended reward functions. Each main configuration uses one training seed and a rollout-group size of 𝐺 = 8. We did not conduct a group-size sweep. The eight evaluation responses per prompt characterize decoding variability. The reported scores are point estimates from those training runs. The interventions and regressions describe finite-horizon behavior; they do not establish a unique causal mediator of eventual performance. Training stops when validation accuracy reaches a plateau; numerical plateau thresholds, per-run training lengths, and checkpoint-selection rules for the main benchmark table are not reported. The retrospective convergence-step measure in Appendix B.3 describes the intervention trajectories in Figure 3. 
+
+# 6. Conclusion 
+
+We study premature convergence in RL and suggest that aggregate entropy may not fully characterize training dynamics. Instead, RL’s implicit target 𝜋 ∗ reveals a built-in sharpening pressure, which is captured with the sharpness factor 𝜅 (and 𝜅 eff ). Motivated by this, we propose reward-budgeting to improve final performance without explicit entropy control. 
+
+# Declaration of LLM Usage 
+
+Appendix B identifies Qwen3-235B-Instruct as the mathematical-equivalence judge and provides its system instruction and user-prompt template. LLM tools also assisted with checking mathematical arguments, refining the proof exposition, and editing the manuscript. The authors take responsibility for the correctness and originality of all mathematical arguments, experimental results, text, and references. 
+
+Code availability. Code will be released upon approval. 
+
+# References 
+
+[1] AI-MO Team. AIMO Validation Set – AMC Subset. https://huggingface.co/datasets/AI-MO/ aimo-validation-amc , 2024. Validation set of AMC 2022–2024 problems; we use the AMC 2023 split (AMC23). [2] Daixuan Cheng, Shaohan Huang, Xuekai Zhu, Bo Dai, Wayne Xin Zhao, Zhenliang Zhang, and Furu Wei. Reasoning with exploration: An entropy perspective, 2025. URL https://arxiv.org/abs/2506. 14758 .[3] Ganqu Cui, Yuchen Zhang, Jiacheng Chen, Lifan Yuan, Zhi Wang, Yuxin Zuo, Haozhan Li, Yuchen Fan, Huayu Chen, Weize Chen, Zhiyuan Liu, Hao Peng, Lei Bai, Wanli Ouyang, Yu Cheng, Bowen Zhou, and Ning Ding. The entropy mechanism of reinforcement learning for reasoning language models, 2025. URL 
+
+https://arxiv.org/abs/2505.22617 .[4] Yaru Hao, Li Dong, Xun Wu, Shaohan Huang, Zewen Chi, and Furu Wei. On-policy rl with optimal reward baseline, 2025. URL https://arxiv.org/abs/2505.23585 .
+
+> 11 Reward Budgeting for LLM Reasoning
+
+[5] Zhezheng Hao, Hong Wang, Haoyang Liu, Jian Luo, Jiarui Yu, Hande Dong, Qiang Lin, Can Wang, and Jiawei Chen. Rethinking entropy interventions in RLVR: An entropy change perspective. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens, editors, Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 31105–31133, San Diego, California, United States, July 2026. Association for Computational Linguistics. ISBN 979-8-89176-390-6. doi: 10.18653/v1/2026.acl-long.1436. URL https://aclanthology.org/2026.acl-long.1436/ .[6] Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, Jie Liu, Lei Qi, Zhiyuan Liu, and Maosong Sun. OlympiadBench: A challenging benchmark for promoting AGI with olympiad-level bilingual multimodal scientific problems. In Lun-Wei Ku, Andre Martins, and Vivek Srikumar, editors, Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 3828–3850, Bangkok, Thailand, August 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.acl-long.211. URL 
+
+https://aclanthology.org/2024.acl-long.211/ .[7] Jujie He, Jiacai Liu, Chris Yuhao Liu, Rui Yan, Chaojie Wang, Peng Cheng, Xiaoyu Zhang, Fuxiang Zhang, Jiacheng Xu, Wei Shen, Siyuan Li, Liang Zeng, Tianwen Wei, Cheng Cheng, Bo An, Yang Liu, and Yahui Zhou. Skywork open reasoner 1 technical report, 2025. URL https://arxiv.org/abs/2505.22312 .[8] Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Ja-cob Steinhardt. Measuring mathematical problem solving with the math dataset. In J. Vanschoren and S. Ye-ung, editors, Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks ,volume 1, 2021. URL https://datasets-benchmarks-proceedings.neurips.cc/paper_ files/paper/2021/file/be83ab3ecd0db773eb2dc1b0a17836a1-Paper-round2.pdf .[9] Hugging Face H4. AIME24: AIME 2024 benchmark. https://huggingface.co/datasets/ HuggingFaceH4/aime_2024 , 2024. 30 problems from the 2024 AIME I and II exams. [10] Yuxian Jiang, Yafu Li, Guanxu Chen, Dongrui Liu, Yu Cheng, and Jing Shao. Rethinking entropy regularization in large reasoning models, 2025. URL https://arxiv.org/abs/2509.25133 .[11] Renren Jin, Pengzhi Gao, Yuqi Ren, Zhuowen Han, Tongxuan Zhang, Wuwei Huang, Wei Liu, Jian Luan, and Deyi Xiong. Revisiting entropy in reinforcement learning for large reasoning models. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens, editors, Findings of the Association for Computational Linguistics: ACL 2026 , pages 25300–25322, San Diego, California, United States, July 2026. Association for Computational Linguistics. ISBN 979-8-89176-395-1. doi: 10.18653/v1/2026.findings-acl.1266. URL https://aclanthology.org/2026.findings-acl.1266/ .[12] Devvrit Khatri, Lovish Madaan, Rishabh Tiwari, Rachit Bansal, Venkata Sai Surya Subramanyam Duvvuri, Manzil Zaheer, Inderjit Dhillon, David Brandfonbrener, and Rishabh Agarwal. The art of scaling reinforcement learning compute for llms. In C. Vondrick, B. Hariharan, C. Raffel, L. Pinto, D. Yang, and A. Faust, editors, International Conference on Learning Representations , volume 2026, pages 72438–72467, 2026. URL https://proceedings.iclr.cc/paper_files/paper/2026/file/ 75ea88aca02640cca54c1231db8cacdd-Paper-Conference.pdf .[13] Shiye Lei, Zhihao Cheng, Kai Jia, and Dacheng Tao. Revisiting llm reasoning via information bottleneck, 2025. URL https://arxiv.org/abs/2507.18391 .[14] Cheuk Ting Li and Farzan Farnia. Mode-seeking divergences: Theory and applications to gans. In Francisco Ruiz, Jennifer Dy, and Jan-Willem van de Meent, editors, Proceedings of The 26th International Conference on Artificial Intelligence and Statistics , volume 206 of Proceedings of Machine Learning Research , pages 8321– 8350. PMLR, 25–27 Apr 2023. URL https://proceedings.mlr.press/v206/ting-li23a.html .[15] Qingbin Li, Rongkun Xue, Jie Wang, Ming Zhou, Zhi Li, Xiaofeng Ji, Yongqi Wang, Miao Liu, Zheming Yang, Minghui Qiu, and Jing Yang. Cure: Critical-token-guided re-concatenation for entropy-collapse prevention, 2025. URL https://arxiv.org/abs/2508.11016 .[16] Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. Understanding r1-zero-like training: A critical perspective. In Conference on Language Modeling (COLM) ,2025. 
+
+> 12 Reward Budgeting for LLM Reasoning
+
+[17] Meta. Llama-3.2-3b-instruct. Hugging Face model card, 2024. URL https://huggingface.co/ meta-llama/Llama-3.2-3B-Instruct .[18] MiniMax, :, Aili Chen, Aonian Li, Bangwei Gong, Binyang Jiang, Bo Fei, Bo Yang, Boji Shan, Changqing Yu, Chao Wang, Cheng Zhu, Chengjun Xiao, Chengyu Du, Chi Zhang, Chu Qiao, Chunhao Zhang, Chunhui Du, Congchao Guo, Da Chen, Deming Ding, Dianjun Sun, Dong Li, Enwei Jiao, Haigang Zhou, Haimo Zhang, Han Ding, Haohai Sun, Haoyu Feng, Huaiguang Cai, Haichao Zhu, Jian Sun, Jiaqi Zhuang, Jiaren Cai, Jiayuan Song, Jin Zhu, Jingyang Li, Jinhao Tian, Jinli Liu, Junhao Xu, Junjie Yan, Junteng Liu, Junxian He, Kaiyi Feng, Ke Yang, Kecheng Xiao, Le Han, Leyang Wang, Lianfei Yu, Liheng Feng, Lin Li, Lin Zheng, Linge Du, Lingyu Yang, Lunbin Zeng, Minghui Yu, Mingliang Tao, Mingyuan Chi, Mozhi Zhang, Mujie Lin, Nan Hu, Nongyu Di, Peng Gao, Pengfei Li, Pengyu Zhao, Qibing Ren, Qidi Xu, Qile Li, Qin Wang, Rong Tian, Ruitao Leng, Shaoxiang Chen, Shaoyu Chen, Shengmin Shi, Shitong Weng, Shuchang Guan, Shuqi Yu, Sichen Li, Songquan Zhu, Tengfei Li, Tianchi Cai, Tianrun Liang, Weiyu Cheng, Weize Kong, Wenkai Li, Xiancai Chen, Xiangjun Song, Xiao Luo, Xiao Su, Xiaobo Li, Xiaodong Han, Xinzhu Hou, Xuan Lu, Xun Zou, Xuyang Shen, Yan Gong, Yan Ma, Yang Wang, Yiqi Shi, Yiran Zhong, Yonghong Duan, Yongxiang Fu, Yongyi Hu, Yu Gao, Yuanxiang Fan, Yufeng Yang, Yuhao Li, Yulin Hu, Yunan Huang, Yunji Li, Yunzhi Xu, Yuxin Mao, Yuxuan Shi, Yuze Wenren, Zehan Li, Zelin Li, Zhanxu Tian, Zhengmao Zhu, Zhenhua Fan, Zhenzhen Wu, Zhichao Xu, Zhihang Yu, Zhiheng Lyu, Zhuo Jiang, Zibo Gao, Zijia Wu, Zijian Song, and Zijun Sun. Minimax-m1: Scaling test-time compute efficiently with lightning attention, 2025. URL https://arxiv.org/abs/2506.13585 .[19] Jaesung R. Park, Junsu Kim, Gyeongman Kim, Jinyoung Jo, Sean Choi, Jaewoong Cho, and Ernest K. Ryu. Clip-low increases entropy and clip-high decreases entropy in reinforcement learning of large language models, 2025. URL https://arxiv.org/abs/2509.26114 .[20] Aleksei Petrenko, Ben Lipkin, Kevin Chen, Erik Wijmans, Marco Cusumano-Towner, Raja Giryes, and Philipp Krähenbühl. Entropy-preserving reinforcement learning, 2026. URL https://arxiv.org/ abs/2603.11682 .[21] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. Deepseekmath: Pushing the limits of mathematical reasoning in open language models, 2024. URL https://arxiv.org/abs/2402.03300 .[22] Zhenpeng Su, Leiyu Pan, Minxuan Lv, Yuntao Li, Wenping Hu, Fuzheng Zhang, Kun Gai, and Guorui Zhou. CE-GPPO: Coordinating entropy via gradient-preserving clipping policy optimization in reinforcement learning. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens, editors, Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 37747–37760, San Diego, California, United States, July 2026. Association for Computational Linguistics. ISBN 979-8-89176-390-6. doi: 10.18653/v1/2026.acl-long.1752. URL https://aclanthology.org/ 2026.acl-long.1752/ .[23] Richard S Sutton, David McAllester, Satinder Singh, and Yishay Mansour. Policy gradi-ent methods for reinforcement learning with function approximation. In S. Solla, T. Leen, and K. Müller, editors, Advances in Neural Information Processing Systems , volume 12. MIT Press, 1999. URL https://proceedings.neurips.cc/paper_files/paper/1999/file/ 464d828b85b0bed98e80ade0a5c43b0f-Paper.pdf .[24] Hongze Tan, Zihan Wang, Jianfei Pan, Jinghao Lin, Hao Wang, Yifan Wu, Tao Chen, Zhihang Zheng, Zhihao Tang, and Haihua Yang. GTPO and GRPO-s: Token and sequence-level reward shaping with policy entropy. In Tong Zhang, Miroslav Dudik, Martin Jaggi, Alekh Agarwal, Sharon Li, Dale Schuurmans, Jerry Zhu, Felix Berkenkamp, Hanze Dong, and Alberto Bietti, editors, Proceedings of the 43rd International Conference on Machine Learning , volume 306 of Proceedings of Machine Learning Research , pages 118609– 118630. PMLR, 06–11 Jul 2026. URL https://proceedings.mlr.press/v306/tan26e.html .[25] Chen Wang, Zhaochun Li, Jionghao Bai, Yuzhi Zhang, Shisheng Cui, Zhou Zhao, and Yue Wang. Arbitrary entropy policy optimization breaks the exploration bottleneck of reinforcement learning. arXiv preprint arXiv:2510.08141 , 2025. 
+
+> 13 Reward Budgeting for LLM Reasoning
+
+[26] Shenzhi Wang, Le Yu, Chang Gao, Chujie Zheng, Shixuan Liu, Rui Lu, Kai Dang, Xiong-Hui Chen, Jianxin Yang, Zhenru Zhang, Yuqiong Liu, An Yang, Andrew Zhao, Yang Yue, Shiji Song, Bowen Yu, Gao Huang, and Junyang Lin. Beyond the 80/20 rule: High-entropy minority tokens drive effective reinforcement learning for llm reasoning. In D. Belgrave, C. Zhang, H. Lin, R. Pascanu, P. Koniusz, M. Ghassemi, and N. Chen, editors, Advances in Neural Information Processing Sys-tems , volume 38, Main Conference, pages 115452–115486. Curran Associates, Inc., 2025. doi: 10.52202/085713-3850. URL https://proceedings.neurips.cc/paper_files/paper/2025/ file/a797c2d2e0c1fdabf4d1ab8cd0b465c6-Paper-Conference.pdf .[27] Ronald J. Williams. Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine Learning , 8(3–4):229–256, 1992. doi: 10.1007/BF00992696. [28] Wujiang Xu, Wentian Zhao, Zhenting Wang, Yu-Jhe Li, Can Jin, Mingyu Jin, Kai Mei, Kun Wan, and Dimitris N. Metaxas. Epo: Entropy-regularized policy optimization for llm agents reinforcement learning, 2026. URL https://arxiv.org/abs/2509.22576 .[29] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayiheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jing Zhou, Jingren Zhou, Junyang Lin, Kai Dang, Keqin Bao, Kexin Yang, Le Yu, Lianghao Deng, Mei Li, Mingfeng Xue, Mingze Li, Pei Zhang, Peng Wang, Qin Zhu, Rui Men, Ruize Gao, Shixuan Liu, Shuang Luo, Tianhao Li, Tianyi Tang, Wenbiao Yin, Xingzhang Ren, Xinyu Wang, Xinyu Zhang, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yinger Zhang, Yu Wan, Yuqiong Liu, Zekun Wang, Zeyu Cui, Zhenru Zhang, Zhipeng Zhou, and Zihan Qiu. Qwen3 technical report, 2025. URL https://arxiv.org/abs/2505.09388 .[30] Kai Yang, Xin Xu, Yangkun Chen, Weijie Liu, Jiafei Lyu, Zichuan Lin, Deheng Ye, and Saiyong Yang. Entropic: Towards stable long-term training of llms via entropy stabilization with proportional-integral control, 2026. URL https://arxiv.org/abs/2511.15248 .[31] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, Xin Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Guangming Sheng, Yuxuan Tong, Chi Zhang, Mofan Zhang, Wang Zhang, Hang Zhu, Jinhua Zhu, Jiaze Chen, Jiangjie Chen, Chengyi Wang, Hongli Yu, Yuxuan Song, Xiangpeng Wei, Hao Zhou, Jingjing Liu, Wei-Ying Ma, Ya-Qin Zhang, Lin Yan, Mu Qiao, Yonghui Wu, and Mingxuan Wang. Dapo: An open-source llm reinforcement learning system at scale, 2025. URL https://arxiv.org/abs/2503.14476 .[32] Xiaoyun Zhang, Xiaojian Yuan, Di Huang, Wang You, Chen Hu, Jingqing Ruan, Kejiang Chen, and Xing Hu. Revisiting entropy regularization: Adaptive coefficient unlocks its potential for LLM reinforcement learning. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens, editors, Findings of the Association for Computational Linguistics: ACL 2026 , pages 18005–18020, San Diego, California, United States, July 2026. Association for Computational Linguistics. ISBN 979-8-89176-395-1. doi: 10.18653/ v1/2026.findings-acl.895. URL https://aclanthology.org/2026.findings-acl.895/ .[33] Yanzhi Zhang, Zhaoxi Zhang, Haoxiang Guan, Yilin Cheng, Yitong Duan, Chen Wang, Yue Wang, Shuxin Zheng, and Jiyan He. No free lunch: Rethinking internal feedback for llm reasoning, 2025. URL 
+
+https://arxiv.org/abs/2506.17219 .[34] Yifan Zhang and Team Math-AI. American invitational mathematics examination (aime) 2025, 2025. [35] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, Jingren Zhou, and Junyang Lin. Group sequence policy optimization, 2025. URL 
+
+https://arxiv.org/abs/2507.18071 .
+
+> 14 Reward Budgeting for LLM Reasoning
+
+# A. Proofs 
+
+A.1. The Effective Kappa Lemma A.1 (Effective sharpness for a KL mirror step) . Fix a state 𝑠 , a finite action space, a full-support policy 𝜌 ,detached advantages ˜𝐴 (𝑠, 𝑎 ), and 𝜏 > 0. For the KL-regularized projection below and the log-odds definition in Eq. 3, 
+
+𝜅 eff (𝑠 ; 𝑎 +, 𝑎 − ) = ˜𝐴 (𝑠, 𝑎 +) − ˜𝐴 (𝑠, 𝑎 − )
+
+𝜏 .
+
+This identity describes the idealized projection, not an exact representation of arbitrary clipped policy updates. Proof. Fix a prompt/state 𝑠 and write 𝜋 (𝑎 ) ≡ 𝜋 (𝑎 | 𝑠 ), 𝜌 (𝑎 ) ≡ 𝜌 (𝑎 | 𝑠 ), and ˜ 𝐴 (𝑎 ) ≡ ˜𝐴 (𝑠, 𝑎 ). Consider the KL-regularized projection (mirror descent) update 
+
+𝜋 new ∈ arg max 
+
+> 𝜋
+
+(∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) ˜𝐴 (𝑎 ) − 𝜏 𝐷 KL (𝜋 ∥𝜌 )
+
+)
+
+(6) such that ∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) = 1, 𝐷 KL (𝜋 ∥𝜌 ) :=∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) log 𝜋 (𝑎 )
+
+𝜌 (𝑎 ) . (7) Introduce the Lagrangian 
+
+L( 𝜋, 𝜆 ) =∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) ˜𝐴 (𝑎 ) − 𝜏 ∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) log 𝜋 (𝑎 )
+
+𝜌 (𝑎 ) + 𝜆 
+
+∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) − 1
+
+
+
+. (8) Taking derivatives and setting them to zero, for each 𝑎 we have 0 = 𝜕 L
+
+𝜕𝜋 (𝑎 ) = ˜𝐴 (𝑎 ) − 𝜏 
+
+
+
+log 𝜋 (𝑎 )
+
+𝜌 (𝑎 ) + 1
+
+
+
++ 𝜆, 
+
+log 𝜋 (𝑎 )
+
+𝜌 (𝑎 ) = ˜𝐴 (𝑎 )
+
+𝜏 + 𝜆 − 𝜏 𝜏 ,𝜋 (𝑎 ) = 𝜌 (𝑎 ) exp 
+
+ ˜𝐴 (𝑎 )
+
+𝜏 
+
+
+
+· exp 
+
+ 𝜆 − 𝜏 𝜏 
+
+
+
+.
+
+(9) Let 𝐶 := exp (( 𝜆 − 𝜏 )/ 𝜏 ), which does not depend on 𝑎 . Enforcing normalization yields 1 =∑︁ 
+
+> 𝑎
+
+𝜋 (𝑎 ) = 𝐶 ∑︁ 
+
+> 𝑎
+
+𝜌 (𝑎 ) exp 
+
+ ˜𝐴 (𝑎 )
+
+𝜏 
+
+
+
+=⇒ 𝐶 = ∑︁ 
+
+> 𝑎 ′
+
+𝜌 (𝑎 ′) exp 
+
+ ˜𝐴 (𝑎 ′)
+
+𝜏 
+
+! −1
+
+.
+
+(10) Therefore, 
+
+𝜋 new (𝑎 | 𝑠 ) = 𝜌 (𝑎 | 𝑠 ) exp ( ˜𝐴 (𝑠, 𝑎 )/ 𝜏 )
+
+Í𝑎 ′ 𝜌 (𝑎 ′ | 𝑠 ) exp ( ˜𝐴 (𝑠, 𝑎 ′)/ 𝜏 ) . (11) For any two actions/outputs 𝑎 + and 𝑎 − , the normalizer cancels: 
+
+𝜋 new (𝑎 + | 𝑠 )
+
+𝜋 new (𝑎 − | 𝑠 ) = 𝜌 (𝑎 + | 𝑠 )
+
+𝜌 (𝑎 − | 𝑠 ) exp 
+
+ ˜𝐴 (𝑠, 𝑎 +) − ˜𝐴 (𝑠, 𝑎 − )
+
+𝜏 
+
+
+
+, (12) log 𝜋 new (𝑎 + | 𝑠 )
+
+𝜋 new (𝑎 − | 𝑠 ) − log 𝜌 (𝑎 + | 𝑠 )
+
+𝜌 (𝑎 − | 𝑠 ) = ˜𝐴 (𝑠, 𝑎 +) − ˜𝐴 (𝑠, 𝑎 − )
+
+𝜏 . (13) Defining Δ ˜𝐴 (𝑠 ) := ˜𝐴 (𝑠, 𝑎 +) − ˜𝐴 (𝑠, 𝑎 − ) and 
+
+𝜅 eff (𝑠 ; 𝑎 +, 𝑎 − ) := log 𝜋 new (𝑎 + | 𝑠 )
+
+𝜋 new (𝑎 − | 𝑠 ) − log 𝜌 (𝑎 + | 𝑠 )
+
+𝜌 (𝑎 − | 𝑠 ) , (14) 
+
+> 15 Reward Budgeting for LLM Reasoning
+
+we obtain the claimed identity  
+
+> 𝜅 eff
+
+(𝑠 ; 𝑎 +, 𝑎 − ) = Δ ˜𝐴 (𝑠 ) 
+
+> 𝜏
+
+(and 𝜏 eff = 𝜏 when Δ ˜𝐴 (𝑠 ) ≠ 0). (15) 
+
+□
+
+A.2. Scope of the Objective Analysis 
+
+Algorithm 1 uses a gap-normalized reward-budget estimator: it first subtracts the within-group minimum reward, normalizes the remaining positive gaps to a fixed per-prompt budget, and skips groups whose gaps are all zero. This differs from the simpler reward-normalized estimator that directly uses 𝑅 𝑖 /Í𝑗 𝑅 𝑗 .We therefore separate the objective analysis into three cases. First, in Appendix A.3, we derive the exact finite-𝐺 objective induced by Algorithm 1 in the binary-reward setting. This is the setting most closely aligned with our main RLVR experiments. Second, in Appendix A.4, we analyze an idealized non-shifted reward-normalized estimator, which gives the clean ∇ log 𝔼 [𝑅 ] interpretation. This result should be understood as an intuition for why fixed reward budgets induce diminishing returns, rather than as the exact finite-𝐺 objective of Algorithm 1. Third, in Appendix A.5, we discuss the actual gap-normalized estimator under general rewards and show that, under additional support assumptions, it asymptotically corresponds to a shifted log-mean objective. 
+
+A.3. Exact Objective of Algorithm 1 under Binary Rewards 
+
+We first analyze the estimator exactly induced by Algorithm 1 in the binary reward setting. This differs slightly from the simpler 𝑐 𝑖 /𝑘 estimator, because Algorithm 1 subtracts the group minimum reward and skips groups whose post-shift gaps are all zero. 
+
+Assumption A.2 (Binary reward setting) . For a prompt 𝑥 , sample 𝐺 i.i.d. rollouts 𝑦 1, . . . , 𝑦 𝐺 ∼ 𝜋 𝜃 (·| 𝑥 ). Let 
+
+> 𝑐
+
+( 𝑦 ) ∈ { 0, 1} denote correctness, 𝑐 𝑖 := 𝑐 ( 𝑦 𝑖 ), and  
+
+> 𝑘
+
+:=
+
+> 𝐺
+
+∑︁   
+
+> 𝑖 =1
+> 𝑐 𝑖 ,𝑝 𝜃
+
+(𝑥 ) := Pr    
+
+> 𝑦 ∼𝜋 𝜃 (· | 𝑥 )
+
+(𝑐 ( 𝑦 ) = 1).
+
+Assume 𝐺 ≥ 2, 0 < 𝑝 𝜃 (𝑥 ) < 1, a correctness rule with no explicit 𝜃 dependence, locally parameter-independent policy support, and the integrability and differentiation conditions needed for the score-function identities below. Under Algorithm 1, there are three cases:  
+
+> 𝑘
+
+= 0 : all rollouts are incorrect and the group is skipped, 1 ≤ 𝑘 ≤ 𝐺 − 1 : the group is mixed and contributes an update,  
+
+> 𝑘
+
+= 𝐺 : all rollouts are correct and the group is skipped. The last case is important: after subtracting the group minimum, all gaps become zero, so the group contains no within-group preference contrast. For 1 ≤ 𝑘 ≤ 𝐺 − 1, the shifted gaps are 𝑔 𝑖 = 𝑐 𝑖 , the normalized budgeted rewards are 𝑅 𝑖 = 𝑐 𝑖 /𝑘 , and Algorithm 1 uses the group-relative advantage  
+
+> 𝐴 𝑖
+
+= 𝑐 𝑖  
+
+> 𝑘
+
+− 1
+
+> 𝐺 .
+
+Thus the exact estimator is ˆ𝑔 RB (𝑥 ) = 1{1 ≤ 𝑘 ≤ 𝐺 − 1}
+
+> 𝐺
+
+∑︁ 
+
+> 𝑖 =1
+
+ 𝑐 𝑖  
+
+> 𝑘
+
+− 1
+
+> 𝐺
+
+
+
+∇𝜃 log 𝜋 𝜃 ( 𝑦 𝑖 |𝑥 ).
+
+> 16 Reward Budgeting for LLM Reasoning
+
+Lemma A.3 (Exact binary objective of Algorithm 1) . For binary rewards, the expected update of Algorithm 1 satisfies 
+
+𝔼 [ˆ𝑔 RB (𝑥 )] = ∇𝜃 𝑓 𝐺 −1 ( 𝑝 𝜃 (𝑥 )) ,
+
+where 
+
+𝑓 𝐻 ( 𝑝 ) =
+
+> 𝐻
+
+∑︁ 
+
+> 𝑚 =1
+
+1 − ( 1 − 𝑝 )𝑚 
+
+𝑚 , 𝐻 = 𝐺 − 1.
+
+Moreover, 𝑓 𝐻 is concave in 𝑝 .Proof. Let 
+
+𝜇 + := 𝔼 [∇ 𝜃 log 𝜋 𝜃 ( 𝑦 |𝑥 ) | 𝑐 ( 𝑦 ) = 1], 𝜇 − := 𝔼 [∇ 𝜃 log 𝜋 𝜃 ( 𝑦 |𝑥 ) | 𝑐 ( 𝑦 ) = 0].
+
+By the score-function identity, 
+
+𝜇 + = ∇𝜃 log 𝑝 𝜃 (𝑥 ), 𝜇 − = ∇𝜃 log (1 − 𝑝 𝜃 (𝑥 )) .
+
+Conditioned on 𝑘 ∈ { 1, . . . , 𝐺 − 1}, there are 𝑘 correct samples and 𝐺 − 𝑘 incorrect samples. Therefore, 
+
+𝔼 [ˆ𝑔 RB (𝑥 ) | 𝑘 ] = 𝑘 
+
+ 1
+
+𝑘 − 1
+
+𝐺 
+
+
+
+𝜇 + + ( 𝐺 − 𝑘 )
+
+
+
+− 1
+
+𝐺 
+
+
+
+𝜇 − .
+
+This simplifies to 
+
+𝔼 [ˆ𝑔 RB (𝑥 ) | 𝑘 ] = 𝐺 − 𝑘 𝐺 (𝜇 + − 𝜇 − ).
+
+Since 𝑘 ∼ Binomial (𝐺, 𝑝 ), we have 
+
+𝔼 
+
+ 𝐺 − 𝑘 𝐺 1{1 ≤ 𝑘 ≤ 𝐺 − 1}
+
+
+
+= (1 − 𝑝 ) − ( 1 − 𝑝 )𝐺 .
+
+Hence 
+
+𝔼 [ˆ𝑔 RB (𝑥 )] =  (1 − 𝑝 ) − ( 1 − 𝑝 )𝐺  (𝜇 + − 𝜇 − ).
+
+Using 
+
+𝜇 + − 𝜇 − = ∇𝜃 log 𝑝 − ∇ 𝜃 log (1 − 𝑝 ) = ∇𝜃 𝑝 𝑝 (1 − 𝑝 ) ,
+
+we obtain 
+
+𝔼 [ˆ𝑔 RB (𝑥 )] = 1 − ( 1 − 𝑝 )𝐺 −1
+
+𝑝 ∇𝜃 𝑝. 
+
+Therefore this is the gradient of a scalar objective 𝑓 𝐺 −1 ( 𝑝 ) satisfying 
+
+𝑓 ′ 
+
+> 𝐺 −1
+
+( 𝑝 ) = 1 − ( 1 − 𝑝 )𝐺 −1
+
+𝑝 =
+
+> 𝐺 −2
+
+∑︁ 
+
+> 𝑚 =0
+
+(1 − 𝑝 )𝑚 .
+
+Integrating gives 
+
+𝑓 𝐺 −1 ( 𝑝 ) =
+
+> 𝐺 −1
+
+∑︁ 
+
+> 𝑚 =1
+
+1 − ( 1 − 𝑝 )𝑚 
+
+𝑚 
+
+up to an additive constant. Finally, 
+
+𝑓 ′′  
+
+> 𝐺 −1
+
+( 𝑝 ) = −
+
+> 𝐺 −2
+
+∑︁ 
+
+> 𝑚 =1
+
+𝑚 (1 − 𝑝 )𝑚 −1 ≤ 0,
+
+so 𝑓 𝐺 −1 is concave. □
+
+For fixed 𝑝 ∈ ( 0, 1], let 𝐻 𝑛 = Í𝑛 𝑚 =1 1/𝑚 . Then 
+
+𝑓 𝑛 ( 𝑝 ) − 𝐻 𝑛 = −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑚 =1
+
+(1 − 𝑝 )𝑚 
+
+𝑚 −→ log 𝑝. 
+
+Thus the logarithmic limit is understood up to a parameter-independent additive constant; 𝑓 𝑛 ( 𝑝 ) itself does not have a finite limit. The score-function derivation assumes 0 < 𝑝 𝜃 (𝑥 ) < 1 and the usual differentiation-under-expectation conditions. 
+
+> 17 Reward Budgeting for LLM Reasoning
+
+A.4. Idealized Non-shifted Reward-normalized Estimator Assumption A.4 (General reward setting) . Fix a prompt 𝑥 . Let 𝑦 1, . . . , 𝑦 𝐺 
+
+> i.i.d.
+
+∼ 𝜋 𝜃 (· | 𝑥 ). Define 
+
+𝑅 𝑖 := 𝑅 ( 𝑦 𝑖 ), 𝑆 :=
+
+> 𝐺
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑅 𝑗 , 𝜇 𝜃 (𝑥 ) := 𝔼 𝑦 ∼𝜋 𝜃 (· | 𝑥 ) [𝑅 ( 𝑦 )] .𝜙 𝑖 := ∇𝜃 log 𝜋 𝜃 ( 𝑦 𝑖 | 𝑥 ) ∈ ℝ𝑑 .
+
+Assume: 1. There are fixed constants 0 < 𝑟 lo ≤ 𝑟 hi < ∞ such that 𝑟 lo ≤ 𝑅 ( 𝑦 ) ≤ 𝑟 hi almost surely. These are sufficient conditions for this idealized estimator only; zero-valued binary rewards are covered separately by the exact binary analysis. 2. 𝔼 [∥ 𝜙 ( 𝑦 )∥ 2 | 𝑥 ] < ∞, where 𝜙 ( 𝑦 ) = ∇𝜃 log 𝜋 𝜃 ( 𝑦 | 𝑥 ).3. Rewards have no explicit dependence on 𝜃 , the policy has parameter-independent support locally, and differentiation may pass under the relevant expectations. Thus 𝔼 [𝜙 ] = 0 and 𝔼 [𝑅𝜙 ] = ∇𝜃 𝜇 𝜃 (𝑥 ).All expectations below are conditional on 𝑥 and we omit the conditioning for brevity. 
+
+Asymptotic-G Derivation 
+
+Define per-sample normalized rewards ˜𝑟 𝑖 =
+
+(
+
+𝑅 𝑖 /𝑆, 𝑆 > 0,
+
+0, 𝑆 = 0,
+
+and the VPG/REINFORCE [27, 23] group estimator 
+
+𝑔 new (𝑥 ) :=
+
+> 𝐺
+
+∑︁ 
+
+> 𝑖 =1
+
+˜𝑟 𝑖 ∇𝜃 log 𝜋 𝜃 ( 𝑦 𝑖 | 𝑥 )
+
+= 1[𝑆 > 0]
+
+> 𝐺
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑅 𝑖 
+
+𝑆 ∇𝜃 log 𝜋 𝜃 ( 𝑦 𝑖 | 𝑥 ).
+
+Lemma A.5 (large 𝐺 objective) . Under the assumptions above, 
+
+lim  
+
+> 𝐺 →∞
+
+𝔼 [𝑔 new (𝑥 )] = ∇𝜃 log 𝜇 𝜃 (𝑥 ).
+
+Consequently, for large 𝐺 the implicit objective is 
+
+𝐽 new ≈ 𝔼 𝑥 [log 𝜇 𝜃 (𝑥 )] .
+
+Proof. Write ¯ 𝑅 𝐺 = 𝐺 −1 Í𝑖 𝑅 𝑖 , ¯ 𝜓 𝐺 = 𝐺 −1 Í𝑖 𝑅 𝑖 𝜙 𝑖 , 𝜇 = 𝔼 [𝑅 ], and 𝐴 = 𝔼 [𝑅𝜙 ] = ∇𝜃 𝜇 . The estimator is 𝑔 new = ¯𝜓 𝐺 / ¯𝑅 𝐺 
+
+and ¯ 𝑅 𝐺 ≥ 𝑟 lo > 0. Therefore 
+
+𝑔 new − 𝐴 𝜇 = ( ¯𝜓 𝐺 − 𝐴 ) − ( 𝐴 /𝜇 )( ¯𝑅 𝐺 − 𝜇 )
+
+¯𝑅 𝐺 
+
+.
+
+Independence and the finite second moments give 
+
+𝔼 𝑔 new − 𝐴 𝜇 
+
+> 2
+
+≤ 2
+
+𝑟 2lo 𝐺 
+
+
+
+𝔼 ∥𝑅𝜙 − 𝐴 ∥2 + ∥ 𝐴 ∥2
+
+𝜇 2 Var (𝑅 )
+
+
+
+.
+
+Hence 𝑔 new → 𝐴 /𝜇 in 𝐿 2 and therefore in 𝐿 1. Taking expectations yields 𝔼 [𝑔 new ] → ∇ 𝜃 log 𝜇 . The lower reward bound controls the random denominator. □
+
+> 18 Reward Budgeting for LLM Reasoning
+
+Finite-G Approximations 
+
+Lemma A.6 (𝐿 2-rate of 𝑔 𝐺 around ∇ log 𝜇 ). Under Assumption A.4, there exists a finite constant 𝐶 (𝑥 ) > 0
+
+(depending on the distribution at prompt 𝑥 but not on 𝐺 ) such that for all sufficiently large 𝐺 ,
+
+𝔼 ∥𝑔 𝐺 (𝑥 ) − ∇ 𝜃 log 𝜇 𝜃 (𝑥 )∥ 2 ≤ 𝐶 (𝑥 )
+
+𝐺 .
+
+Proof. Write 𝑔 𝐺 = 𝑔 new for a group of size 𝐺 . The direct ratio bound in the proof of Lemma A.5 applies for every 
+
+𝐺 ≥ 1. The claim follows by choosing 
+
+𝐶 (𝑥 ) = 2
+
+𝑟 2lo 
+
+
+
+𝔼 ∥𝑅𝜙 − 𝐴 ∥2 + ∥ 𝐴 ∥2
+
+𝜇 2 Var (𝑅 )
+
+
+
+,
+
+or any larger positive constant. It is finite under Assumption A.4. □
+
+Corollary A.7 (Bias, variance and MSE of 𝑔 𝐺 ). Under Assumption A.4, there exists 𝐶 (𝑥 ) < ∞ such that for all sufficiently large 𝐺 ,
+
+𝔼 [𝑔 𝐺 (𝑥 )] − ∇ 𝜃 log 𝜇 𝜃 (𝑥 ) ≤√︂ 𝐶 (𝑥 )
+
+𝐺 
+
+Var  𝑔 𝐺 (𝑥 ) := 𝔼 ∥𝑔 𝐺 (𝑥 ) − 𝔼 [𝑔 𝐺 (𝑥 )] ∥ 2 ≤ 𝐶 (𝑥 )
+
+𝐺 
+
+Proof. The mean-squared error bound is Lemma A.6. The bias bound follows from Cauchy–Schwarz: 
+
+𝔼 [𝑔 𝐺 (𝑥 )] − ∇ 𝜃 log 𝜇 𝜃 (𝑥 ) 2 ≤ 𝔼 ∥𝑔 𝐺 (𝑥 ) − ∇ 𝜃 log 𝜇 𝜃 (𝑥 )∥ 2 .
+
+For the variance, Var  𝑔 𝐺 (𝑥 ) = 𝔼 ∥𝑔 𝐺 (𝑥 ) − 𝔼 [𝑔 𝐺 (𝑥 )] ∥ 2
+
+≤ 𝔼 ∥𝑔 𝐺 (𝑥 ) − ∇ 𝜃 log 𝜇 𝜃 (𝑥 )∥ 2,
+
+since ∇𝜃 log 𝜇 𝜃 (𝑥 ) is a fixed vector. The last quantity is bounded by 𝐶 (𝑥 )/ 𝐺 by Lemma A.6. □
+
+A.5. Gap-normalized Estimator under General Rewards 
+
+We now give sufficient conditions for the actual gap-normalized estimator. Fix a prompt 𝑥 and policy 𝜃 , and draw an i.i.d. sequence of rollouts. Write 𝑅 𝑖 = 𝑅 ( 𝑦 𝑖 , 𝑥 ), 𝜙 𝑖 = ∇𝜃 log 𝜋 𝜃 ( 𝑦 𝑖 | 𝑥 ), 𝑀 𝐺 = min 𝑖 ≤𝐺 𝑅 𝑖 , and 𝑍 𝐺 = Í𝑖 (𝑅 𝑖 − 𝑀 𝐺 ).Let 𝑎 (𝑥 ) be the finite essential infimum of 𝑅 under 𝜋 𝜃 , assumed policy-independent in a neighborhood of 𝜃 .Assume 𝜇 = 𝔼 [𝑅 ] > 𝑎 (𝑥 ), and 
+
+𝔼 |𝑅 | < ∞, 𝔼 ∥𝜙 ∥ < ∞, 𝔼 [| 𝑅 |∥ 𝜙 ∥] < ∞.
+
+Assume also that rewards have no explicit 𝜃 dependence, the policy has locally parameter-independent support, and differentiation may pass under the expectation, so that 𝔼 [𝜙 ] = 0 and 𝔼 [𝑅𝜙 ] = ∇𝜃 𝜇 .For 𝑍 𝐺 > 0, the centered Algorithm 1 score-function estimator is ˆ𝑔 gap =
+
+> 𝐺
+
+∑︁ 
+
+> 𝑖 =1
+
+ 𝑅 𝑖 − 𝑀 𝐺 
+
+𝑍 𝐺 
+
+− 1
+
+𝐺 
+
+
+
+𝜙 𝑖 ;it is zero when 𝑍 𝐺 = 0. The centered term cannot in general be discarded by treating the group-dependent skipping rule as an action-independent event. Instead, with ¯ 𝜙 𝐺 = 𝐺 −1 Í𝑖 𝜙 𝑖 , rewrite the estimator as ˆ𝑔 gap = 𝐺 −1 Í𝑖 𝑅 𝑖 𝜙 𝑖 − 𝑀 𝐺 ¯𝜙 𝐺 
+
+𝐺 −1 Í𝑖 𝑅 𝑖 − 𝑀 𝐺 
+
+− ¯𝜙 𝐺 when 𝑍 𝐺 > 0.
+
+> 19 Reward Budgeting for LLM Reasoning
+
+The sampled minimum converges almost surely to 𝑎 (𝑥 ). By the strong law, the numerator converges to ∇𝜃 𝜇 ,the denominator converges to 𝜇 − 𝑎 (𝑥 ) > 0, and ¯ 𝜙 𝐺 → 0. Thus ˆ𝑔 gap 
+
+> 𝑎.𝑠.
+
+−−→ ∇𝜃 𝜇 𝜇 − 𝑎 (𝑥 ) = ∇𝜃 log (𝜇 − 𝑎 (𝑥 )) .
+
+Convergence of the expected update additionally requires uniform integrability. One sufficient condition is an almost-sure bound ∥𝜙 ∥ ≤ 𝐿 < ∞: the nonnegative normalized gaps sum to one, so ∥ˆ𝑔 gap ∥ ≤ 2𝐿 , and dominated convergence then applies. Under these sufficient conditions, the large-group expected direction has a shifted log-mean interpretation. This argument establishes neither an exact finite-𝐺 general-reward objective nor a finite-𝐺 rate; the behavior of the sampled minimum can depend on the reward distribution near its lower endpoint. When 𝑎 (𝑥 ) = 0, the limiting expression coincides with the unshifted log-mean. 
+
+A.6. RL as Policy-to-Target KL Minimization 
+
+A.6.1. Trajectory Level 
+
+Claim. The regularized RL objective 
+
+𝐽 RL (𝜃 ) = 𝔼 𝛾 ∼𝜋 𝜃 
+
+𝑅 (𝛾 ) − 𝛽 𝐷 KL 
+
+ 𝜋 𝜃 ∥ 𝜋 ref 
+
+
+
+is equivalent (up to an additive constant independent of 𝜃 ) to 
+
+−𝛽 𝐷 KL 
+
+ 𝜋 𝜃 ∥ 𝜋 ∗
+
+> RL
+
+,
+
+where 
+
+𝜋 ∗ 
+
+> RL
+
+(𝛾 ) ∝ 𝜋 ref (𝛾 ) exp 
+
+ 𝑅 (𝛾 )
+
+𝛽 
+
+
+
+.
+
+Proof. Let 𝛾 denote a trajectory (rollout) and let 𝜋 𝜃 (𝛾 ) be the trajectory distribution induced by policy 𝜋 𝜃 .Consider 
+
+𝐽 RL (𝜃 ) = 𝔼 𝛾 ∼𝜋 𝜃 [𝑅 (𝛾 )] − 𝛽 𝐷 KL (𝜋 𝜃 ∥𝜋 ref ).
+
+Expanding the KL term, 
+
+𝐷 KL (𝜋 𝜃 ∥𝜋 ref ) = 𝔼 𝛾 ∼𝜋 𝜃 
+
+
+
+log 𝜋 𝜃 (𝛾 )
+
+𝜋 ref (𝛾 )
+
+
+
+,
+
+so 
+
+𝐽 RL (𝜃 ) = 𝔼 𝛾 ∼𝜋 𝜃 [𝑅 (𝛾 ) − 𝛽 log 𝜋 𝜃 (𝛾 ) + 𝛽 log 𝜋 ref (𝛾 )] .
+
+Define the (nonparametric) optimal distribution 
+
+𝜋 ∗ 
+
+> RL
+
+(𝛾 ) = 1
+
+𝑍 𝜋 ref (𝛾 ) exp 
+
+ 𝑅 (𝛾 )
+
+𝛽 
+
+
+
+,𝑍 =∑︁ 
+
+> 𝛾
+
+𝜋 ref (𝛾 ) exp 
+
+ 𝑅 (𝛾 )
+
+𝛽 
+
+
+
+.
+
+Then log 𝜋 ∗ 
+
+> RL
+
+(𝛾 ) = log 𝜋 ref (𝛾 ) + 𝑅 (𝛾 )
+
+𝛽 − log 𝑍. 
+
+Compute the policy-to-target KL: 
+
+𝐷 KL (𝜋 𝜃 ∥𝜋 ∗
+
+> RL
+
+)
+
+= 𝔼 𝛾 ∼𝜋 𝜃 
+
+log 𝜋 𝜃 (𝛾 ) − log 𝜋 ∗ 
+
+> RL
+
+(𝛾 )
+
+= 𝔼 𝛾 ∼𝜋 𝜃 
+
+
+
+log 𝜋 𝜃 (𝛾 ) − log 𝜋 ref (𝛾 ) − 𝑅 (𝛾 )
+
+𝛽 + log 𝑍 
+
+
+
+Multiplying by −𝛽 gives 
+
+−𝛽𝐷 KL (𝜋 𝜃 ∥𝜋 ∗
+
+> RL
+
+) = 𝔼 [𝑅 (𝛾 ) − 𝛽 log 𝜋 𝜃 (𝛾 ) + 𝛽 log 𝜋 ref (𝛾 )] 
+
+> 20 Reward Budgeting for LLM Reasoning
+
+−𝛽 log 𝑍 = 𝐽 RL (𝜃 ) − 𝛽 log 𝑍. 
+
+Therefore, 
+
+𝐽 RL (𝜃 ) = −𝛽𝐷 KL (𝜋 𝜃 ∥𝜋 ∗
+
+> RL
+
+) + 𝛽 log 𝑍, 
+
+and since log 𝑍 does not depend on 𝜃 ,arg max  
+
+> 𝜃
+
+𝐽 RL (𝜃 ) ≡ arg min  
+
+> 𝜃
+
+𝐷 KL (𝜋 𝜃 ∥𝜋 ∗
+
+> RL
+
+).
+
+□
+
+A.6.2. Action Level 
+
+Claim. For any state 𝑠 , maximizing the per-state objective 
+
+L𝑠 (𝜋 ) := 𝔼 𝑎 ∼𝜋 (· | 𝑠 )
+
+h
+
+𝑓 (𝑠, 𝑎 ) − 𝛽 log 𝜋 (𝑎 |𝑠 )
+
+𝜋 ref (𝑎 |𝑠 )
+
+i
+
+is equivalent to minimizing the policy-to-target KL 
+
+𝐷 KL (𝜋 (·| 𝑠 )∥ 𝜋 ∗ 
+
+> 𝑓
+
+(·| 𝑠 )) ,
+
+where 𝜋 ∗ 
+
+> 𝑓
+
+(𝑎 |𝑠 ) ∝ 𝜋 ref (𝑎 |𝑠 ) exp ( 𝑓 (𝑠, 𝑎 )/ 𝛽 ); moreover, replacing 𝑓 by 𝑓 − 𝑏 (𝑠 ) leaves 𝜋 ∗ 
+
+> 𝑓
+
+unchanged, while using 
+
+𝑓 = 𝑟 (𝑠, 𝑎 ) generally does not recover the 𝑓 = 𝑄 (𝑠, 𝑎 ) optimum unless 𝑄 (𝑠, 𝑎 ) = 𝑟 (𝑠, 𝑎 ) + 𝑐 (𝑠 ).
+
+Proof. Fix a state 𝑠 and consider the per-state regularized objective 
+
+L𝑠 (𝜋 ) := 𝔼 𝑎 ∼𝜋 (· | 𝑠 )
+
+h
+
+𝑓 (𝑠, 𝑎 ) − 𝛽 log 𝜋 (𝑎 |𝑠 )
+
+𝜋 ref (𝑎 |𝑠 )
+
+i
+
+,
+
+where 𝑓 is any score function. Define 
+
+𝜋 ∗ 
+
+> 𝑓
+
+(𝑎 |𝑠 ) := 1
+
+𝑍 𝑓 (𝑠 ) 𝜋 ref (𝑎 |𝑠 ) exp 
+
+ 𝑓 (𝑠, 𝑎 )
+
+𝛽 
+
+
+
+,𝑍 𝑓 (𝑠 ) =∑︁ 
+
+> 𝑎
+
+𝜋 ref (𝑎 |𝑠 )𝑒 𝑓 (𝑠,𝑎 )/ 𝛽 .
+
+Then log 𝜋 ∗ 
+
+> 𝑓
+
+(𝑎 |𝑠 ) = log 𝜋 ref (𝑎 |𝑠 ) + 𝑓 (𝑠, 𝑎 )
+
+𝛽 − log 𝑍 𝑓 (𝑠 ),
+
+and hence 
+
+𝐷 KL 
+
+ 𝜋 (·| 𝑠 ) ∥ 𝜋 ∗ 
+
+> 𝑓
+
+(·| 𝑠 )
+
+= 𝔼 𝑎 ∼𝜋 
+
+h
+
+log 𝜋 (𝑎 |𝑠 ) − log 𝜋 ∗ 
+
+> 𝑓
+
+(𝑎 |𝑠 )
+
+i
+
+= 𝔼 𝑎 ∼𝜋 
+
+
+
+log 𝜋 (𝑎 |𝑠 )
+
+𝜋 ref (𝑎 |𝑠 ) − 𝑓 (𝑠, 𝑎 )
+
+𝛽 + log 𝑍 𝑓 (𝑠 )
+
+
+
+.
+
+Multiplying by −𝛽 gives 
+
+−𝛽𝐷 KL (𝜋 ∥𝜋 ∗ 
+
+> 𝑓
+
+) = L𝑠 (𝜋 ) − 𝛽 log 𝑍 𝑓 (𝑠 ).
+
+Since log 𝑍 𝑓 (𝑠 ) is independent of 𝜋 , maximizing L𝑠 (𝜋 ) is equivalent to minimizing this policy-to-target KL, and the unique maximizer is 𝜋 ∗ 
+
+> 𝑓
+
+.
+
+Baseline invariance. Let 𝑓 ′ (𝑠, 𝑎 ) = 𝑓 (𝑠, 𝑎 ) − 𝑏 (𝑠 ) for any state-only 𝑏 (𝑠 ). Then 
+
+𝜋 ∗  
+
+> 𝑓 ′
+
+(𝑎 |𝑠 ) ∝ 𝜋 ref (𝑎 |𝑠 ) exp 
+
+ 𝑓 (𝑠, 𝑎 ) − 𝑏 (𝑠 )
+
+𝛽 
+
+
+
+= exp 
+
+
+
+− 𝑏 (𝑠 )
+
+𝛽 
+
+
+
+𝜋 ref (𝑎 |𝑠 )𝑒 𝑓 (𝑠,𝑎 )/ 𝛽 ∝ 𝜋 ∗ 
+
+> 𝑓
+
+(𝑎 |𝑠 ),
+
+so 𝜋 ∗  
+
+> 𝑓 ′
+
+= 𝜋 ∗ 
+
+> 𝑓
+
+. Taking 𝑓 = 𝑄 and 𝑏 = 𝑉 yields 𝜋 ∗ (𝑎 |𝑠 ) ∝ 𝜋 ref (𝑎 |𝑠 )𝑒 𝐴 (𝑠,𝑎 )/ 𝛽 , identical to using 𝑄 .
+
+Using 𝑟 (𝑠, 𝑎 ). Replacing 𝑓 by the immediate reward gives 𝜋 ∗ 
+
+> 𝑟
+
+(𝑎 |𝑠 ) ∝ 𝜋 ref (𝑎 |𝑠 )𝑒 𝑟 (𝑠,𝑎 )/ 𝛽 , which coincides with 
+
+𝜋 ∗ 
+
+> 𝑄
+
+iff 𝑄 (𝑠, 𝑎 ) = 𝑟 (𝑠, 𝑎 ) + 𝑐 (𝑠 ) for some state-only 𝑐 (𝑠 ). This holds only in special cases (e.g., contextual bandits or 𝛾 = 0); in general MDPs ( 𝛾 > 0), 𝑄 depends on future returns, so 𝜋 ∗ 
+
+> 𝑟
+
+≠ 𝜋 ∗ 
+
+> 𝑄
+
+. □
+
+> 21 Reward Budgeting for LLM Reasoning
+
+# B. Experimental Detail 
+
+B.1. Data Processing Training & Validation. We filter DAPO-MATH-17K [31] using the following criteria: 1. the final answer is an integer, so that we can reliably extract and compare answers from RL rollouts; 2. the prompt length is at most 1024 tokens; 3. the response length is at most 8192 tokens. After filtering, we then use the first 10k examples for training and the subsequent 1k examples for validation. 
+
+Evaluation. For all benchmarks, we apply no filtering and keep the full dataset. 
+
+B.2. Hyper-Parameters Training. For all RL algorithms, we use 4 nodes with 8 H100 gpus per node. We sample 8 rollouts per prompt at temperature 1.0, with a maximum response length of 8192 tokens. We use AdamW with weight decay 0 .1and a constant learning rate of 1 × 10 −6 with no warmup, and perform one update per batch of 32 prompts. For the main benchmark comparisons, we retain each baseline's KL setting when adding reward budgeting. GRPO uses a reference-policy KL coefficient of 0 .001 in both cases. 
+
+Validation. We validate every 5 training steps by computing pass@1 accuracy on the validation set. For generation, we use greedy decoding with a maximum response length of 8192 tokens to avoid stochasticity. 
+
+Evaluation. We evaluate each trained checkpoint on the selected reasoning benchmarks using 8 responses per prompt at temperature 0 .7, with a maximum response length of 8192 tokens. As in Table 2, we report mean accuracy across the eight generations for Qwen3-8B and pass@8 for Llama3.2-3B-Instruct. These are different metrics and should not be compared directly across model families. The table reports point estimates rather than mean ± std across independently trained models. For the integer-answer benchmarks AMC23, AIME24, and AIME25, we use exact match. For MATH500 and OlympiadBench, whose answers may be symbolic expressions, we use an LLM judge (Qwen3-235B-Instruct) to determine whether a predicted answer matches the ground truth. The judge is instructed to compare mathematical meaning rather than surface form: it should ignore differences in L ATEX, whitespace, and notation, and accept mathematically equivalent expressions. It must also enforce any required domain, units, and exactness constraints, while allowing small rounding errors when appropriate. The judge outputs only one of two labels: correct or incorrect . 
+
+System message ( judge instruction). 
+
+> Judge if the Predicted Answer matches the Ground Truth for the Given Problem. Be strict on meaning, not format: ignore LaTeX/whitespace/notation; accept mathematically equivalent forms. ↩→
+> Respect required domain/units/exactness; allow small rounding error. Reply ONLY with \boxed{correct} or \boxed{incorrect}.
+
+User message (template). 
+
+> Given Problem: <question> Ground Truth: <ground_truth> Predicted Answer: <pred_answer>
+
+B.3. Convergence Step Detection 
+
+In Figure 3, we retrospectively define an operational “convergence step” for each configuration based on a smoothed trajectory rather than raw, potentially noisy evaluations. Concretely, given the sequence of validation 
+
+> 22 Reward Budgeting for LLM Reasoning
+
+accuracies measured every 5 steps, we fit a uni-variate polynomial ( 𝑝 (𝑥 )) (degree 𝑑 = 5) to (𝑥, 𝑦 ) with 𝑥 
+
+the training step and 𝑦 the scaled validation accuracy, and evaluate the fitted curve on a dense grid {𝑥 𝑔 }𝑁 grid 
+
+> 𝑔 =1
+
+(𝑁 grid = 400) to obtain 𝑦 𝑔 = 𝑝 (𝑥 𝑔 ). We then identify the earliest grid point 𝑥 𝑔 that satisfies a sustained plateau condition: (i) local flatness, meaning the absolute change over a forward window of length 𝑤 = 0.10 𝑁 grid 
+
+(a fixed fraction of the grid) is small, | 𝑦 𝑔 +𝑤 − 𝑦 𝑔 | ≤ 𝜀 local ; and (ii) global closeness, meaning the remaining gain to the future best value on the fitted curve is small, max 𝑗 ≥𝑔 ( 𝑦 𝑗 − 𝑦 𝑔 ) ≤ 𝜀 remain . The tolerances are set relative to the fitted curve’s dynamic range Δ = max 𝑔 𝑦 𝑔 − min 𝑔 𝑦 𝑔 : 𝜀 local = max (𝜀 abs , 𝜀 rel Δ) with 𝜀 abs = 0.005, 
+
+𝜀 rel = 0.02, and 𝜀 remain = max (𝜀 abs , 𝜌 Δ) with 𝜌 = 0.10. To avoid spurious detections, we additionally require that both criteria hold continuously for at least 𝑠 grid points with 𝑠 = 0.06 𝑁 grid and a minimum of 10 points. The convergence step is reported as the earliest 𝑥 𝑔 that meets this sustained condition; we visualize it as a vertical dashed line at 𝑥 = 𝑥 𝑔 , and optionally plot a plateau guide as the median of the last 10% of fitted values. This procedure measures plateau timing retrospectively on the plotted trajectories. Training uses the validation-plateau stopping rule described above; the numerical tolerances here specify only this retrospective diagnostic. 
+
+# C. Conditional Association Analysis 
+
+Under the set-up in §3.2.1, we further test whether entropy’s predictiveness survives after controlling for 𝜅 .Specifically, for every run with the principled sharpness factor 𝜅 and update step 𝑡 , we record the entropy 
+
+𝐻 𝜅,𝑡 and the validation accuracy 𝑃 𝜅,𝑡 . We then set a prediction horizon Δ = 10 steps and regress twice to test whether 𝐻 𝜅,𝑡 predicts 𝑃 𝜅,𝑡 +Δ.First, we fit a naive regression 𝑃 𝜅,𝑡 +Δ = 𝑎 + 𝛽 𝐻 𝐻 𝜅,𝑡 + 𝜀 𝜅,𝑡 . Next, we include the configuration-level quantity 
+
+𝜅 via 𝑃 𝜅,𝑡 +Δ = 𝑎 + 𝛽 ′ 
+
+> 𝐻
+
+𝐻 𝜅,𝑡 + 𝛽 𝜅 𝜅 + 𝜀 𝜅,𝑡 . As shown in Figure 6, the points cluster much more clearly by 𝜅 than by 𝐻 . Consistently, once 𝜅 is included as a predictor, it explains most of the predictive power, while the entropy coefficient shrinks substantially ( |𝛽 ′ 
+
+> 𝐻
+
+| ≪ | 𝛽 𝐻 |). Thus, in this controlled comparison, much of the apparent predictive signal of entropy is accounted for by variation in 𝜅 . This comparison describes conditional association in the pooled trajectories. It does not control for training-step effects or serial dependence, and the configurations vary reward scale and KL strength jointly; it therefore does not identify a causal effect of 𝜅 or establish entropy as a downstream mediator. 
+
+Figure 6 | Accuracy evaluated at predictive horizon 10 is plotted against the entropy for three settings 𝜅 = 200 , 2000 , 5000. Different marker groups indicate different 𝜅 . The inset describes the absolute regression coefficients |𝛽 𝐻 | from OLS linear fits that relate the target metric “Validation Accuracy” 𝑉 to (i) “Entropy” 𝐻 alone and (ii) 𝐻 together with 𝜅 , showing the relative importance of 𝐻 vs. 𝜅 .

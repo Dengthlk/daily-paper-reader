@@ -1,0 +1,722 @@
+{
+  "mode": "standard",
+  "generated_at": "2026-11-06T00:40:49.104106+00:00",
+  "stats": {
+    "mode": "standard",
+    "tag_count": 2,
+    "deep_divecandidates": 5,
+    "deep_cap": 7,
+    "deep_selected": 5,
+    "quick_candidates": 15,
+    "quick_skim_target": 12,
+    "quick_selected": 12
+  },
+  "deep_dive": [
+    {
+      "id": "2611.05601v1",
+      "source": "arxiv",
+      "title": "RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents",
+      "abstract": "A deep RL agent trained on a fixed persona reward plays one way: an Explorer keeps exploring while starving, a Survivor hoards on an empty map. Since each persona fixes its own reward, automated playtesting trains N agents for N styles. Changing reward composition mid-episode runs into the switching-stability dilemma: PPO degrades under non-stationary rewards. We present RIDGE, a single-agent architecture that sidesteps the dilemma with two design choices: a state-conditioned blender that computes softmax-normalized sigmoid weights from slow-moving state variables, and a multi-head critic that trains one value head per persona on its own stationary signal. On Crafter with four personas, one \\ridge agent acquires both branches of the wood-tier crafting/combat split that no fixed-persona baseline solves jointly, and a sharpness ablation confirms state-conditioning drives the gain. We position these results as demonstrations of the blending mechanism's dynamics across n=3 seeds per condition; larger multi-seed sweeps remain future work.",
+      "authors": [
+        "AL Muqshith Mohammed Shifan",
+        "Kevin Christopher Chua",
+        "Ali Neshati",
+        "Loutfouz Zaman",
+        "Cristiano Politowski"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG",
+        "cs.SE"
+      ],
+      "published": "2026-11-03 20:41:36+00:00",
+      "link": "https://arxiv.org/pdf/2611.05601v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 9.0,
+      "llm_evidence_en": "deep RL game agents with reward blending for behavioral coverage",
+      "llm_evidence_cn": "面向游戏智能体的深度强化学习奖励混合方法",
+      "llm_evidence": "面向游戏智能体的深度强化学习奖励混合方法",
+      "canonical_evidence": "面向游戏智能体的深度强化学习奖励混合方法",
+      "llm_tldr_en": "RIDGE trains a single deep RL game agent that blends persona rewards via state-conditioned softmax weights and a multi-head critic, avoiding PPO instability and covering multiple play styles on Crafter.",
+      "llm_tldr_cn": "针对固定人格奖励导致每个风格都需单独训练、且中途切换奖励会让PPO失稳的问题，本文提出RIDGE单智能体架构。它用基于慢变状态变量的softmax归一化权重做状态条件奖励混合，并用多头评论家为每个人格保留独立平稳信号训练价值头。在Crafter四个风格上，单个RIDGE智能体即可习得多种行为分支并提升行为覆盖度。该工作为自动化游戏测试提供了统一的多风格智能体训练方案。",
+      "llm_tldr": "针对固定人格奖励导致每个风格都需单独训练、且中途切换奖励会让PPO失稳的问题，本文提出RIDGE单智能体架构。它用基于慢变状态变量的softmax归一化权重做状态条件奖励混合，并用多头评论家为每个人格保留独立平稳信号训练价值头。在Crafter四个风格上，单个RIDGE智能体即可习得多种行为分支并提升行为覆盖度。该工作为自动化游戏测试提供了统一的多风格智能体训练方案。",
+      "llm_tags": [
+        "query:game-llm-rl"
+      ],
+      "matched_query_tag": "query:game-llm-rl",
+      "matched_query_text": "game-playing agents",
+      "matched_requirement_id": "req-1",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2611.06483v1",
+      "source": "arxiv",
+      "title": "What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?",
+      "abstract": "While multi-turn agentic reinforcement learning (RL) excels on long-horizon tasks, its performance gains remain highly sensitive to interaction constraints. Evaluating across sampling breadth $K$ and interaction depth $T$ via $Pass@(K,T)$, we show that trajectory-level RL advantages depend on sufficient turn budgets, diminishing significantly when budgets tighten. Besides, agentic RL does not uniformly elevate single-step decision quality; rather, its strength concentrates in error recovery and long-horizon resilience. To mitigate the deployment risks caused by this budget dependence, we provide a preliminary discussion on the benefits and limitations of process supervision signals and introduce BudgetMix RL as an alternative that varies interaction budgets during training. Experiments demonstrate that BudgetMix RL achieves robust performance across diverse execution settings. Project Page: https://rethinking-agentic-rl.github.io/",
+      "authors": [
+        "Kejian Zhu",
+        "Zhuoran Jin",
+        "Shangqing Tu",
+        "Tianyi Men",
+        "Yupu Hao",
+        "Jiachun Li",
+        "Kang Liu",
+        "Jun Zhao"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG",
+        "cs.CL"
+      ],
+      "published": "2026-11-04 13:24:54+00:00",
+      "link": "https://arxiv.org/pdf/2611.06483v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 9.0,
+      "llm_evidence_en": "Analyzes multi-turn agentic RL gains in LLM agents under turn and sampling budgets",
+      "llm_evidence_cn": "分析多轮智能体强化学习在轮次与采样预算下的收益",
+      "llm_evidence": "分析多轮智能体强化学习在轮次与采样预算下的收益",
+      "canonical_evidence": "分析多轮智能体强化学习在轮次与采样预算下的收益",
+      "llm_tldr_en": "This paper dissects what multi-turn agentic RL actually improves in LLM agents, showing via Pass@(K,T) that gains depend on sufficient turn budgets and concentrate in error recovery rather than single-step quality, and proposes BudgetMix RL.",
+      "llm_tldr_cn": "多轮智能体强化学习在长程任务上表现突出，但其收益对交互约束高度敏感，部署风险不明。作者以Pass@(K,T)在采样宽度K与交互深度T两个维度上系统评估，发现轨迹级RL优势依赖充足的轮次预算，且提升主要集中于错误恢复与长程鲁棒性而非单步决策质量。为缓解预算依赖，作者讨论了过程监督信号的作用并引入BudgetMix RL变体，为智能体强化学习的评测与训练设计提供了实证依据。",
+      "llm_tldr": "多轮智能体强化学习在长程任务上表现突出，但其收益对交互约束高度敏感，部署风险不明。作者以Pass@(K,T)在采样宽度K与交互深度T两个维度上系统评估，发现轨迹级RL优势依赖充足的轮次预算，且提升主要集中于错误恢复与长程鲁棒性而非单步决策质量。为缓解预算依赖，作者讨论了过程监督信号的作用并引入BudgetMix RL变体，为智能体强化学习的评测与训练设计提供了实证依据。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Reinforcement learning methods for training large language model agents in multi-turn decision making, planning, and tool use.",
+      "matched_requirement_id": "req-17",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2611.06704v1",
+      "source": "arxiv",
+      "title": "Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man",
+      "abstract": "Training an agent to play Pac-Man with only up, down, left and right actions raises a basic question: when performance is poor, what should be improved? Difficulty can arise from reading the screen or from choosing actions over a long sequence. We examine these problems in a Qwen3.5-9B-based agent through separate perception checks and primitive-policy reinforcement-learning studies. In the policy study, which uses textual boards to remove image transcription from the decision interface, completion on eight held-out mazes increased from 0% before this optimization to 80.2% at a selected checkpoint, with three extra lives. The perception checks show that accurate static screenshot reading can coexist with errors during interaction. A separate policy comparison also shows that further optimization can accompany worse action choices. Together, these findings motivate concrete checks for post-training: evaluate perception in use, distinguish training success from full-game validation, and examine decisions and later performance rather than relying on one selected score. The study provides empirical lessons for improving future agent training and evaluation.",
+      "authors": [
+        "Xinglu Wang",
+        "Edward Wang",
+        "Yong Zhang",
+        "Zhenan Fan"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG"
+      ],
+      "published": "2026-11-04 16:04:57+00:00",
+      "link": "https://arxiv.org/pdf/2611.06704v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 9.0,
+      "llm_evidence_en": "vision-language agent playing Pac-Man, diagnosing perception, memory and decision failures with RL policy study",
+      "llm_evidence_cn": "视觉语言智能体玩吃豆人，结合强化学习策略研究诊断感知、记忆与决策失效",
+      "llm_evidence": "视觉语言智能体玩吃豆人，结合强化学习策略研究诊断感知、记忆与决策失效",
+      "canonical_evidence": "视觉语言智能体玩吃豆人，结合强化学习策略研究诊断感知、记忆与决策失效",
+      "llm_tldr_en": "The paper diagnoses why a Qwen3.5-9B vision-language agent fails at Pac-Man, separating perception checks from a primitive-policy RL study; maze completion rose from 0% to 80.2% after policy optimization.",
+      "llm_tldr_cn": "用仅有上下左右四个动作训练智能体玩吃豆人时，性能不佳究竟源于读屏错误还是长序列动作选择，往往难以判断。作者基于Qwen3.5-9B构建视觉语言游戏智能体，将问题拆分为独立的感知检查与原始策略强化学习研究，后者使用文本棋盘以排除图像转写干扰。实验显示策略优化后八张留出迷宫的通关率从0%提升到80.2%，而感知检查表明静态截图识别准确可以与动态过程中的错误并存。该工作将感知与决策失败分离诊断，为视觉语言游戏智能体指明了可定位的改进方向。",
+      "llm_tldr": "用仅有上下左右四个动作训练智能体玩吃豆人时，性能不佳究竟源于读屏错误还是长序列动作选择，往往难以判断。作者基于Qwen3.5-9B构建视觉语言游戏智能体，将问题拆分为独立的感知检查与原始策略强化学习研究，后者使用文本棋盘以排除图像转写干扰。实验显示策略优化后八张留出迷宫的通关率从0%提升到80.2%，而感知检查表明静态截图识别准确可以与动态过程中的错误并存。该工作将感知与决策失败分离诊断，为视觉语言游戏智能体指明了可定位的改进方向。",
+      "llm_tags": [
+        "query:game-llm-rl"
+      ],
+      "matched_query_tag": "query:game-llm-rl",
+      "matched_query_text": "vision language game agents",
+      "matched_requirement_id": "req-5",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2611.06395v1",
+      "source": "arxiv",
+      "title": "GIST: Gibbs-Targeted Hierarchical Data Selection for Offline RLVR",
+      "abstract": "Offline reinforcement learning with verifiable rewards (RLVR) trains on a fixed pool of sampled responses and typically supervises every token of every response, although responses and tokens are not equally informative. We study which ones to supervise through the Gibbs-optimal policy of KL-regularized RLVR, which offline training targets, and measure the mismatch between a policy and this target with a bidirectional KL divergence. At the reference policy, this mismatch factorizes exactly and separates the two outcomes: correct responses contribute mainly through the forward term, concentrated on their low-probability tokens, and incorrect responses through the reverse term, concentrated on the responses the policy generates often and on their high-probability tokens. Based on this analysis, we propose GIST (Gibbs-Targeted Hierarchical Data Selection), a two-level selection method that approximates these principles with signals available before training. GIST uses the sampling temperature to select correct responses on-policy and incorrect responses near the policy's mode, and it uses the initial policy's token probabilities to supervise only the tokens where the mismatch lies. Applied to two offline training objectives, GIST raises the average accuracy over GSM8K, MATH-500, and MBPP for all three models under both objectives. In a controlled comparison on Qwen3-0.6B/GSM8K, it outperforms seven selection baselines that choose from the same candidates while supervising 66.6% fewer tokens than training on all candidates of the same prompts.",
+      "authors": [
+        "Xuliang Huang",
+        "Tianxiang Zhao",
+        "Chengwei Qin",
+        "Yao Shu"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI",
+        "cs.LG"
+      ],
+      "published": "2026-11-04 12:01:21+00:00",
+      "link": "https://arxiv.org/pdf/2611.06395v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 8.0,
+      "llm_evidence_en": "Gibbs-targeted hierarchical data selection for offline reinforcement learning with verifiable rewards",
+      "llm_evidence_cn": "面向离线可验证奖励强化学习的Gibbs目标分层数据选择",
+      "llm_evidence": "面向离线可验证奖励强化学习的Gibbs目标分层数据选择",
+      "canonical_evidence": "面向离线可验证奖励强化学习的Gibbs目标分层数据选择",
+      "llm_tldr_en": "Offline RLVR supervises all tokens though they are not equally informative; this paper analyzes supervision via the Gibbs-optimal policy of KL-regularized RLVR and proposes hierarchical data selection.",
+      "llm_tldr_cn": "离线可验证奖励强化学习在固定采样池上训练，通常对所有响应和所有token一视同仁地监督，但信息量并不均等。本文借助KL正则化RLVR的Gibbs最优策略刻画离线训练目标，用双向KL散度度量策略与该目标的偏差，并据此区分正确与错误响应中应重点监督的token。在此基础上提出分层数据选择方法，以更高效地利用有限离线数据。该工作提升了离线RLVR训练的数据效率与稳定性。",
+      "llm_tldr": "离线可验证奖励强化学习在固定采样池上训练，通常对所有响应和所有token一视同仁地监督，但信息量并不均等。本文借助KL正则化RLVR的Gibbs最优策略刻画离线训练目标，用双向KL散度度量策略与该目标的偏差，并据此区分正确与错误响应中应重点监督的token。在此基础上提出分层数据选择方法，以更高效地利用有限离线数据。该工作提升了离线RLVR训练的数据效率与稳定性。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+      "matched_requirement_id": "req-18",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2611.06543v1",
+      "source": "arxiv",
+      "title": "Using Experience Twice: Dynamic Process Rubrics for Privileged Token-Level Credit Assignment",
+      "abstract": "Agent trajectories often contain both successful decisions and failed attempts, yet optimization with sparse trajectory-level rewards struggles to identify which critical decisions should be reinforced or suppressed. We observe that meaningful distinctions among on-policy trajectories can be distilled into natural-language process rubrics and used as process supervision signals. Based on this insight, we propose Online Rubric Self-Distillation (ORSD), which leverages self-derived process rubrics for dense token-level supervision, thereby augmenting outcome-centric reinforcement learning. Specifically, the current policy independently generates multiple rubric bundles at each step according to the same group of trajectories, extracting candidate process rubrics from cross-trajectory behavioral differences. A frozen verifier then evaluates all rubric items against each trajectory in the group, and selects one candidate bundle based on bundle-level alignment between rubric satisfaction and task success. ORSD treats the selected rubric bundle as privileged information during training, then compares the log-likelihoods of the original tokens with and without the rubric. The resulting likelihood gap provides token-specific process credit, which is added to the original trajectory-level GRPO advantage through additive advantage shaping. ORSD thus bridges trajectory-level outcome supervision and fine-grained process supervision, enabling token-level credit assignment using process signals. Extensive experiments on ALFWorld and WebShop show that ORSD accelerates policy improvement and boosts final task performance for both Qwen3-1.7B and Qwen3-4B under the same environment-interaction budget. Our code is available at https://github.com/AnnaXChun/ORSD.",
+      "authors": [
+        "Shumao Wu",
+        "Kongcheng Zhang",
+        "Jianqiang Huang",
+        "Baisheng Lai"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-11-04 14:11:53+00:00",
+      "link": "https://arxiv.org/pdf/2611.06543v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 8.0,
+      "llm_evidence_en": "dense token-level credit assignment via process rubrics",
+      "llm_evidence_cn": "借助过程评分规则实现令牌级信用分配",
+      "llm_evidence": "借助过程评分规则实现令牌级信用分配",
+      "canonical_evidence": "借助过程评分规则实现令牌级信用分配",
+      "llm_tldr_en": "Sparse trajectory rewards hinder credit assignment; the paper distills natural-language process rubrics from on-policy trajectories and proposes ORSD to provide dense token-level supervision, augmenting outcome-centric RL.",
+      "llm_tldr_cn": "针对稀疏轨迹级奖励难以识别关键决策的信用分配难题，论文观察到同一组轨迹间的差异可提炼为自然语言过程评分规则，据此提出在线评分规则自蒸馏ORSD，为策略自生成密集的令牌级过程监督信号。该方法以过程监督增强以结果为中心的强化学习，实现更细粒度的信用分配，从而更有效地强化成功决策、抑制失败尝试，为大模型智能体强化学习提供了可复用的监督机制。",
+      "llm_tldr": "针对稀疏轨迹级奖励难以识别关键决策的信用分配难题，论文观察到同一组轨迹间的差异可提炼为自然语言过程评分规则，据此提出在线评分规则自蒸馏ORSD，为策略自生成密集的令牌级过程监督信号。该方法以过程监督增强以结果为中心的强化学习，实现更细粒度的信用分配，从而更有效地强化成功决策、抑制失败尝试，为大模型智能体强化学习提供了可复用的监督机制。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+      "matched_requirement_id": "req-18",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "quick_skim": [
+    {
+      "id": "2611.05929v1",
+      "source": "arxiv",
+      "title": "Diversity-Aware Experience Replay via Statistical Leverage Scores",
+      "abstract": "Off-policy deep reinforcement learning trains on random samples from a replay buffer of past experience. In physical robot settings, that buffer is dominated by routine: thousands of near-identical transitions from normal operation, while the rare events that define the edges of the task are rarely sampled. We propose scoring every stored transition by its statistical leverage, which measures how unusual it is relative to the buffer's own data, computed from the stored numbers alone, with no labels, rewards, or value network. We draw each mini-batch from a mixture of this score and uniform sampling. First, the natural way to build the score along the directions where the data varies most turns out to be blind when actions are stored as one-hot indicators, because indicator columns always win the variance ranking; we instead select the feature columns with the heaviest tails (largest kurtosis) where small far-away populations are revealed. Second, the importance weights that prioritized replay uses to keep gradients unbiased cancel the method exactly: with full correction, training matches uniform sampling, so we drop the correction and deliberately optimize the rebalanced objective. Third, when the rare situations of a log are relational, visible only in how a stretch of behavior relates to its goal, not in any single stored coordinate-per-transition scores are blind; applying the same tail rule to short trajectory windows described relative to their goal restores the signal, and on a three-joint arm that must push an object around an obstacle it raises the rare-task success from 0.49 to 0.69 against a labeled-oracle ceiling of 0.74.",
+      "authors": [
+        "Shaifalee Saxena",
+        "Alexander Scheinker"
+      ],
+      "primary_category": "cs.RO",
+      "categories": [
+        "cs.RO",
+        "cs.LG"
+      ],
+      "published": "2026-11-04 04:18:33+00:00",
+      "link": "https://arxiv.org/pdf/2611.05929v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "diversity-aware replay sampling to improve exploration and sample efficiency in off-policy deep RL",
+      "llm_evidence_cn": "面向离策略深度强化学习的多样性感知回放采样，提升探索与样本效率",
+      "llm_evidence": "面向离策略深度强化学习的多样性感知回放采样，提升探索与样本效率",
+      "canonical_evidence": "面向离策略深度强化学习的多样性感知回放采样，提升探索与样本效率",
+      "llm_tldr_en": "Off-policy RL replay buffers in robotics are dominated by near-duplicate routine transitions. The paper scores each stored transition by its statistical leverage and samples mini-batches from a mixture of this score and uniform sampling, improving coverage of rare events without labels or rewards.",
+      "llm_tldr_cn": "离策略深度强化学习的回放缓冲在机器人场景中常被大量近乎重复的常规转移占据，真正定义任务边界的稀有事件极少被采样。作者提出用统计杠杆分数衡量每条转移相对缓冲自身数据的异常程度，仅依赖存储数值、无需标签或奖励，并按该分数与均匀采样的混合进行小批量采样。研究还指出当动作以独热编码存储时，沿数据方差最大方向构建的分数会失效并给出修正。该工作为多样性感知经验回放提供了通用且任务无关的采样方案。",
+      "llm_tldr": "离策略深度强化学习的回放缓冲在机器人场景中常被大量近乎重复的常规转移占据，真正定义任务边界的稀有事件极少被采样。作者提出用统计杠杆分数衡量每条转移相对缓冲自身数据的异常程度，仅依赖存储数值、无需标签或奖励，并按该分数与均匀采样的混合进行小批量采样。研究还指出当动作以独热编码存储时，沿数据方差最大方向构建的分数会失效并给出修正。该工作为多样性感知经验回放提供了通用且任务无关的采样方案。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+      "matched_requirement_id": "req-19",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.05562v1",
+      "source": "arxiv",
+      "title": "Near-Minimax Sample Complexity for Multi-Objective Reinforcement Learning under Generative Models",
+      "abstract": "In multi-objective reinforcement learning, preferences may be specified only after data collection, requiring one dataset to support a continuum of reward trade-offs. We study finite discounted Markov decision processes with unknown transitions, $S$ states, $A$ actions, and $m$ known reward functions taking values in $[0,1]$, given access to a generative model. The learner must provide an $\\varepsilon$-optimal policy for every convex combination of these rewards without further sampling, with a guarantee that holds simultaneously over all preferences and initial states. Writing $H=(1-γ)^{-1}$, we establish the constant-confidence minimax sample complexity $\\widetildeΘ\\!\\left(   \\frac{SAH^3}{\\varepsilon^2}\\min\\{S,\\log(em)\\} \\right)$, where the suppressed factors are logarithmic in $S,A,H,\\varepsilon^{-1}$ and the dependence on $m$ is explicit. Thus, up to these logarithmic factors, the worst-case statistical cost of supporting all preferences grows logarithmically with the number of objectives and saturates at the number of states. The upper bound uses uniform state--action sampling and empirical planning, with reward rounding in the logarithmic-objective regime. Its analysis chains optimal-value increments over covers of the reward hull. A one-sided Bellman variance bound controls signed value differences under a second transition kernel, preserving the $H^3\\varepsilon^{-2}$ dependence. A complementary uniform guarantee for all bounded rewards yields the state-dimension saturation. We establish lower bounds matching up to logarithmic factors through a rare-exit construction with subset rewards and action encoding. These bounds apply to adaptive simulator queries and arbitrary randomized history-dependent output policies, while the upper bounds are attained by deterministic stationary policies.",
+      "authors": [
+        "Yue Wang"
+      ],
+      "primary_category": "stat.ML",
+      "categories": [
+        "stat.ML",
+        "cs.LG"
+      ],
+      "published": "2026-11-03 19:54:09+00:00",
+      "link": "https://arxiv.org/pdf/2611.05562v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "Near-minimax sample complexity for multi-objective RL under generative models",
+      "llm_evidence_cn": "生成模型下多目标强化学习的近极小极大样本复杂度",
+      "llm_evidence": "生成模型下多目标强化学习的近极小极大样本复杂度",
+      "canonical_evidence": "生成模型下多目标强化学习的近极小极大样本复杂度",
+      "llm_tldr_en": "This paper studies multi-objective RL where preferences are revealed after data collection, establishing near-minimax sample complexity for learning epsilon-optimal policies for all reward convex combinations simultaneously from a generative model.",
+      "llm_tldr_cn": "多目标强化学习中偏好可能在数据采集之后才确定，需要一份数据支持连续的奖励权衡，而样本效率的理论边界尚不清晰。作者在未知转移的有限折扣MDP与生成模型设定下，研究对全部奖励凸组合同时给出ε最优策略的问题，并证明了常数置信度下的近极小极大样本复杂度界。该结果为多目标强化学习的数据效率提供了理论刻画，属于强化学习基础理论贡献，但与游戏或大模型智能体主题关联较弱。",
+      "llm_tldr": "多目标强化学习中偏好可能在数据采集之后才确定，需要一份数据支持连续的奖励权衡，而样本效率的理论边界尚不清晰。作者在未知转移的有限折扣MDP与生成模型设定下，研究对全部奖励凸组合同时给出ε最优策略的问题，并证明了常数置信度下的近极小极大样本复杂度界。该结果为多目标强化学习的数据效率提供了理论刻画，属于强化学习基础理论贡献，但与游戏或大模型智能体主题关联较弱。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+      "matched_requirement_id": "req-19",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2611.05942v1",
+      "source": "arxiv",
+      "title": "Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning",
+      "abstract": "RL for LLM reasoning often reaches an early performance plateau as the policy distribution becomes increasingly sharp. Recent work has studied policy entropy as both a diagnostic and a control signal for this behavior. In our experiments, however, increasing entropy alone does not reliably change the eventual plateau. We analyze RL through its implicit target policy and derive a sharpness factor $κ$, together with an effective counterpart $κ_{\\mathrm{eff}}$, that describes how strongly reward or advantage gaps are translated into probability-ratio gaps. Motivated by this view, we introduce \\emph{reward budgeting}, a plug-in advantage construction that assigns a fixed total reward budget to each prompt. For binary rewards and independent on-policy rollouts, its unclipped score-function estimator follows the gradient of an exact finite-$G$ concave objective with diminishing returns, while its advantage gap decreases as more rollouts become correct. For general rewards, a shifted log-mean interpretation holds asymptotically under the stated regularity conditions. These results motivate, rather than establish exact objective equivalence for, the clipped implementations. On Qwen3-8B and Llama3.2-3B-Instruct, reward budgeting consistently improves a range of RL baselines, with gains up to +12.50 on AMC23 and +10.00 on AIME24 and AIME25. Overall, our results support an update-dynamics view of premature convergence and show that strong gains can be obtained without explicitly preserving entropy.",
+      "authors": [
+        "Mengni Jia",
+        "Mengyu Zhou",
+        "Xiaoxi Jiang",
+        "Guanjun Jiang"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG"
+      ],
+      "published": "2026-11-04 04:32:08+00:00",
+      "link": "https://arxiv.org/pdf/2611.05942v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "reward budgeting advantage construction for RL of LLM reasoning",
+      "llm_evidence_cn": "面向大模型推理强化学习的奖励预算优势构造",
+      "llm_evidence": "面向大模型推理强化学习的奖励预算优势构造",
+      "canonical_evidence": "面向大模型推理强化学习的奖励预算优势构造",
+      "llm_tldr_en": "Reward budgeting assigns a fixed total reward budget per prompt as a plug-in advantage construction, reducing premature convergence and performance plateaus in RL for LLM reasoning.",
+      "llm_tldr_cn": "针对大模型推理强化学习因策略分布变尖锐而过早陷入性能平台期的问题，本文从隐式目标策略出发分析优势与概率比的映射关系。作者提出奖励预算这一即插即用的优势构造方法，为每个提示分配固定奖励总量以控制更新强度。实验表明该方法能有效缓解过早收敛、改善平台期表现。其分析视角与奖励设计对大模型策略优化具有通用价值。",
+      "llm_tldr": "针对大模型推理强化学习因策略分布变尖锐而过早陷入性能平台期的问题，本文从隐式目标策略出发分析优势与概率比的映射关系。作者提出奖励预算这一即插即用的优势构造方法，为每个提示分配固定奖励总量以控制更新强度。实验表明该方法能有效缓解过早收敛、改善平台期表现。其分析视角与奖励设计对大模型策略优化具有通用价值。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Policy optimization, reward modeling, credit assignment, and reinforcement learning with verifiable rewards for language models.",
+      "matched_requirement_id": "req-18",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.05666v1",
+      "source": "arxiv",
+      "title": "Revisiting Critic Estimation in Soft Actor-Critic Algorithms",
+      "abstract": "Soft Actor-Critic (SAC) is a widely used deep reinforcement learning algorithm that combines entropy regularization with an actor-critic architecture. Standard implementations rely on one-step temporal-difference learning of Q-functions, yet alternative critic design choices remain underexplored. In this work, we revisit three such choices: learning soft advantages instead of soft Q-values, the use of multi-step return targets, and the training of multi-step critics from replay buffer data. Keeping the policy objective fixed, we compare the six critic variants these choices generate: (i) advantage and (ii) dueling-advantage critics learned from one-step transitions, and $λ$-return and soft Generalized Advantage Estimation (GAE) critics learned either (iii, iv) on-policy or (v, vi) from replayed trajectory segments. Each variant is evaluated across an entire random hyperparameter search on fourteen tasks, treating the hyperparameters as part of the algorithm. Learning soft advantages instead of soft Q-values does not improve performance, and the soft GAE critic adds nothing over the simpler $λ$-return critic. What does improve performance, most clearly on continuous control, is training a $λ$-return critic on replayed trajectory segments, even without importance weighting or trace cutting. This extends earlier evidence that uncorrected multi-step targets work well under replay to the full soft $λ$-return, entropy terms included. By design, the underlying ideas studied here extend beyond SAC, and our empirical findings aim to encourage their application to a broader class of reinforcement learning algorithms.",
+      "authors": [
+        "Jan Felix Kleuker",
+        "Koen Ponse",
+        "Aske Plaat",
+        "Thomas M. Moerland"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG"
+      ],
+      "published": "2026-11-03 21:52:04+00:00",
+      "link": "https://arxiv.org/pdf/2611.05666v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "revisits critic design choices in soft actor-critic deep RL for improved stability",
+      "llm_evidence_cn": "重新审视软演员-评论家深度强化学习的评论家设计以提升稳定性",
+      "llm_evidence": "重新审视软演员-评论家深度强化学习的评论家设计以提升稳定性",
+      "canonical_evidence": "重新审视软演员-评论家深度强化学习的评论家设计以提升稳定性",
+      "llm_tldr_en": "Revisits critic estimation in Soft Actor-Critic, comparing advantage, dueling-advantage, lambda-return, and soft GAE critics to clarify which design choices improve deep reinforcement learning.",
+      "llm_tldr_cn": "针对软演员-评论家算法普遍采用一步时序差分学习Q函数、其他评论家设计未被充分探索的问题，作者在保持策略目标不变的前提下比较软优势评论家、对偶优势评论家、λ回报与软广义优势估计评论家等六种变体，分析多步回报与回放缓冲训练的影响。该工作为深度强化学习算法的稳定性与设计选择提供了系统实证，属于强化学习算法层面的贡献。",
+      "llm_tldr": "针对软演员-评论家算法普遍采用一步时序差分学习Q函数、其他评论家设计未被充分探索的问题，作者在保持策略目标不变的前提下比较软优势评论家、对偶优势评论家、λ回报与软广义优势估计评论家等六种变体，分析多步回报与回放缓冲训练的影响。该工作为深度强化学习算法的稳定性与设计选择提供了系统实证，属于强化学习算法层面的贡献。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Advances in online, offline, and model-based reinforcement learning with improved exploration, sample efficiency, stability, and generalization.",
+      "matched_requirement_id": "req-19",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2611.06244v1",
+      "source": "arxiv",
+      "title": "Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains",
+      "abstract": "Reinforcement learning with verifiable rewards (RLVR) has led to significant gains in math and code generation. Extending these gains to open-ended domains remains challenging: ground-truth verification is unavailable, human annotation is expensive, and learned reward models are prone to reward hacking. The generation-verification gap, where judging good outputs is easier than producing them, offers a potential path to improvement. However, rubric-based judges are often imprecise and stationary, so policies can overfit or reward hack them. We introduce Rubric Curriculum RL (RcRL), which exploits this gap without new data, human annotations, or stronger teacher models. We combine pairwise preferences over rollouts with a curriculum over rubric criteria, yielding a more discriminative signal than absolute scoring and a non-stationary objective. Whereas baselines plateau within a few hundred steps, RcRL preserves output entropy and keeps improving past 1000 steps. On creative writing, RcRL achieves a 70.5% human win rate against the base model, with gains across benchmarks and judges. On HealthBench, RcRL improves over the base model by 14.6% (full set) and 25.4% (consensus subset), outperforming all training baselines, including instance-specific rubrics.",
+      "authors": [
+        "Sumeet Ramesh Motwani",
+        "Tejas Krishnan",
+        "Alistair Letcher",
+        "Charles London",
+        "Suhaas Bhat",
+        "Huitian Jiao",
+        "Philip Torr",
+        "Riashat Islam",
+        "Christopher Summerfield",
+        "Jakob Foerster",
+        "Christian Schroeder de Witt",
+        "Qilong Gu",
+        "Shital Shah"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG",
+        "cs.AI"
+      ],
+      "published": "2026-11-04 09:51:06+00:00",
+      "link": "https://arxiv.org/pdf/2611.06244v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "reinforcement learning with verifiable rewards extended to non-verifiable domains via rubric curriculum",
+      "llm_evidence_cn": "通过评分标准课程将可验证奖励强化学习扩展到不可验证领域",
+      "llm_evidence": "通过评分标准课程将可验证奖励强化学习扩展到不可验证领域",
+      "canonical_evidence": "通过评分标准课程将可验证奖励强化学习扩展到不可验证领域",
+      "llm_tldr_en": "Proposes Rubric Curriculum RL, which leverages the generation-verification gap with pairwise rollout preferences and a curriculum of rubric judges to extend RLVR to open-ended non-verifiable domains without extra data.",
+      "llm_tldr_cn": "针对可验证奖励强化学习在数学与编程之外难以扩展到开放式领域的问题，作者利用生成比判别更易的生成-验证差距，提出评分标准课程强化学习RcRL，将对rollout的成对偏好与逐步演进的评分标准评判器结合，无需新数据、人工标注或更强教师即可缓解奖励黑客。该工作为不可验证域的策略优化与奖励建模提供了新思路。",
+      "llm_tldr": "针对可验证奖励强化学习在数学与编程之外难以扩展到开放式领域的问题，作者利用生成比判别更易的生成-验证差距，提出评分标准课程强化学习RcRL，将对rollout的成对偏好与逐步演进的评分标准评判器结合，无需新数据、人工标注或更强教师即可缓解奖励黑客。该工作为不可验证域的策略优化与奖励建模提供了新思路。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "reinforcement learning verifiable rewards",
+      "matched_requirement_id": "req-15",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.05827v1",
+      "source": "arxiv",
+      "title": "TandemBench: Benchmarking Decision Models for Multi-Agent Collaboration",
+      "abstract": "Decision models choose among predefined options in tasks such as routing and action selection. In multi-agent collaboration, a decision determines how members divide work, exchange resources, and act in parallel. We introduce TandemBench, a benchmark of 1,200 questions in multi-agent cooking scenarios where coordination choices affect goal completion. Models receive complete global information and candidate team plans, with reference answers established through execution and exact search. Models select an optimal team plan and, in paired variants that retain or remove it, judge whether better arrangements exist beyond the supplied options. We evaluate 40 native decision models and compare them with 10 general-purpose language models. The best native decision model achieves 62.50% decision accuracy. Native decision models remain close to chance in optimality verification. Paired tests reveal that some report better alternatives regardless of whether an optimal plan is already present. These findings show that team-plan decision accuracy alone can conceal systematic errors in judging whether the supplied options contain an optimal arrangement. The dataset and evaluation code are publicly available at https://github.com/lililibaohang/TandemBench.",
+      "authors": [
+        "Baohang Li",
+        "Xiaocheng Feng",
+        "Bing Qin"
+      ],
+      "primary_category": "cs.CL",
+      "categories": [
+        "cs.CL"
+      ],
+      "published": "2026-11-04 02:08:57+00:00",
+      "link": "https://arxiv.org/pdf/2611.05827v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "benchmark for multi-agent collaboration with team plan selection",
+      "llm_evidence_cn": "面向多智能体协作与团队计划选择的基准",
+      "llm_evidence": "面向多智能体协作与团队计划选择的基准",
+      "canonical_evidence": "面向多智能体协作与团队计划选择的基准",
+      "llm_tldr_en": "Multi-agent collaboration decisions shape work division and goal completion; this paper introduces TandemBench, 1,200 cooking-scenario questions testing team plan selection and judging better arrangements.",
+      "llm_tldr_cn": "多智能体协作中的决策决定成员如何分工、交换资源与并行行动，直接影响目标完成，但缺乏针对性评测。本文提出TandemBench，构建1200道多智能体烹饪场景问题，模型需选择最优团队计划，并在配对变体中判断是否存在更优安排，参考答案由执行与精确搜索确定。研究评估40个原生决策模型并与10个通用语言模型比较，最佳原生决策模型表现突出。该基准为多智能体协作决策提供标准化评测。",
+      "llm_tldr": "多智能体协作中的决策决定成员如何分工、交换资源与并行行动，直接影响目标完成，但缺乏针对性评测。本文提出TandemBench，构建1200道多智能体烹饪场景问题，模型需选择最优团队计划，并在配对变体中判断是否存在更优安排，参考答案由执行与精确搜索确定。研究评估40个原生决策模型并与10个通用语言模型比较，最佳原生决策模型表现突出。该基准为多智能体协作决策提供标准化评测。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Multi-agent reinforcement learning and language model agents for collaborative or competitive sequential decision making.",
+      "matched_requirement_id": "req-20",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2611.06445v1",
+      "source": "arxiv",
+      "title": "SUMONE: A Simple and Efficient Summarizer for Plug-and-Play Agent Memory",
+      "abstract": "Long-horizon language-model agents accumulate increasingly large interaction histories, making context compaction essential for efficient execution. Existing learned compaction methods often rely on downstream task outcomes or solver behavior, coupling training to specific tasks or agents. We introduce SumOne, a standalone summarizer trained to preserve information in agent histories through masked reconstruction. Given a summary of the expired history, a frozen reconstructor recovers randomly masked portions of the original trajectory; reconstruction quality, combined with a length penalty, provides a task-agnostic reward for optimizing the summarizer with GRPO. This yields self-supervision directly from raw trajectories, without reference summaries or downstream task execution. At inference time, only the lightweight summarizer is retained, enabling plug-and-play context compression for otherwise unchanged agents. We conduct a systematic evaluation of SumOne in long-horizon search and software-engineering tasks. SumOne reduces estimated inference cost by approximately 78\\% on DeepSearchQA and 75\\% on SWE-bench Verified relative to operating with full context, with absolute decreases of 0.04. The same checkpoint also transfers across downstream models and agent harnesses without additional fine-tuning.",
+      "authors": [
+        "Jizhe Zhang",
+        "Ang Li",
+        "Chenheng Zhang",
+        "Yisen Wang"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-11-04 12:49:07+00:00",
+      "link": "https://arxiv.org/pdf/2611.06445v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "task-agnostic summarizer for long-horizon agent memory compaction trained with GRPO",
+      "llm_evidence_cn": "面向长程智能体记忆压缩的任务无关摘要器，使用GRPO训练",
+      "llm_evidence": "面向长程智能体记忆压缩的任务无关摘要器，使用GRPO训练",
+      "canonical_evidence": "面向长程智能体记忆压缩的任务无关摘要器，使用GRPO训练",
+      "llm_tldr_en": "Long-horizon LLM agents need context compaction, but learned summarizers depend on downstream outcomes. SumOne trains a standalone summarizer with masked reconstruction and a GRPO reward, giving task-agnostic memory compression from raw trajectories.",
+      "llm_tldr_cn": "长程语言模型智能体的交互历史不断膨胀，上下文压缩成为高效执行的关键，而现有学习式压缩方法往往依赖下游任务结果或求解器行为，与具体任务强耦合。作者提出SumOne独立摘要器，通过掩码重构训练：给定过期历史摘要，冻结的重构器恢复原轨迹中被随机掩码的部分，重构质量结合长度惩罚构成任务无关奖励，并用GRPO优化摘要器。该方法可直接从原始轨迹获得自监督信号，无需参考摘要。这为智能体长程记忆提供了可即插即用的通用压缩方案。",
+      "llm_tldr": "长程语言模型智能体的交互历史不断膨胀，上下文压缩成为高效执行的关键，而现有学习式压缩方法往往依赖下游任务结果或求解器行为，与具体任务强耦合。作者提出SumOne独立摘要器，通过掩码重构训练：给定过期历史摘要，冻结的重构器恢复原轨迹中被随机掩码的部分，重构质量结合长度惩罚构成任务无关奖励，并用GRPO优化摘要器。该方法可直接从原始轨迹获得自监督信号，无需参考摘要。这为智能体长程记忆提供了可即插即用的通用压缩方案。",
+      "llm_tags": [
+        "query:game-llm-rl"
+      ],
+      "matched_query_tag": "query:game-llm-rl",
+      "matched_query_text": "Memory, exploration, world models, and skill learning for long-horizon decision making in games such as Minecraft, NetHack, Atari, and StarCraft.",
+      "matched_requirement_id": "req-9",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.05953v1",
+      "source": "arxiv",
+      "title": "Graph-Mediated Large Language Model Systems in the Agentic Era: Reasoning, Knowledge, Retrieval, Execution, and Coordination",
+      "abstract": "Graphs play an increasingly important role in large language model (LLM) systems, supporting structural reasoning, knowledge grounding, retrieval, and memory. As these systems evolve toward the agentic era, graphs also organize execution dependencies and multi-agent communication, linking intermediate observations and retained information to subsequent decisions. However, understanding their contribution requires distinguishing the function of each graph operation, the component responsible for its computation, and the subsequent use of its output. This survey introduces an operation-level role--locus taxonomy for reasoning, knowledge and evidence, retrieval and memory, execution, and coordination. We compare how graph observations and external computations guide decisions, how memory representations and updates support later tasks, and how dependencies constrain execution and information delivery. These comparisons distinguish improvements in local metrics from downstream task performance while retaining the conditions under which results were reported. We then organize benchmarks, comparison designs, process diagnostics, and system costs into an evaluation framework. Finally, we identify open challenges in adaptive computation and stopping, memory maintenance, and dependency-aware recovery. The survey provides a basis for assessing when graph mechanisms are useful and for evaluating their effects across components and stages.",
+      "authors": [
+        "Haihui Liu",
+        "Yang Chen",
+        "Zice Qiu",
+        "Yun Zhang",
+        "Jialun Zhong",
+        "Wenhua Wang",
+        "Yanzeng Li",
+        "Tian Wang"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-11-04 04:47:38+00:00",
+      "link": "https://arxiv.org/pdf/2611.05953v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "survey of graph-mediated LLM agent systems including memory and coordination",
+      "llm_evidence_cn": "综述图结构在大模型智能体系统中的推理、记忆与协作",
+      "llm_evidence": "综述图结构在大模型智能体系统中的推理、记忆与协作",
+      "canonical_evidence": "综述图结构在大模型智能体系统中的推理、记忆与协作",
+      "llm_tldr_en": "This survey introduces an operation-level role-locus taxonomy for graph-mediated LLM agent systems, covering reasoning, knowledge, retrieval, memory, execution, and multi-agent coordination.",
+      "llm_tldr_cn": "针对图结构在大模型系统中作用日益重要却难以区分其功能的问题，本文系统梳理了图介导的大模型智能体系统。作者提出按操作层面划分的角色-位置分类法，覆盖推理、知识证据、检索记忆、执行与多智能体协调等环节。综述明确了每种图操作的功能、计算主体与输出用途，为理解与设计智能体系统提供了统一框架。该分类有助于厘清记忆与协调机制在大模型智能体中的作用。",
+      "llm_tldr": "针对图结构在大模型系统中作用日益重要却难以区分其功能的问题，本文系统梳理了图介导的大模型智能体系统。作者提出按操作层面划分的角色-位置分类法，覆盖推理、知识证据、检索记忆、执行与多智能体协调等环节。综述明确了每种图操作的功能、计算主体与输出用途，为理解与设计智能体系统提供了统一框架。该分类有助于厘清记忆与协调机制在大模型智能体中的作用。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "large language model agents",
+      "matched_requirement_id": "req-12",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2611.06523v1",
+      "source": "arxiv",
+      "title": "H^2MARL: Hierarchical Heterogeneous Multi-agent Reinforcement Learning for Humanoid Robot Control",
+      "abstract": "Coordinated whole-body control of humanoid robots remains challenging due to high-dimensional coupled dynamics and substantial physical heterogeneity across joint degrees of freedom (JDoFs). Existing multi-agent reinforcement learning methods either employ coarse agent partitions or directly apply generic heterogeneous-agent algorithms, while hierarchical controllers commonly optimize high-level planning and low-level execution independently, leading to uncoordinated motion. In this paper, we propose H^2MARL, a hierarchical heterogeneous multi-agent reinforcement learning framework with two key mechanisms. We first formulate humanoid whole-body control using a JDoF-level physical-heterogeneity-aware policy factorization, where each torque-actuated JDoF is conditioned on an explicit descriptor of its actuation, kinematic, and dynamic properties. Moreover, we develop a closed-loop policy-executor co-optimization mechanism that jointly adapts the high-level pose planner and the low-level joint executor using shared interaction trajectories, thereby reducing the distribution mismatch between planning and execution. Extensive experiments in MuJoCo and Isaac Gym demonstrate that H^2MARL consistently improves locomotion stability, gait coordination, and motion quality over homogeneous, coarse-grained, and independently optimized alternatives.",
+      "authors": [
+        "Xuemin Hu",
+        "Kaixin Li",
+        "Qingqing Xia",
+        "Yuxin Wang",
+        "Wei Xie",
+        "Bo Tang",
+        "Long Chen"
+      ],
+      "primary_category": "cs.RO",
+      "categories": [
+        "cs.RO"
+      ],
+      "published": "2026-11-04 13:48:34+00:00",
+      "link": "https://arxiv.org/pdf/2611.06523v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "hierarchical heterogeneous multi-agent reinforcement learning",
+      "llm_evidence_cn": "分层异构多智能体强化学习",
+      "llm_evidence": "分层异构多智能体强化学习",
+      "canonical_evidence": "分层异构多智能体强化学习",
+      "llm_tldr_en": "H2MARL tackles humanoid whole-body control with a hierarchical heterogeneous multi-agent RL framework using joint-DoF-level heterogeneity-aware policy factorization for more coordinated motion.",
+      "llm_tldr_cn": "针对人形机器人全身控制维度高、关节物理异质性强，而现有多智能体强化学习与分层控制器易导致动作不协调的问题，论文提出分层异构多智能体强化学习框架H^2MARL，采用关节自由度级物理异质性感知的策略分解与分层机制。该框架在高维耦合动力学下实现更协调的全身控制，为异构多智能体强化学习与分层规划执行的协同提供了新方法。",
+      "llm_tldr": "针对人形机器人全身控制维度高、关节物理异质性强，而现有多智能体强化学习与分层控制器易导致动作不协调的问题，论文提出分层异构多智能体强化学习框架H^2MARL，采用关节自由度级物理异质性感知的策略分解与分层机制。该框架在高维耦合动力学下实现更协调的全身控制，为异构多智能体强化学习与分层规划执行的协同提供了新方法。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "multi-agent reinforcement learning",
+      "matched_requirement_id": "req-16",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.06131v1",
+      "source": "arxiv",
+      "title": "ModalSearcher: Weaving Visual Evidence into Autonomous Cross-Modal Deep Search",
+      "abstract": "Static and incomplete parametric knowledge limits the performance of multimodal large language models on novel-knowledge and knowledge-intensive tasks, especially those requiring multi-hop evidence acquisition. Existing multimodal agentic search methods often fix visual evidence at the input or a predefined trajectory position, making it difficult for agents to select search modalities as their information needs evolve and to handle complex real-world queries. We define this capability as autonomous cross-modal search: an agent chooses among direct reasoning, text-to-text search, text-to-image search, and reverse-image search, actively introduces visual evidence when appropriate, and switches between and integrates modalities across multiple hops. We propose ModalSearch-Pipeline, a scalable procedure for constructing an interleaved multimodal knowledge graph. It samples paths with diverse depths and modality compositions and uses backward question construction to obscure entity names and image targets that would expose reasoning shortcuts while retaining necessary disambiguating clues, yielding text-only, image-initialized, and arbitrarily interleaved multi-hop problems. We train the ModalSearcher Agent with supervised fine-tuning and reinforcement learning in a live Web environment, and construct ModalSearch-Bench. Experiments show that ModalSearcher-8B improves average accuracy by 16.2 points over Qwen3-VL-8B under the same agentic workflow across five multimodal knowledge-intensive QA benchmarks, with consistent gains on independently constructed active visual-search benchmarks.",
+      "authors": [
+        "Zhihan Yin",
+        "Ruyi Li",
+        "Chengyu Fang",
+        "Yifeng Yao",
+        "Nonghai Zhang",
+        "Pengfei Xiong",
+        "Terry Zhang",
+        "Huishuai Zhang",
+        "Dongyan Zhao"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-11-04 08:14:50+00:00",
+      "link": "https://arxiv.org/pdf/2611.06131v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "agentic multimodal search with dynamic tool selection",
+      "llm_evidence_cn": "智能体多模态搜索与动态工具选择",
+      "llm_evidence": "智能体多模态搜索与动态工具选择",
+      "canonical_evidence": "智能体多模态搜索与动态工具选择",
+      "llm_tldr_en": "Existing multimodal agentic search fixes visual evidence at input or preset positions; ModalSearcher enables autonomous cross-modal search where agents dynamically choose and integrate search modalities across multi-hop queries.",
+      "llm_tldr_cn": "针对现有多模态智能体搜索将视觉证据固定在输入或预设轨迹位置、难以随信息需求演化切换模态的问题，论文提出自主跨模态搜索能力，让智能体在直接推理、文搜文、文搜图与反图搜之间动态选择，并跨多跳整合证据。ModalSearcher据此实现复杂真实查询下的模态切换与视觉证据主动引入，为多模态大模型的智能体式工具使用与规划提供了更灵活的框架。",
+      "llm_tldr": "针对现有多模态智能体搜索将视觉证据固定在输入或预设轨迹位置、难以随信息需求演化切换模态的问题，论文提出自主跨模态搜索能力，让智能体在直接推理、文搜文、文搜图与反图搜之间动态选择，并跨多跳整合证据。ModalSearcher据此实现复杂真实查询下的模态切换与视觉证据主动引入，为多模态大模型的智能体式工具使用与规划提供了更灵活的框架。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "Reinforcement learning methods for training large language model agents in multi-turn decision making, planning, and tool use.",
+      "matched_requirement_id": "req-17",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2611.06854v1",
+      "source": "arxiv",
+      "title": "Visual Token Routing: Learning to keep tokens that matter",
+      "abstract": "Computer-use agents (CUAs) have recently achieved superhuman performance on several long-horizon benchmarks. However, their computational cost limits their use in long-horizon tasks and real-time domains such as video games. A key bottleneck is representing each screenshot as thousands of visual tokens, which accumulate into long contexts as agents reason over extended interaction histories. We observe that most of these visual tokens are either semantically irrelevant to the agent's next action or temporally redundant across screenshots. Building on this observation, we introduce Visual Token Routing (VTR), a joint training framework for learning sparse visual representations that preserve the information needed for action prediction. In VTR, we train the vision-language model together with a lightweight spatio-temporal router that examines each image region in the current and previous screenshots and decides whether its visual token enters the language model. We optimize the router using an adaptive loss to keep the number of visual tokens as small as possible while minimizing performance degradation. With just 2,000 training steps, VTR matches the performance of the full-resolution model on OSWorld, CUA-World, and video game action prediction, while using 2.5-5.8x fewer visual tokens. These savings reduce inference cost by up to 3.3x and speed up prefill by up to 2.9x. VTR also outperforms lowering the image resolution and other baselines for dropping tokens, by up to 12.8 points on OSWorld. Overall, VTR enables computer-use agents to process only the visual tokens they need, allowing them to be used in long-horizon tasks and real-time domains at a fraction of the computational cost. Code and models are available at https://pranjal2041.github.io/vtr",
+      "authors": [
+        "Pranjal Aggarwal",
+        "Sean Welleck"
+      ],
+      "primary_category": "cs.CV",
+      "categories": [
+        "cs.CV",
+        "cs.LG"
+      ],
+      "published": "2026-11-04 18:10:33+00:00",
+      "link": "https://arxiv.org/pdf/2611.06854v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "sparse visual token routing for vision-language computer-use agents in long-horizon tasks like video games",
+      "llm_evidence_cn": "面向视觉语言计算机使用智能体的稀疏视觉token路由，适用于游戏等长程任务",
+      "llm_evidence": "面向视觉语言计算机使用智能体的稀疏视觉token路由，适用于游戏等长程任务",
+      "canonical_evidence": "面向视觉语言计算机使用智能体的稀疏视觉token路由，适用于游戏等长程任务",
+      "llm_tldr_en": "Computer-use agents waste compute on thousands of visual tokens per screenshot. Visual Token Routing jointly trains sparse visual representations that keep action-relevant information and drop redundant tokens, enabling long-horizon and real-time game use.",
+      "llm_tldr_cn": "计算机使用智能体在长程基准上已取得超人类表现，但每张截图被编码为数千个视觉token，随交互历史累积形成超长上下文，严重限制其在游戏等实时场景中的应用。作者观察到多数视觉token与下一步动作语义无关或在相邻截图间时间冗余，据此提出视觉token路由VTR，联合训练学习稀疏视觉表示，仅保留动作预测所需信息。该框架在降低视觉token数量与上下文长度的同时维持动作预测能力。这为长程视觉语言智能体提供了高效的视觉表示压缩方案。",
+      "llm_tldr": "计算机使用智能体在长程基准上已取得超人类表现，但每张截图被编码为数千个视觉token，随交互历史累积形成超长上下文，严重限制其在游戏等实时场景中的应用。作者观察到多数视觉token与下一步动作语义无关或在相邻截图间时间冗余，据此提出视觉token路由VTR，联合训练学习稀疏视觉表示，仅保留动作预测所需信息。该框架在降低视觉token数量与上下文长度的同时维持动作预测能力。这为长程视觉语言智能体提供了高效的视觉表示压缩方案。",
+      "llm_tags": [
+        "query:game-llm-rl"
+      ],
+      "matched_query_tag": "query:game-llm-rl",
+      "matched_query_text": "vision language game agents",
+      "matched_requirement_id": "req-5",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2611.06254v1",
+      "source": "arxiv",
+      "title": "HarnessFlow: MCTS-Guided Harness Optimization for LLM Agents",
+      "abstract": "The performance of large language model (LLM) agents depends on both the underlying model and the harness that governs interaction with tools and the environment. Yet harness design remains largely manual, and automating it requires navigating an open-ended search space through costly end-to-end evaluations. We introduce HarnessFlow, a framework for optimizing complete executable harnesses under a limited candidate-evaluation budget, with the model and task environment held fixed. HarnessFlow organizes candidates and their evaluation histories in a refinement tree, using a Monte Carlo Tree Search (MCTS)-based policy to balance exploitation and exploration. A coding agent refines selected harnesses using archived code, execution feedback, and a library of reusable harness mechanisms. With 15 refinement attempts per benchmark, HarnessFlow achieves the highest mean test scores among the compared methods on six benchmarks spanning agentic tasks, coding, and web interaction. The optimized harnesses achieve an average score of 69.48%, outperforming the initial harnesses and Meta-Harness by 10.89 and 3.95 percentage points, respectively, while incurring lower average per-task execution costs than hand-engineered baselines. These results suggest that structured harness search offers a promising route toward automating the design of capable and efficient LLM agents.",
+      "authors": [
+        "Zhi Hong",
+        "Qianlong Wang",
+        "Hongchen Wei",
+        "Aidan Wu",
+        "Daohong Ying",
+        "Mingze Kong",
+        "Bei Liu",
+        "Chong Luo"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-11-04 10:05:15+00:00",
+      "link": "https://arxiv.org/pdf/2611.06254v1",
+      "tags": [
+        "keyword:game-llm-rl",
+        "keyword:rl-agents",
+        "query:game-llm-rl",
+        "query:rl-agents"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "MCTS-based policy to optimize LLM agent harnesses under evaluation budget",
+      "llm_evidence_cn": "用MCTS策略优化大模型智能体执行框架",
+      "llm_evidence": "用MCTS策略优化大模型智能体执行框架",
+      "canonical_evidence": "用MCTS策略优化大模型智能体执行框架",
+      "llm_tldr_en": "HarnessFlow automates the design of LLM agent harnesses by organizing candidate harnesses in a refinement tree and using an MCTS-based policy to balance exploration and exploitation under a limited evaluation budget.",
+      "llm_tldr_cn": "大模型智能体的表现不仅取决于模型本身，也取决于与工具和环境交互的执行框架，但框架设计长期依赖人工且搜索代价高昂。作者提出HarnessFlow，将候选框架及其评测历史组织为细化树，用基于蒙特卡洛树搜索的策略在有限评测预算下平衡探索与利用，并由编码智能体依据代码与执行反馈迭代改进框架。实验表明该框架能在受限预算内高效优化完整可执行框架，为智能体系统自动化调优提供了可复用的搜索方法。",
+      "llm_tldr": "大模型智能体的表现不仅取决于模型本身，也取决于与工具和环境交互的执行框架，但框架设计长期依赖人工且搜索代价高昂。作者提出HarnessFlow，将候选框架及其评测历史组织为细化树，用基于蒙特卡洛树搜索的策略在有限评测预算下平衡探索与利用，并由编码智能体依据代码与执行反馈迭代改进框架。实验表明该框架能在受限预算内高效优化完整可执行框架，为智能体系统自动化调优提供了可复用的搜索方法。",
+      "llm_tags": [
+        "query:rl-agents"
+      ],
+      "matched_query_tag": "query:rl-agents",
+      "matched_query_text": "large language model agents",
+      "matched_requirement_id": "req-12",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    }
+  ]
+}

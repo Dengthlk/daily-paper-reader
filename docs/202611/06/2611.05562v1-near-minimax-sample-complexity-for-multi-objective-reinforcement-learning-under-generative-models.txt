@@ -1,0 +1,1528 @@
+Title: Near-Minimax Sample Complexity for Multi-Objective Reinforcement Learning under Generative Models
+
+URL Source: https://arxiv.org/pdf/2611.05562v1
+
+Published Time: Thu, 05 Nov 2026 01:12:51 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Near-Minimax Sample Complexity for Multi-Objective Reinforcement Learning under Generative Models 
+
+Yue Wang 
+
+University of Central Florida 
+
+# Abstract 
+
+In multi-objective reinforcement learning, preferences may be specified only after data collection, requiring one dataset to support a continuum of reward trade-offs. We study finite discounted Markov decision processes with unknown transitions, S states, A actions, and m known reward functions taking values in [0 , 1], given access to a generative model. The learner must provide an ε-optimal policy for every convex combination of these rewards without further sampling, with a guarantee that holds simultaneously over all preferences and initial states. Writing H = (1 − γ)−1, we establish the constant-confidence minimax sample complexity ˜Θ
+
+( SAH 3 
+
+> ε2
+
+min {S, log( em )}
+
+)
+
+, where the suppressed factors are logarithmic in S, A, H, ε −1 and the dependence on m is explicit. Thus, up to these logarithmic factors, the worst-case statistical cost of supporting all preferences grows logarithmically with the number of objectives and saturates at the number of states. The upper bound uses uniform state–action sampling and empirical planning, with reward rounding in the logarithmic-objective regime. Its analysis chains optimal-value increments over covers of the reward hull. A one-sided Bellman variance bound controls signed value differences under a second transition kernel, preserving the H3ε−2 dependence. A complementary uniform guarantee for all bounded rewards yields the state-dimension saturation. We establish lower bounds matching up to logarithmic factors through a rare-exit construction with subset rewards and action encoding. These bounds apply to adaptive simulator queries and arbitrary randomized history-dependent output policies, while the upper bounds are attained by deterministic stationary policies. 
+
+# 1 Introduction 
+
+Many sequential decision problems involve trade-offs among competing objectives. A robot may balance task completion, energy consumption, and wear, and a language model may be evaluated for both helpfulness and safety. Multi-objective reinforcement learning (MORL) represents such criteria as separate reward signals and studies how the resulting decisions depend on the user’s preferences [1, 2]. We consider linear scalarization. The learner knows m rewards r1, . . . , r m, which we call the coordinate rewards; together they form the reward dictionary {r1, . . . , r m}. A preference vector w ∈ ∆m assigns them nonnegative weights summing to one and induces the scalar reward rw = ∑mi=1 wiri. The dynamics are shared across preferences, but the optimal policy can change with the weights. Preferences are often specified only after data collection. Different users may weigh the same objectives differently, and a designer may inspect the available trade-offs before fixing a reward. Preference-conditioned value functions [3] and interpolation between models fine-tuned on different rewards [4] address this need for adaptation. The statistical question is what a single dataset can guarantee. For one fixed scalar reward, the dataset must support one near-optimal policy. For a finite list of rewards, it must support a near-optimal policy for each listed reward. Uniform MORL asks for a policy-selection rule that is simultaneously accurate for every convex combination of the coordinate rewards. This requirement covers a continuum of rewards, including preferences for which no policy that is optimal for a single coordinate reward is optimal. arXiv:2611.05562v1 [stat.ML] 3 Nov 2026 Preprint 
+
+We study this uniform target in finite discounted Markov decision processes (MDPs) with unknown transitions and access to a generative model, that is, a simulator that returns a next state for any queried state–action pair. Write S and A for the numbers of states and actions, γ ∈ [0 , 1) for the discount factor, and H = (1 −γ)−1
+
+for the effective horizon. For one fixed bounded reward, the minimax sample complexity is ˜Θ( SAH 3/ε 2) in the standard nontrivial parameter regime [5–7]. The closest discounted MORL analysis gives an ˜O(mSAH 3/ε 2)bound for estimating scalarized Q-functions uniformly over preferences [8]. A direct reduction through a net of preferences also gives linear dependence on m for uniform policy learning. For a finite list of known rewards, recent online episodic results instead depend logarithmically on the list size [9]. These results motivate the following question. 
+
+How many simulator queries are needed to support a near-optimal policy for every reward in the convex hull of a known reward dictionary? 
+
+Our learner collects one dataset and then answers every preference query without further simulator calls. Its guarantee holds on a single high-probability event, simultaneously for all preferences and all initial states (Section 2.3). Specifically, our contributions are summerized as follows. 
+
+A near-minimax characterization of the objective dependence. For S ≥ 3, A ≥ 2, H ≥ 2, and 
+
+ε ≤ H/ 4096, we show that the minimax sample complexity is 
+
+˜Θ
+
+( SAH 3
+
+ε2 min {S, log( em )}
+
+)
+
+, H ≜ (1 − γ)−1,
+
+where the suppressed factors are logarithmic in S, A, H, ε −1 and the dependence on m is retained explicitly (Theorem 3.1). Supporting every convex combination of the known rewards thus costs only a logarithmic factor in the number of objectives, and this factor never exceeds the number of states. The upper bound combines two procedures. Empirical planning for a rounded reward gives the log( em ) factor (Theorem 4.1). Direct empirical planning for the requested reward gives the factor S, since its guarantee holds for every reward in [0 , 1] SA (Theorem 5.1). The learner uses whichever procedure needs fewer samples. Each procedure samples every state–action pair equally once, and returns deterministic stationary policies without further simulator queries. 
+
+A chaining analysis for uniform policy learning. Nearby preferences have nearby optimal values, so the data needed to serve them overlap; the difficulty is to exploit this overlap without losing accuracy. The upper bound rests on finite covers of the convex reward hull. At resolution η, their logarithmic size is of order η−2 log( SA ) log( em ). A single union bound over the cover at the final resolution ε/H would add a factor of order H2/ε 2. We instead write each optimal value as a sum of increments across successively finer reward approximations, and the variance of each increment shrinks with its resolution. The central technical step is a one-sided Bellman variance bound for signed differences of optimal values, with variances taken under a second transition kernel (Lemmas 4.4 and 4.5). The bound uses only an upper bound on the one-step drift. It therefore applies even though the policy that is optimal for the target reward need not be optimal for its approximants. Increments of empirical optimal values depend on the data used to compute them. An adaptation of the absorbing-state construction of [6] supplies concentration for these increments. The variance bound then turns the row-wise concentration into bounds on policy values, in both directions of the comparison between the true and empirical models. Across levels, the growth of the cover sizes is balanced by the decay of the increment variances, which preserves both the H3 and the ε−2 dependence. 
+
+Lower bounds with bounded rewards and simplex preferences. We construct stationary discounted MDPs in which answering every preference query accurately identifies many unknown exit distributions. Rare exits produce the H3/ε 2 dependence. Subset rewards distinguish distributions over d shared absorbing outcomes using 2 d coordinate rewards, which yields a factor of order log m, capped by S. An additional action code of length O(log( A + 1)) lets a simplex preference single out one pair of actions while keeping every reward in [0 , 1] (Theorem 6.4). The lower bounds allow adaptive simulator queries and randomized history-dependent output policies. For any fixed output policy, its normalized pre-exit action weights do not depend on the unknown exit distributions. This identity lets the learned policy-selection rule serve as a decoder. A scalar construction covers the remaining parameter regimes (Theorem C.1). 
+
+1.1 Related work MORL targets and Pareto geometry. Surveys distinguish MORL problems by their utility functions, policy classes, and the information available about preferences [1, 2]. For linear utilities, a convex coverage set contains an optimal policy for every preference, whereas Pareto-front recovery describes the attainable 2Preprint 
+
+nondominated value vectors. Lu et al. [10] study convexity and the relations among Pareto notions for stationary policies. Li et al. [11] exploit geometric locality to recover the exact Pareto front in a known model. Other learning targets include approachability of a target set in average-reward problems [12] and convergence to Pareto-stationary policies [13]. Our target is uniform scalarized policy accuracy in an unknown model, delivered by a policy-selection rule. Section 2.3 explains how this rule acts as an implicit approximate convex coverage set. 
+
+Preference-conditioned and offline methods. Abels et al. [14] develop deep MORL methods for changing weights, and Yang et al. [3] use an envelope Bellman update to share one value representation across preferences. Zhu et al. [15] learn preference-adaptive policies from offline demonstrations, and Ramé et al. [4] interpolate models fine-tuned on different rewards. These works study representations and algorithms for preference adaptation. We instead quantify the worst-case number of transition samples needed for a simultaneous policy guarantee in a tabular discounted model. 
+
+Generative-model sample complexity. For a single reward, variance-sensitive arguments and empirical planning give sharp sample bounds [5–7]. Zhou et al. [8] extend model-based envelope value iteration to MORL and obtain a bound linear in m for a preference-weighted Q-function error. This value-estimation target differs from the policy loss in the true model studied here. A preference net combined with scalar empirical-planning guarantees yields a uniform policy bound with the same linear dependence on m. Our analysis instead uses multiscale covers of the reward hull to obtain the logarithmic factor. In a related simulator setting, Vaswani et al. [16] characterize the cost of relaxed and strict feasibility in constrained MDPs. Their objective is a constrained scalar optimum, whereas ours is a family of unconstrained scalar rewards. 
+
+Online multi-objective learning. Wu et al. [17] study adversarial preferences and preference-free ex-ploration in finite-horizon MDPs. With Hep denoting the episode length, their exploration upper bound is 
+
+˜O(min {m, S }SAH 3ep /ε 2) episodes. Qiu et al. [18] develop online and preference-free algorithms for Tchebycheff and smooth Tchebycheff scalarizations. Hu and Yu [19] study near-minimax learning under predictable adversarial preferences and preference-free exploration in linear MDPs. These works differ from ours in the interaction protocol, the scalarization, or the model class. We study linear scalarization in a stationary discounted tabular model with direct state–action sampling. 
+
+Finite reward lists and reward-free exploration. Reward-free exploration collects data before any reward is specified and must support arbitrary bounded rewards afterward [20]. Task-agnostic exploration instead considers a finite collection of tasks whose rewards are unavailable during exploration [21]. Later work sharpens these guarantees [22–24]. In particular, Li et al. [23] separate reward-agnostic learning for a finite reward class from the all-rewards requirement. Ridel and Cohen [24] reduce the lower-order term that restricts the accuracy range of the reward-agnostic bound. They also prove a reward-free lower bound of order 
+
+S2AH 3ep /ε 2 for time-inhomogeneous MDPs, which matches the reward-free upper bound up to logarithmic factors. For rewards known before exploration, Chen and Zhang [9] give an online episodic upper bound of 
+
+˜O(SAH 3ep log m/ε 2) episodes for a list of m rewards. Under the parameter conditions of their Corollary 1, they also prove a lower bound of order SAH 3ep min {S, log m}/ε 2. Our upper bound covers the entire convex hull of the given rewards, not only the list. Our lower bounds use a stationary discounted kernel and count individual simulator observations. Episodic bounds count trajectories, so their horizon factors cannot be compared directly with H = (1 − γ)−1. Theorem 5.1 supplies the complementary all-rewards guarantee under our sampling model. Table 1 collects these rates. 
+
+# 2 Problem formulation 
+
+2.1 Model and reward class 
+
+Let S and A be finite sets with cardinalities S and A. The stationary transition kernel P (· | s, a ) is unknown. The discount factor γ ∈ [0 , 1) is known, and H ≜ (1 − γ)−1. The learner is given the complete tables of the deterministic coordinate rewards ri : S × A → [0 , 1], i ∈ [m], which form the reward dictionary {r1, . . . , r m}.We identify each reward with its table in [0 , 1] SA . Define ∆m ≜
+
+{
+
+w ∈ Rm : wi ≥ 0,
+
+> m
+
+∑
+
+> i=1
+
+wi = 1 
+
+}
+
+, rw ≜
+
+> m
+
+∑
+
+> i=1
+
+wiri, R ≜ conv {r1, . . . , r m}.
+
+We call w ∈ ∆m a preference and R the reward hull. Since R = {rw : w ∈ ∆m}, every scalarized reward lies in [0 , 1] SA , whatever the value of m.3Preprint 
+
+Work Access Rewards served Upper bound ×ε2 Lower bound ×ε2
+
+Zhou et al. [8] generative, discounted 
+
+Q-values for all w with 
+
+∥w∥1 ≤ 1
+
+mSAH 3 single objective only Net + planning [6, 7] generative, discounted ∆m mSAH 3 –Wu et al. [17] online, episodic ∆m, preferences revealed later min {m, S }SAH 3ep min {m, S }SAH 2ep †
+
+Jin et al. [20] online, episodic all rewards, revealed later S2AH 5ep S2AH 2ep 
+
+Zhang et al. [21] online, episodic 
+
+m tasks, unknown during exploration 
+
+SAH 5ep log m SAH 2ep log m
+
+Li et al. [23] online, episodic poly( S, A, H ep ) given rewards; all rewards 
+
+SAH 3ep ‡; S2AH 3ep –Ridel and Cohen [24] online, episodic poly( S, A, H ep ) given rewards; all rewards 
+
+SAH 3ep ; S2AH 3ep –; S2AH 3ep §
+
+Chen and Zhang [9] online, episodic 
+
+m known rewards SAH 3ep log m SAH 3ep min {S, log m} §
+
+This work generative, discounted 
+
+R (equivalently ∆ m) SAH 3 min {S, log( em )} SAH 3 min {S, log( em )}
+
+Table 1: Sample-complexity results for learning near-optimal policies for many rewards in tabular MDPs. Each entry is the leading term of the bound multiplied by ε2; constants and logarithmic factors other than those shown are omitted, and m is the number of rewards or objectives. Online episodic rows count episodes of length Hep with per-step rewards in [0 , 1]. Generative rows count simulator queries in discounted MDPs with 
+
+H = (1 − γ)−1. Rows with different access models use different units and are not directly comparable. The row “Net + planning” combines a preference net with the cited scalar guarantees. Linear-MDP results [19] and non-linear scalarizations [18] are not listed. †Stated in [17, Theorem 4]. Its proof uses [17, Appendix D, Lemma 12], which is stated for preferences on the unit ℓ1 sphere; under that normalization, all actions in its construction are within 2 ε/m of each other in scalarized value, so the lemma does not hold as stated. 
+
+> ‡
+
+A lower-order term of order S4A4H6ep /ε dominates unless ε is small; [24] reduces it to S2AH 4ep /ε . §Time-inhomogeneous constructions; the bound of [9] holds under the parameter conditions of its Corollary 1. A policy π may be randomized and history-dependent. For a reward r ∈ [0 , 1] SA , we use unnormalized discounted values, 
+
+V πr (s) ≜ EP,π s
+
+[ ∞∑
+
+> t=0
+
+γtr(st, a t)
+
+]
+
+, V ∗ 
+
+> r
+
+(s) ≜ sup 
+
+> π
+
+V πr (s),
+
+where EP,π s denotes expectation over trajectories with s0 = s, actions drawn from π, and transitions drawn from P . Both values lie in [0 , H ]. For a preference w, we abbreviate V πw ≜ V πrw and V ∗ 
+
+> w
+
+≜ V ∗ 
+
+> rw
+
+. Every guarantee below holds at each initial state, not only on average over a prescribed initial distribution. 
+
+2.2 Which rewards must one dataset support? 
+
+We further distinguish different learning targets, determined by two features: the reward information available during sampling, and the query class, that is, the set of rewards for which the learner must later return a near-optimal policy. Table 2 compares four targets under a common discounted simulator model. 
+
+A fixed reward versus a finite list. If w0 is fixed and known before sampling, optimizing rw0 is an ordinary single-reward learning problem, and the sampling procedure may be tailored to that reward. For the finite list {r1, . . . , r m}, one dataset must support policies ̂π 1, . . . , ̂π m that are simultaneously near-optimal for their respective rewards. This joint guarantee on the listed rewards says nothing about other preferences. 
+
+A finite list versus its convex hull. Uniform MORL also covers every mixed preference, and policies that are optimal for individual coordinate rewards need not suffice. Consider a single-state problem with three actions whose reward vectors ( r1(s, a ), r 2(s, a )) are (1 , 0), (0 , 1), and (0 .6, 0.6). The first two actions are optimal for r1 and r2, respectively. The third is optimal for w = (1 /2, 1/2), and no randomization between the first two attains its value. This distinction concerns the required outputs. By itself, it does not imply a larger minimax sample complexity for the hull than for the finite list. 4Preprint                     
+
+> Learning target Reward information during sampling Query class Fixed reward One scalar reward rw0is known The singleton {rw0}
+> Finite known tasks The rewards r1, . . . , r mare known The finite set {r1, . . . , r m}
+> Uniform MORL (this work) The rewards r1, . . . , r mare known; the query preference is not The reward hull R
+> Reward-free learning No reward is known Every reward in [0 ,1] SA
+
+Table 2: Learning targets, distinguished by the reward information available during sampling and by the query class. The last three rows require simultaneous accuracy over the whole query class from one dataset. All rows assume the discounted simulator model of Section 2.3; Table 1 also lists results for trajectory-based interaction. 
+
+A known reward hull versus arbitrary rewards. In our setting, the reward dictionary is available before sampling, although no query preference is specified. Reward-free learning must instead cover the entire bounded reward class, without this prior restriction [20]. The inclusions 
+
+{r1, . . . , r m} ⊆ R ⊆ [0 , 1] SA 
+
+order the query classes of finite-task learning, uniform MORL, and reward-free learning. Reward knowledge during sampling and the requirement to serve every query afterward are separate features of a target. Our upper-bound procedures do not use the reward values during sampling: they sample every state–action pair equally often. The known dictionary enters through the sample size, which depends on m, and through the policy selection after sampling. 
+
+2.3 Simulator access and the simultaneous guarantee 
+
+Each generative-model query selects a state–action pair ( s, a ) and returns a fresh draw from P (· | s, a ), conditionally independent of earlier observations given the queried pair. Query choices may depend on the preceding transcript. The sample complexity counts these next-state observations, so we use “sample” and “simulator query” interchangeably. The reward tables are known and require no sampling. After training, the learner returns a policy-selection rule w 7 →̂π w. Answering a query may use the stored data and additional computation, but makes no further simulator calls. Let D denote the training transcript together with the learner’s internal random seed, so that the selection rule is fixed once D is fixed. Define the loss of the rule at preference w by 
+
+ED (w) ≜ max 
+
+> s∈S
+
+(V ∗ 
+
+> w
+
+(s) − V̂π w 
+
+> w
+
+(s)).
+
+For every transition kernel and every reward dictionary, we require the event sup 
+
+> w∈∆m
+
+ED (w) = sup 
+
+> w∈∆m
+
+max 
+
+> s∈S
+
+(V ∗ 
+
+> w
+
+(s) − V̂π w 
+
+> w
+
+(s)) ≤ ε (1) to hold with probability at least 1 − δ:
+
+PD
+
+(
+
+sup 
+
+> w∈∆m
+
+ED (w) ≤ ε
+
+)
+
+≥ 1 − δ. (2) The probability is over the training observations and the algorithmic randomness. Randomness during deployment, when present, is already averaged into the policy values. We refer to (1)–(2) as the uniform MORL guarantee. A pointwise guarantee for the same sampling procedure would instead require 
+
+PD
+
+(ED (w) ≤ ε) ≥ 1 − δ for every fixed w ∈ ∆m.
+
+Its exceptional datasets may depend on w. Our requirement places the supremum over w inside one probability event, so a successful dataset supports all preferences at once, including preferences chosen after inspecting the training output. The rule may select different policies for different preferences; no single policy is required to be optimal for every reward. The rule acts as an implicit ε-approximate convex coverage set, with accuracy required at every initial state: rather than listing policies, it returns an ε-optimal policy for any queried preference. Exact enumeration of the Pareto front, or of all policies attaining a Pareto-optimal value, is a different output requirement. The upper bounds return deterministic stationary policies, whereas the lower bounds allow arbitrary randomized history-dependent output policies. The minimax quantity counts simulator queries only; we do not analyze the computational cost of storing or evaluating the policy-selection rule. 5Preprint 
+
+2.4 Notation and standard planning facts 
+
+A transition kernel K assigns a distribution K(· | s, a ) on S to each state–action pair; the two kernels used below are the true kernel P and the empirical kernel ̂ P of Section 4. For a reward r, let vr (K) ∈ RS be the optimal value vector in K, and let V πr (K) be the value vector of a policy π in K. An omitted kernel is P , so 
+
+vr = vr (P ) = V ∗ 
+
+> r
+
+and V πr = V πr (P ). For a deterministic stationary policy π, write rπ (s) ≜ r(s, π (s)), and let 
+
+Kπ be the S × S stochastic matrix whose row s is K(· | s, π (s)). For f ∈ RS , write 
+
+Kf (s, a ) ≜ ∑
+
+> s′∈S
+
+K(s′ | s, a )f (s′), σK (f )( s, a ) ≜
+
+√
+
+K(f 2)( s, a ) − (Kf (s, a ))2.
+
+For Kπ , the same notation is indexed by states. Thus Kπ f (s) = Kf (s, π (s)), and similarly σKπ (f )( s) = 
+
+σK (f )( s, π (s)). Vector inequalities are coordinatewise. Squares, absolute values, and products of vectors are also coordinatewise, 1 is the all-ones vector, and ∥f ∥∞ is the largest absolute entry of a vector or array. Finite discounted MDPs admit deterministic stationary policies that are optimal at every state, even when the comparison class contains all randomized history-dependent policies [25, Theorem 6.2.10]. For every kernel K, every policy π, and all r, q ∈ [0 , 1] SA , Bellman contraction and the discounted reward sum give 0 ≤ vr (K) ≤ H1,
+
+∥vr (K) − vq (K)∥∞ ≤ H∥r − q∥∞,
+
+∥V πr (K) − V πq (K)∥∞ ≤ H∥r − q∥∞.
+
+(3) In particular, ∥rw − rw′ ∥∞ ≤ ∥ w − w′∥1 implies that optimal values are H-Lipschitz in the preference with respect to ∥ · ∥ 1, although an optimal policy need not vary continuously with the preference. 
+
+# 3 Main result: Near Minimax Sample Complexity 
+
+Let N ∗(S, A, m, H, ε ) be the smallest worst-case maximum number of simulator queries sufficient for (1) with success probability at least 3 /4, uniformly over all known reward functions r1, . . . , r m : S × A → [0 , 1] and all transition kernels. Computational cost is not included in this definition. Set 
+
+κ(S, m ) ≜ min {S, log( em )}, L ≜ log eSAH 2
+
+ε , LA ≜ 1 + log log( eeA).
+
+Natural logarithms are used unless a base is displayed. 
+
+Theorem 3.1 (Joint near-minimax characterization) . There are universal constants c, C > 0 such that, for 
+
+S ≥ 3, A ≥ 2, m ≥ 1, H ≥ 2, and 0 < ε ≤ H/ 4096 ,
+
+c SAH 3
+
+ε2
+
+κ(S, m )
+
+LA
+
+≤ N ∗(S, A, m, H, ε ) ≤ C SAH 3
+
+ε2 κ(S, m )L3. (4) 
+
+If m is at least a sufficiently large constant times log( A + 1) , the denominator LA can be removed from the lower bound, after adjusting the universal constant. The upper bound has a high-probability version for every 
+
+δ ∈ (0 , 1) , with logarithmic dependence on δ−1 specified in Theorems 4.1 and 5.1. 
+
+The proof of this theorem is assembled in Section 7 after the explicit upper and lower bounds. The logarithmic factors in (4) depend on S, A, H, ε −1, not on an unspecified polynomial in m. In particular, if a tilde hides only logarithms in these other parameters, the joint rate is 
+
+N ∗ = ˜Θ
+
+( SAH 3
+
+ε2 min {S, log( em )}
+
+)
+
+.
+
+This statement retains the objective dependence explicitly. When m is exponentially large in S, the logarithmic objective cost can itself be of order S. For fixed m, the bound has the same polynomial dependence as single-objective generative-model planning. The result is minimax optimal up to logarithmic factors, not a constant-factor characterization of every logarithm or of the full confidence dependence. 
+
+Algorithm. The learner samples every state–action pair equally and forms ̂ P . In the reward-hull regime, it rounds a query rw to a finite reward cover and returns an optimal policy for the rounded reward in ̂ P .Fixing an order on the cover and on the actions makes both selections deterministic. In the state-saturation regime, it plans directly for rw. The two sufficient sample counts are known before sampling, so the learner chooses the smaller one. 6Preprint 
+
+Proof structure. Section 4 proves the logarithmic-objective upper bound in four steps: construct reward covers, concentrate their value increments, control these increments through a one-sided variance estimate, and compare true and empirical policies. Section 5 states the complementary bound for all bounded rewards. Section 6 proves the action-code lower bound, using a common occupancy identity and an adaptive information bound. Section 7 combines the parameter regimes. Supporting upper and lower arguments appear in the appendices. At reward scale η, the cover entropy is of order η−2 log(4 SA ) log( em ). Its square root contributes a factor η−1
+
+to Bernstein’s inequality. The variance comparison supplies a matching factor H3/2η, together with a term depending on the comparison error. Lemma 4.5 absorbs that remaining term and sums over the logarithmic number of scales. 
+
+# 4 The reward-hull upper bound 
+
+Let H = (1 − γ)−1, and let R = conv {r1, . . . , r m} ⊂ [0 , 1] SA . Rewards are known. All samples below concern transitions. Fix ε ∈ (0 , H ] and δ ∈ (0 , 1), and define 
+
+J ≜
+
+⌈
+
+log 2
+
+16 Hε
+
+⌉
+
+, ηj ≜ 2−j (0 ≤ j ≤ J), h ≜ ε
+
+1000 HJ , G ≜ {min {ℓh, H } : 0 ≤ ℓ ≤ ⌈ H/h ⌉} ,
+
+and Λ ≜ log 20 SAJ |G| 2
+
+δ + 3 log(4 SA ) log( em ).
+
+Then ε/ (32 H) < η J ≤ ε/ (16 H), J ≥ 4, and |G| ≤ 1000 H2J/ε + 2. 
+
+Theorem 4.1 (Reward-hull chaining upper bound) . Draw n independent next states at each state–action pair, form the empirical kernel ̂ P , and suppose 
+
+n ≥ 220 H3ΛJ2
+
+ε2 .
+
+Then there is a finite ηJ -cover NJ ⊂ R in the supremum norm, depending only on the known rewards, with the following property. With probability at least 1 − δ, simultaneously for every r ∈ R , every q ∈ N J with 
+
+∥r − q∥∞ ≤ ηJ , and every deterministic stationary policy ̂π that is optimal for reward q in the empirical kernel ̂ P (ties broken arbitrarily), 
+
+V ∗ 
+
+> r
+
+(s) − V̂πr (s) ≤ ε for all s ∈ S .
+
+In particular, the algorithm that chooses any such q and returns any such ̂π is simultaneously ε-optimal for all r ∈ R . The total sample complexity is at most 
+
+SA 
+
+⌈ 220 H3ΛJ2
+
+ε2
+
+⌉
+
+.
+
+In particular, the dependence on the number of reward coordinates is logarithmic, and the polynomial dependence is SAH 3ε−2.
+
+4.1 Finite reward covers 
+
+For j ≥ 1, define 
+
+kj ≜
+
+⌈
+
+log(4 SA )2η2
+
+> j
+
+⌉
+
+, Nj ≜
+
+
+
+1
+
+kjkj
+
+∑
+
+> ℓ=1
+
+riℓ : ( i1, . . . , i kj ) ∈ [m]kj
+
+ ⊆ [0 , 1] SA ,
+
+and set N0 ≜ {0} and Mj ≜ |N j |. Clearly Mj ≤ mkj . We then claim that Nj is an ηj -cover of R. To verify this, consider a fixed reward r = ∑ 
+
+> i
+
+wiri ∈ R . We can sample kj independent coordinate rewards with index distribution w. At each of the SA state-action entries, their average differs from its mean by more than ηj
+
+with probability at most 2 e−2kj η2 
+
+> j
+
+. Specifically, Hoeffding’s inequality [26, Theorem 2] applied to a kj -sample average with index distribution w implies 
+
+P
+
+∥∥∥∥∥∥k−1
+
+> jkj
+
+∑
+
+> ℓ=1
+
+rIℓ − rw
+
+∥∥∥∥∥∥∞
+
+> η j
+
+ ≤ 2SAe −2kj η2 
+
+> j
+
+,
+
+7Preprint 
+
+and a union bound implies total probability at most 1 /2. Therefore, at least one deterministic average in Nj
+
+is consequently within ηj of r in the supremum norm. Now for every target r ∈ N J , fix an approximant qj (r) ∈ N j with ∥r − qj (r)∥∞ ≤ ηj for 1 ≤ j < J ; set 
+
+q0(r) = 0 and qJ (r) = r. These choices depend only on the rewards. For every j ≥ 1, we claim 
+
+∥qj (r) − qj−1(r)∥∞ ≤ 3ηj .
+
+To prove it, note that for j = 1, the bound holds as ∥q1(r)∥∞ ≤ 1 ≤ 3/2; for j ≥ 2, it uses the fact that ηj−1 = 2 ηj and triangle inequality. Therefore, these approximants form a subset of all adjacent pairs (q, q ′) ∈ N j × N j−1 with ∥q − q′∥∞ ≤ 3ηj (we will use them later in Section 4.2). There are at most Mj Mj−1
+
+of them, and the union bound at level j runs over these pairs. Define 
+
+Lj ≜ log 20 SAJM j Mj−1|G| 2
+
+δ , tj ≜ Lj /n. 
+
+For j ≥ 2, we have log( Mj Mj−1) ≤ (kj + kj−1) log m, with kj ≤ log(4 SA )/(2 η2 
+
+> j
+
+) + 1 and kj−1 ≤
+
+log(4 SA )/(8 η2 
+
+> j
+
+) + 1. Because ηj ≤ 1/2 and log(4 SA ) > 1, the additive constant 2 is at most 12 η−2 
+
+> j
+
+log(4 SA ). Hence log( Mj Mj−1) ≤ 3η−2 
+
+> j
+
+log(4 SA ) log( em ).
+
+The same bound holds for j = 1 because M0 = 1. Since η−2 
+
+> j
+
+≥ 1 and log(20 SAJ |G| 2/δ ) ≥ 0, it follows that 
+
+Lj ≤ Λ/η 2 
+
+> j
+
+. (5) The sample-size condition implies tj ≤ Λ/(nη 2 
+
+> J
+
+) < 1 for every j.
+
+4.2 Uniform concentration of the value increments 
+
+We first present the concentration result used in both upper bounds. The following inequalities are standard in literature. 
+
+Lemma 4.2 (Bernstein bounds in two variance conventions) . Let X1, . . . , X n be i.i.d. copies of X supported in an interval of length B, with n ≥ 3. Write μ = EX, σ2 = Var( X),̂μ = n−1 ∑ 
+
+> i
+
+Xi, and ̂σ 2 = n−1 ∑
+
+> i
+
+(Xi −̂μ )2.For L > 0, the following bounds have failure probabilities at most 2e−L and 4e−L, respectively: 
+
+|̂μ − μ| ≤ √2σ2L/n + 2 BL/ (3 n), (6) 
+
+|̂μ − μ| ≤ 2 √L/n ̂σ + 4 BL/n. (7) 
+
+They hold jointly with failure probability at most 6e−L.
+
+The first inequality is Bernstein’s inequality. The second follows from Maurer and Pontil [27, Theorem 4], applied to both tails after translating and rescaling the interval. Their unbiased variance is n̂σ 2/(n − 1); These bounds require n ≥ 3 and 7 n/ [3( n − 1)] ≤ 4, and every sample-size condition below ensures them. 
+
+Lemma 4.3 (Simultaneous concentration of adjacent value increments) . With probability at least 1 − δ, the following inequalities hold simultaneously for all j, all adjacent reward pairs (q, q ′) ∈ N j × N j−1 satisfying 
+
+∥q − q′∥∞ ≤ 3ηj , and all state–action pairs: 
+
+|(̂P − P )( vq (P ) − vq′ (P )) | ≤ 2√tj σ̂ P (vq (P ) − vq′ (P )) + 32 Hη j tj + 10 h, (8) 
+
+|(̂P − P )( vq (̂ P ) − vq′ (̂ P )) | ≤ 2√tj σP (vq (̂ P ) − vq′ (̂ P )) + 32 Hη j tj + 10 h. (9) 
+
+Both inequalities are coordinatewise. Proof. We will apply an absorbing-state construction to remove the dependence of the empirical-value increment on the sampled row. For (8), first note that the function ∆ ≜ vq (P ) − vq′ (P ) is deterministic and satisfies ∥∆∥∞ ≤ 3Hη j . Let 
+
+Y1, . . . , Y n be the samples at ( s, a ), and apply Lemma 4.2, with B = 6 Hη j and L = Lj , to Xi = ∆( Yi)+3 Hη j ∈
+
+[0 , 6Hη j ]. Since P (· | s, a ) and ̂ P (· | s, a ) are probability vectors, the shift changes neither ( ̂ P − P )∆ nor the standard deviations, and the empirical standard deviation of the Xi is σ̂P (∆)( s, a ). Inequality (7) therefore implies 
+
+|(̂P − P )∆ | ≤ 2√tj σ̂ P (∆) + 24 Hη j tj
+
+8Preprint 
+
+with failure probability at most 4 e−Lj for each row and pair. For (9), we remove the dependence on the row being sampled, using the absorbing-MDP construction of [6, Lemmas 8–9]. Fix a state s. We modify the empirical MDP by making s absorbing and giving all its actions reward (1 − γ)u, where u ∈ [0 , H ]. Other states retain reward q. Write vs,q,u for its optimal value. This vector is independent of all empirical transition rows at state s. It equals u at state s. It also satisfies 
+
+vs,q,v q (̂P )( s) = vq (̂P ), (10) 
+
+∥vs,q,u − vs,q ′,u ′ ∥∞ ≤ max {| u − u′|, H ∥q − q′∥∞}. (11) The first identity is [6, Lemma 8]. The second extends their boundary Lipschitz bound to two different rewards: let a be the norm on its left. At s, the difference is |u − u′|; outside s, the Bellman inequality bounds it by ∥q − q′∥∞ + γa . Hence a ≤ max {| u − u′|, ∥q − q′∥∞ + γa }, which implies the displayed bound. Now consider u, u ′ ∈ G with |u − u′| ≤ 3Hη j + 2 h and define the proxy difference ∆ 0 ≜ vs,q,u − vs,q ′,u ′ . Since 
+
+h ≤ Hη J /2 ≤ Hη j /2, (11) implies ∥∆0∥∞ ≤ 4Hη j . Conditional on all data outside state s, this is a fixed function independent of the n samples at ( s, a ). Bernstein’s inequality consequently implies 
+
+|(̂P − P )∆ 0|(s, a ) ≤ √2tj σP (∆ 0)( s, a ) + 8 Hη j tj
+
+with conditional, and hence unconditional, failure probability at most 2 e−Lj . We note the numerical constant 8 is conservative: the range length is at most 8 Hη j .Then we choose grid points u, u ′ within h of vq (̂P )( s) and vq′ (̂ P )( s), respectively. The two exact boundary values differ by at most 3 Hη j , so this grid pair is among those considered. Equations (10)–(11) give 
+
+∥∆ − ∆0∥∞ ≤ 2h, where ∆ ≜ vq (̂P ) − vq′ (̂P ).
+
+Therefore |(̂P − P )(∆ − ∆0)| ≤ 4h, and σP (∆ 0) ≤ σP (∆) + 2 h by the triangle inequality in centered L2(P ). Since tj ≤ 1, we have 
+
+|(̂P − P )∆ | ≤ √2tj σP (∆) + 8 Hη j tj + (4 + 2 √2) h, 
+
+which implies (9). A union bound over at most SAM j Mj−1 true-value events, each failing with probability at most 4 e−Lj , and at most SAM j Mj−1|G| 2 empirical-proxy events at level j, each failing with probability at most 2 e−Lj , has total failure probability at most 
+
+> J
+
+∑
+
+> j=1
+
+6SAM j Mj−1|G| 2e−Lj = 3δ
+
+10 < δ. 
+
+The union covers every grid pair, so it covers the data-dependent pair chosen above. 
+
+4.3 A one-sided variance bound for the comparison 
+
+In single-objective RL, [5] utilize the total-variance method to control a value function through its Bellman equation; But here, our objective contains signed differences of optimal values, evaluated under a second kernel. We therefore need the following form. 
+
+Lemma 4.4. Let K be an S × S stochastic matrix, let RK ≜ (I − γK )−1, and for u ∈ RS define 
+
+σK (u)( s) ≜ √K(u2)( s) − (Ku (s)) 2.
+
+Let c ≥ 0 and let β ∈ RS satisfy β ≥ 0. If 0 ≤ u ≤ c1 and b ≜ u − γKu ≤ β, then 
+
+γ2RK σK (u)2 ≤ 2c R K β − u2 and γ∥RK σK (u)∥∞ ≤ √2cH ∥RK β∥∞.
+
+In particular, if v ∈ [0 , H ]S and v − γKv ≤ 21, then γ∥RK σK (v)∥∞ ≤ 2H3/2.Proof. Note that RK has nonnegative entries [25] and satisfies RK 1 = H1. In particular, it preserves coordinatewise inequalities. The relation γKu = u − b implies γ2(Ku )2 = ( u − b)2 = u2 − 2ub + b2. Hence 
+
+γ2σK (u)2 = γ2K(u2) − u2 + 2 ub − b2 ≤ γK (u2) − u2 + 2 cβ. 
+
+9Preprint 
+
+Specifically, it is from bounding three terms. First, γ2K(u2) ≤ γK (u2), because K(u2) ≥ 0 and γ2 ≤ γ.Second, −b2 ≤ 0. Third, 2 ub ≤ 2uβ ≤ 2cβ : multiplying b ≤ β by u ≥ 0 preserves its direction, and u ≤ c1
+
+together with β ≥ 0 implies the inequality. Apply RK and use RK (γK − I) = −I:
+
+γ2RK σK (u)2 ≤ − u2 + 2 c R K β ≤ 2c R K β. 
+
+This proves the first claim. For each state s, the weights RK (s, y ) are nonnegative and sum to H, so the Cauchy–Schwarz inequality implies 
+
+(RK σK (u)( s))2 ≤
+
+(∑ 
+
+> y
+
+RK (s, y )
+
+)(∑ 
+
+> y
+
+RK (s, y )σK (u)( y)2)
+
+= H(RK σK (u)2)(s).
+
+Multiplying by γ2 and using the first claim implies γ2(RK σK (u)( s)) 2 ≤ 2cH (RK β)( s) ≤ 2cH ∥RK β∥∞. Both 
+
+γ and RK σK (u)( s) are nonnegative, so taking square roots and the maximum over s proves the second claim. For the last claim, take u = v, c = H, and β = 2 1. Then RK β = 2 H1 and √2H · H · 2H = 2 H3/2 and it completes the proof. 
+
+4.4 Chaining the comparison error 
+
+The following lemma will be applied twice, in opposite directions. All target and approximating rewards are the bounded arrays in the reward chain defined above, including the zero reward at level zero. Let K0 and 
+
+K1 be two transition kernels. Denote the optimal values of the base kernel K0 vq ≜ vq (K0). For each target 
+
+r ∈ N J , one can choose a deterministic stationary policy πr that is optimal for r in K0, and define 
+
+Rr ≜ (I − γK 1 
+
+> πr
+
+)−1, fr,j ≜ vr − vqj (r), dr,j ≜ vqj (r) − vqj−1(r).
+
+Then we have fr,J = 0, fr, 0 = vr , and fr,j = ∑Jk=j+1 dr,k . Define the finite nonnegative quantity 
+
+E ≜ max   
+
+> r∈N J,0≤j≤J
+
+∥∥γR r
+
+∣∣(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)fr,j 
+
+∣∣∥∥∞ .
+
+Lemma 4.5. Let tj = Lj /n be as in Section 4, so that tj ≤ Λ/(nη 2 
+
+> j
+
+) by (5) . Suppose that, for all targets 
+
+r ∈ N J , all levels 1 ≤ j ≤ J, and all state–action pairs, 
+
+|(K1 − K0)dr,j | ≤ 2√tj σK1 (dr,j ) + 32 Hη j tj + 10 h. (12) 
+
+Then 
+
+E ≤ 36 JH 3/2√Λ/n + 1728 H2Λ
+
+nη J
+
++ 20 JHh, (13) 
+
+and ∥vr (K0) − V πr 
+
+> r
+
+(K1)∥∞ ≤ E for every r ∈ N J .Proof. We first bound the resolved variance of each tail fr,j . We then sum the increment concentration bounds and absorb the resulting term proportional to √E.
+
+The Bellman inequality controls every tail. Fix a target and level and abbreviate f = fr,j and η = ηj .The reward Lipschitz property implies |f | ≤ Hη 1. Optimality of πr for r and Bellman optimality of vqj (r)
+
+imply that 
+
+vr = rπr + γK 0 
+
+> πr
+
+vr , vqj (r) ≥ qj (r)πr + γK 0 
+
+> πr
+
+vqj (r).
+
+Subtracting shows f − γK 0 
+
+> πr
+
+f ≤ η1. Moreover, note that the shift ϕ = f + Hη 1 satisfies 0 ≤ ϕ ≤ 2Hη 1 and, because (1 − γ)H = 1, we have 
+
+ϕ − γK 1 
+
+> πr
+
+ϕ = η1 + (f − γK 0 
+
+> πr
+
+f ) − γ(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)f ≤ 2η1 + γ ∣∣(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)f ∣∣ .
+
+Apply Lemma 4.4 with K = K1 
+
+> πr
+
+, u = ϕ, c = 2 Hη , and β = 2 η1 + γ|(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)f |. Since K is stochastic, 
+
+σK (ϕ) = σK (f ). Since Rr 1 = H1, the definition of E implies Rr β ≤ (2 Hη + E)1. Therefore we have that 
+
+γ∥Rr σK (fr,j )∥∞ ≤
+
+√
+
+8H3η2 
+
+> j
+
++ 4 H2ηj E ≤ 3H3/2ηj + 2 H√ηj E. (14) This argument also holds at j = 0, where q0 = 0, vq0 = 0, and ∥r∥∞ ≤ 1 = η0, and trivially at j = J, where 
+
+fr,J = 0. 10 Preprint 
+
+Increment bounds close the comparison. Since dr,j = fr,j −1 − fr,j , the centered-L2 triangle inequality and ηj−1 = 2 ηj imply that 
+
+γ∥Rr σK (dr,j )∥∞ ≤ 9H3/2ηj + 5 H√ηj E. 
+
+Use the tail representation of each fr,j , the nonnegativity of Rr, and (12) at the rows ( s, π r(s)). These rows give |(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)dr,j | ≤ 2√tj σK (dr,j ) + (32 Hη j tj + 10 h)1. Enlarge every tail sum to the full sum; all summands are nonnegative. After taking the maximum defining E, we obtain 
+
+E ≤
+
+> J
+
+∑
+
+> j=1
+
+[
+
+18 H3/2ηj
+
+√tj + 10 H√ηj E√tj + 32 H2ηj tj + 10 Hh 
+
+]
+
+(15) 
+
+≤ 18 JH 3/2√Λ/n + 10 H√ΛE/n 
+
+> J
+
+∑
+
+> j=1
+
+η−1/2 
+
+> j
+
++ 32 H2Λ
+
+n
+
+> J
+
+∑
+
+> j=1
+
+η−1 
+
+> j
+
++ 10 JHh (16) 
+
+≤ 18 JH 3/2√Λ/n + 40 H
+
+√
+
+ΛEnη J
+
++ 64 H2Λ
+
+nη J
+
++ 10 JHh. (17) The second inequality uses (5); the third uses the geometric-sum bounds ∑ 
+
+> j
+
+η−1/2 
+
+> j
+
+≤ 4η−1/2 
+
+> J
+
+and ∑ 
+
+> j
+
+η−1 
+
+> j
+
+≤
+
+2η−1 
+
+> J
+
+. Finally, Young’s inequality implies 40 H
+
+√
+
+ΛEnη J
+
+≤ E
+
+2 + 800 H2Λ
+
+nη J
+
+.
+
+Plugging it in (15) then proves (13). 
+
+The comparison controls policy evaluation. For the last claim, write V = V πr 
+
+> r
+
+(K1). Subtracting 
+
+V = rπr + γK 1 
+
+> πr
+
+V from vr = rπr + γK 0 
+
+> πr
+
+vr implies ( I − γK 1 
+
+> πr
+
+)( vr − V ) = −γ(K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)fr, 0, thus we have that 
+
+vr − V = −γR r (K1 
+
+> πr
+
+− K0 
+
+> πr
+
+)fr, 0.
+
+Since Rr has nonnegative entries, |Rr x| ≤ Rr |x| for every vector x. Hence ∥vr − V ∥∞ is at most the level-zero term in the definition of E.
+
+4.5 Policy comparison and completion of the proof 
+
+Now we are ready to prove Theorem 4.1. We will consider the event of Lemma 4.3. We will apply Lemma 4.5 first with K0 =̂ P and K1 = P (inequality (9) verifies its hypothesis hence we can apply it). Let ̂π r be any empirical optimal deterministic stationary policy, and note that since (9) concerns values only, the conclusion holds simultaneously for every such choice. The exact policy-evaluation identity is 
+
+vr (̂P ) − V̂π r 
+
+> r
+
+(P ) = γ(I − γP ̂π r )−1(̂ P̂π r − P̂π r )vr (̂P ),
+
+and the last claim of Lemma 4.5 bounds its norm by E. Hence ∥vr (̂ P ) − V̂π r 
+
+> r
+
+(P )∥∞ ≤ Γn, where Γn ≜ 36 JH 3/2√Λ/n + 1728 H2Λ
+
+nη J
+
++ 20 JHh. 
+
+Apply the same lemma with K0 = P and K1 =̂ P . Inequality (8) verifies its hypothesis. For a true optimal policy π∗ 
+
+> r
+
+, the lemma implies ∥vr (P ) − V π∗ 
+
+> r
+> r
+
+(̂P )∥∞ ≤ Γn.For each target reward and state, empirical optimality implies 
+
+vr (P ) − V̂π r 
+
+> r
+
+(P ) = vr (P ) − V π∗ 
+
+> r
+> r
+
+(̂ P ) + V π∗ 
+
+> r
+> r
+
+(̂ P ) − vr (̂ P ) + vr (̂P ) − V̂π r 
+
+> r
+
+(P ) ≤ 2Γ n1.
+
+The sample-size condition, ηJ > ε/ (32 H), and J ≥ 4 imply Γn ≤
+
+( 36 1024 + 55296 220 J2 + 150 
+
+)
+
+ε < ε
+
+4 .
+
+Thus every finest-net target has true policy loss at most ε/ 2. 11 Preprint 
+
+Finally, for an arbitrary query reward r ∈ R , choose q ∈ N J at distance at most ηJ and return ̂π q . For any fixed policy, changing the reward by at most ηJ changes every discounted value by at most Hη J . The same bound holds for optimal values by (3). Consequently, we have that 
+
+vr (P ) − V̂π q 
+
+> r
+
+(P ) ≤ 2Hη J 1 + vq (P ) − V̂π q 
+
+> q
+
+(P ) ≤
+
+( ε
+
+8 + ε
+
+2
+
+)
+
+1 ≤ ε1. (18) Namely, the output policy is ε-optimal under r. All these events were simultaneous over the finite sets used to answer every query, and the bounds hold for every admissible choice of q and of the empirical optimal policy. (18) therefore holds simultaneously over the entire reward hull. This hence proves Theorem 4.1. 
+
+# 5 An upper bound independent of the number of objectives 
+
+From the other perspective, we can apply the similar argument and bound simultaneously to every scalar reward in [0 , 1] SA , and therefore supplies the state-dimension saturation for the reward-hull upper bound. 
+
+Theorem 5.1 (Uniform planning) . Let H = (1 − γ)−1, 0 < ε ≤ H, and 0 < δ < 1. Set h = ε/ (1000 H), and define 
+
+Fh ≜ {min {jh, H } : 0 ≤ j ≤ ⌈ H/h ⌉} S , Lsat ≜ log 8SA |F h|
+
+δ .
+
+If n independent transitions are collected at every state–action pair and 
+
+n ≥ 214 H3Lsat /ε 2,
+
+then, with probability at least 1 − δ, for every reward r ∈ [0 , 1] SA , every empirical optimal deterministic stationary policy is ε-optimal in the true MDP at every state. In particular, the total sample is 
+
+O
+
+( SAH 3
+
+ε2
+
+[
+
+S log eH 2
+
+ε + log SA δ
+
+]) 
+
+.
+
+The proof applies the same one-sided variance comparison to a grid of all value vectors in [0 , H ]S . It is given in Appendix A. The finite value grid makes the concentration event uniform over every bounded reward and every empirical optimal policy. 
+
+# 6 Lower bounds 
+
+We then study lower bounds in this section. We assume that all rewards are known and bounded by one, and every test uses a simplex preference. The lower bound combines two constructions: a scalar problem supplies the baseline SAH 3/ε 2, and a multi-objective construction which adds a factor proportional to the dimension of an unknown exit distribution. Subset rewards identify that distribution, while a short collection of action rewards isolates the action whose distribution is being tested. Our technique, the packing and subset-testing approach, is related to reward-free and finite-known-reward lower bounds [9, 20]. Our arguments below imply the discounted simulator construction, a simplex-normalized encoding of the target action pair, and a decoder valid for history-dependent deployment policies. We first introduce the three ingredients shared by the constructions. The first explains why deployment memory cannot circumvent the lower bound; the other two are standard coding and information inequalities in the form needed here. 
+
+Lemma 6.1. Fix γ ∈ [1 /2, 1) , H = (1 − γ)−1, and p = H−1. At a decision state x, every action b returns to 
+
+x with probability 1 − p and otherwise exits to an absorbing state yj according to a distribution qb. Let the known immediate reward at x be ab, and let the reward at yj be a known number tj under every action. Set 
+
+D ≜ 11 − γ(1 − p) = H
+
+2 − H−1 ≥ H
+
+2 , gb ≜ ab + γ ∑
+
+> j
+
+qb(j)tj .
+
+Then, for every randomized history-dependent policy π started from x, there is a probability vector zπ
+
+determined by the policy and the known rewards, independently of the distributions qb for a fixed policy, such that 
+
+V π (x) = D ∑
+
+> b
+
+zπb gb, V ∗(x) = D max  
+
+> b
+
+gb.
+
+12 Preprint Proof. Let ρt(b) be the probability of choosing action b at time t conditional on remaining at x through time 
+
+t. Before exit, the observed state is always x, the rewards are known functions of the chosen actions, and each action has the same survival probability. Thus ρt is a functional of the policy that does not depend on the unknown exit distributions. Define 
+
+zπb ≜ D−1
+
+> ∞
+
+∑
+
+> t=0
+
+[γ(1 − p)] tρt(b).
+
+The geometric series sums to D, so zπ is a probability vector. A visit to x contributes the immediate reward ab
+
+and the expected discounted reward after exit, γpH ∑ 
+
+> j
+
+qb(j)tj . Since pH = 1, summing these contributions implies the value identity. Every policy therefore implies a convex combination of the gb, and a stationary action maximizing gb attains the upper endpoint. 
+
+Lemma 6.2. For every even integer d ≥ 128 , there is a set Cd ⊂ {− 1, 1}d such that each vector has d/ 2
+
+positive entries and 
+
+log |C d| ≥ d/ 16 , dist Ham (θ, θ ′) ≥ d/ 4 for θ̸ = θ′.
+
+Proof. Apply the greedy Gilbert packing argument [28] to the ( dd/ 2
+
+) ≥ 2d/(d + 1) balanced vectors. AHamming ball of radius ⌊d/ 4⌋ in the full cube contains at most exp( dh 2(1 /4)) vectors, where h2(t) = 
+
+−t log t − (1 − t) log(1 − t). Consequently the selected set has logarithmic size at least 
+
+d(log 2 − h2(1 /4) ) − log( d + 1) ≥ d/ 16 .
+
+The last inequality holds for d ≥ 128: the first coefficient exceeds 0 .13, and log( d + 1) /d decreases on this range and is less than 0 .0675 at d = 128. 
+
+Lemma 6.3. Let d ≥ 128 be even, let 0 < p ≤ 1, let 0 < α ≤ 1/2, and write 
+
+u(j) ≜ 1
+
+d , qθ (j) ≜ 1 + αθ j
+
+d , θ ∈ C d.
+
+Consider a family with an integer R ≥ 1 of independently indexed unknown transition rows. Each such row self-loops with probability 1 − p and exits with probability p according to its distribution qθ ; all other rows are fixed throughout the family. If a learner using at most N adaptive simulator queries produces an output from which all R codewords can be decoded with probability at least 3/4 in every model, then 
+
+N ≥ Rd 
+
+32 pα 2 .
+
+Proof. Give the parameter vector Θ the uniform prior on CRd . For a fixed parameter vector ϑ, compare the learner’s transcript with the reference model in which every unknown exit distribution is replaced by u. One query to an unknown row has relative entropy at most 
+
+p KL( qϑr ∥u) ≤ p
+
+> d
+
+∑
+
+> j=1
+
+(qϑr (j) − u(j)) 2
+
+u(j) = pα 2.
+
+Here KL ≤ χ2 follows from log x ≤ x − 1. The adaptive relative-entropy chain rule [29, Lemma 15.1] implies KL( PZϑ ∥PZ 
+
+> 0
+
+) ≤ N pα 2,
+
+where Z includes the transcript, a model-independent internal random seed, and the learner’s output. Conditional on the past and the seed, the next query is the same function in both experiments; hence only its next-state observation contributes to the chain rule. Early stopping can be padded with queries to a known absorbing state. Apply Fano’s inequality in the reference-distribution form of [20, Lemma D.10]. The decoder in the hypothesis has error probability at most 1 /4, so 
+
+N pα 2 ≥ 34 R log |C d| − log 2 ≥ 12 R log |C d| ≥ Rd 
+
+32 .
+
+The middle inequality uses R log |C d| ≥ d/ 16 ≥ 8. Rearranging proves the claim. 13 Preprint 
+
+6.1 The multi-objective lower bound 
+
+The next construction uses 2 d objectives for subset tests and only O(log A) additional objectives to select an action pair. 
+
+Theorem 6.4 (Lower bound with additive objective budget) . Let A ≥ 2, B ≜ ⌊A/ 2⌋, and 
+
+ℓ ≜ 2 ⌈max {64 , 8 log B}⌉ .
+
+Let k ≥ 1, let d ≥ 128 be even, and assume S ≥ k + d and m ≥ ℓ + 2 d. For γ ∈ [1 /2, 1) , H = (1 − γ)−1,and 0 < ε ≤ H/ 4096 , there is a family of discounted MDPs with S states, A actions, and m known reward functions in [0 , 1] for which every learner satisfying (1) with probability at least 3/4 in every model requires 
+
+N ≥ 2−27 kBdH 3
+
+ε2 .
+
+This holds for adaptive simulator queries and arbitrary randomized history-dependent output policies. Proof. We construct the family, show that a successful policy map identifies all its unknown distributions, and then apply Lemma 6.3. 
+
+Constructing the dynamics and the action codes. Take decision states x1, . . . , x k and absorbing outcome states y1, . . . , y d; any additional states are absorbing with zero rewards. At each decision state, pair the first 2 B actions as ( b, 0) , (b, 1), b ∈ [B]. Every action self-loops with probability 1 − p, where p = H−1.Conditional on exit, action ( b, 0) uses u, and action ( b, 1) uses qθi,b . Here Θ = ( θi,b ) ∈ C kB d , α = 2048 ε/H ≤ 1/2.
+
+When A is odd, the remaining action duplicates (1 , 0) in both its transitions and its known rewards. To make a preference select one pair, apply Lemma 6.2 in dimension ℓ. Since ℓ ≥ 128 and ℓ/ 16 ≥ log B, it provides B balanced binary vectors c1, . . . , c B ∈ { 0, 1}ℓ, obtained by replacing signs by zeros and ones. Each vector has ℓ/ 2 ones, and any two differ in at least ℓ/ 4 coordinates. Therefore va ≜ 2ca/ℓ ∈ ∆ℓ satisfies 
+
+⟨va, c a⟩ = 1 , ⟨va, c b⟩ ≤ 3/4 (b̸ = a).
+
+Indeed, equal Hamming weights imply that two distinct vectors share at most ℓ/ 2 − ℓ/ 8 = 3 ℓ/ 8 coordinates equal to one. 
+
+Defining simplex preferences that isolate a pair. The first ℓ reward coordinates are action rewards: 
+
+rj (xi, (b, t )) = cb(j), rj (yz , (b, t )) = 0 .
+
+One further coordinate is supplied for each subset U ⊆ [d]: 
+
+rU (xi, (b, t )) = 0 , rU (yz , (b, t )) = 1{z ∈ U }.
+
+All remaining coordinates are zero. These known rewards lie in [0 , 1] and are identical in every environment. For pair a and subset U , use the simplex preference 
+
+wa,U ≜
+
+( 78 va, 18 eU
+
+)
+
+,
+
+with zero entries in unused coordinates. Lemma 6.1 expresses the value at xi through the effective rewards 
+
+gb,t = 78 ⟨va, c b⟩ + γ
+
+8 qb,t (U ).
+
+Here qb, 0 = u and qb, 1 = qθi,b for the fixed decision state xi. Both target actions have effective reward at least 7/8, whereas every other pair has effective reward at most 7834 + 18 = 25 32 < 78 .
+
+The maximum effective reward is attained within the target pair. If the extra duplicate exists and a = 1, it has exactly the value of the target reference action; it does not change this comparison. 
+
+Recovering a codeword from the learned policy map. Fix a row ( i, a ) and distinct θ, θ ′ ∈ C d. Set 
+
+Uθ,θ ′ ≜ {j : θj = 1 , θ ′ 
+
+> j
+
+= −1}.
+
+14 Preprint 
+
+Balance and separation give |Uθ,θ ′ | ≥ d/ 8, and 
+
+qθ (Uθ,θ ′ ) − u(Uθ,θ ′ ) = α|Uθ,θ ′ |
+
+d , qθ′ (Uθ,θ ′ ) − u(Uθ,θ ′ ) = − α|Uθ,θ ′ |
+
+d .
+
+For preference wa,U θ,θ ′ , the optimal target action therefore changes when the row changes from θ to θ′. Their stationary value gap in either model is at least 
+
+D γα |Uθ,θ ′ |
+
+8d ≥ Hα 
+
+256 = 8 ε, 
+
+using D ≥ H/ 2 and γ ≥ 1/2. Let za, 1 be the occupancy functional of the output policy from Lemma 6.1, at this preference and initial state. If the row is θ, every other action has effective reward at most that of the target reference action. Consequently its value loss is at least 8 ε(1 − za, 1), and ε-optimality requires za, 1 ≥ 7/8. If the row is θ′, the value loss is at least 8 εz a, 1, so za, 1 ≤ 1/8. These are restrictions on the same model-independent functional of the learned policy. Decode row ( i, a ) by selecting the codeword θ whose policy at wa,U θ,θ ′ has za, 1 ≥ 7/8 for every θ′̸ = θ; use any fixed output if there is no unique candidate. On the simultaneous success event, the true codeword passes every test. Every false candidate fails its comparison against the true codeword, by the preceding negative-gap calculation with the candidates reversed. Thus the decoder recovers all kB codewords on that event. This is an information-theoretic decoder; evaluating its occupancy functionals has no computational role in the argument. 
+
+Counting simulator observations. Lemma 6.3 now applies with R = kB . Substituting p = H−1 and 
+
+α = 2048 ε/H implies 
+
+N ≥ kBd 
+
+32 pα 2 = 2 −27 kBdH 3
+
+ε2 .
+
+This thus completes the proof. Since ℓ = O(log( A+1)), choosing d of order min {S, log( m−ℓ)} and k = S−d implies the desired min {S, log m}
+
+factor when m ≥ 2ℓ and that minimum is sufficiently large. Appendix C implies a related construction that uses only pure preferences and has objective budget ( A − 1)2 d.
+
+6.2 The scalar baseline 
+
+For the remaining parameter regimes, we use the following scalar change-of-measure bound. Its proof, given in Appendix B, reuses Lemma 6.1 to cover history-dependent policies. 
+
+Theorem 6.5 (Scalar lower bound) . Let S ≥ 3, A ≥ 2, m ≥ 1, γ ∈ [1 /2, 1) , and H = (1 − γ)−1. If 
+
+0 < ε ≤ H/ 64 , every learner that uses at most N adaptive generative-model queries and satisfies (1) with probability at least 3/4 on every instance must satisfy 
+
+N ≥ (S − 2) AH 3
+
+12288 ε2 .
+
+The conclusion allows arbitrary randomized history-dependent output policies. 
+
+# 7 Assembling the joint minimax rate 
+
+Proof of Theorem 3.1. We first combine the two upper bounds. Fix δ = 1 /4. In Theorem 4.1, the definitions give 
+
+J ≤ C1L, log |G| ≤ C2L, Λ ≤ C3 log( em )L, 
+
+for universal constants C1, C 2, C 3. To check these estimates, note that L = log( eSAH 2/ε ) dominates 1, log( SA ), log( H/ε ), and log H in the stated range ε ≤ H/ 4096. Also log J ≤ CL , so the displayed upper bound on |G| implies the second estimate. Since log( em ) ≥ 1, the terms of Λ not containing m can be included in its right-hand side. Therefore the chaining algorithm uses at most 
+
+C SAH 3
+
+ε2 log( em )L3
+
+15 Preprint 
+
+samples. The ceiling adds at most SA , which is absorbed by this bound. Theorem 5.1, whose logarithmic term satisfies Lsat ≤ CSL , implies at most 
+
+C SAH 3
+
+ε2 SL 
+
+samples. Choose the algorithm with the smaller displayed sufficient sample count. Since L ≥ 1, the minimum is at most CSAH 3ε−2 min {S, log( em )}L3.For the lower bound, write κ = min {S, log( em )} and use the action-code length 
+
+ℓ = 2 ⌈max {64 , 8 log ⌊A/ 2⌋}⌉ ≤ C4 log( eA ).
+
+Suppose first that m ≥ 2ℓ and κ ≥ 512. Define 
+
+x ≜ min {S/ 2, log 2(m − ℓ)}, d ≜ 2⌊x/ 2⌋, k ≜ S − d. 
+
+The assumptions imply x ≥ κ/ 2: the state term has this property, while m − ℓ ≥ m/ 2 and the large lower bound on log( em ) imply log 2(m/ 2) ≥ log( em )/2. Hence d ≥ x − 2 ≥ κ/ 4 ≥ 128, d is even, and k ≥ S/ 2. Moreover ℓ + 2 d ≤ m. Theorem 6.4 applies, and ⌊A/ 2⌋ ≥ A/ 3 yields 
+
+N ∗ ≥ c1
+
+SAH 3
+
+ε2 κ. 
+
+If κ < 512, Theorem 6.5 implies the same conclusion after decreasing the universal constant: S − 2 ≥ S/ 3 for 
+
+S ≥ 3, and the factor κ is bounded by 512. The remaining case has m < 2ℓ and κ ≥ 512. Then 
+
+κ ≤ log( em ) ≤ log(2 eℓ ) ≤ C5
+
+(1 + log log( eeA)) = C5LA.
+
+The scalar lower bound consequently implies 
+
+N ∗ ≥ c2
+
+SAH 3
+
+ε2 ≥ c3
+
+SAH 3
+
+ε2
+
+κLA
+
+.
+
+This proves the universal lower bound. When m ≥ 2ℓ, only the first two cases are needed, and the LA
+
+denominator is absent. Since 2 ℓ ≤ C log( A + 1), the stated sufficient objective-budget condition follows. Together, they complete the proofs for both upper and lower bounds. 
+
+# 8 Discussion 
+
+The objective dependence is determined by the geometry of the known reward hull. A fine cover used in a single union bound would introduce H2/ε 2 through its entropy. Chaining avoids that loss because finer reward increments have smaller resolved variance. The one-sided Bellman inequality remains valid even though the policy optimal for the target reward need not optimize its approximants. The logarithmic-objective guarantee applies to empirical planning after reward rounding. Direct empirical planning for every bounded reward has the separate state-saturation guarantee. Both statements assume known bounded reward coordinates, simplex preferences, a stationary discounted kernel, and uniform accuracy at every initial state. The result identifies the joint rate up to logarithmic factors; exact logarithmic and confidence dependence remain separate questions. 
+
+# References 
+
+[1] D. M. Roijers, P. Vamplew, S. Whiteson, and R. Dazeley, “A survey of multi-objective sequential decision-making,” Journal of Artificial Intelligence Research , vol. 48, pp. 67–113, 2013. [2] C. F. Hayes, R. Rădulescu, E. Bargiacchi, J. Källström, M. Macfarlane, M. Reymond, T. Verstraeten, L. M. Zintgraf, R. Dazeley, F. Heintz, et al. , “A practical guide to multi-objective reinforcement learning and planning,” Autonomous Agents and Multi-Agent Systems , vol. 36, no. 1, p. 26, 2022. [3] R. Yang, X. Sun, and K. Narasimhan, “A generalized algorithm for multi-objective reinforcement learning and policy adaptation,” Advances in neural information processing systems , vol. 32, 2019. [4] A. Rame, G. Couairon, C. Dancette, J.-B. Gaya, M. Shukor, L. Soulier, and M. Cord, “Rewarded soups: towards pareto-optimal alignment by interpolating weights fine-tuned on diverse rewards,” Advances in Neural Information Processing Systems , vol. 36, pp. 71095–71134, 2023. 16 Preprint 
+
+[5] M. G. Azar, R. Munos, and H. J. Kappen, “Minimax pac bounds on the sample complexity of reinforcement learning with a generative model,” Machine learning , vol. 91, pp. 325–349, June 2013. [6] A. Agarwal, S. Kakade, and L. F. Yang, “Model-based reinforcement learning with a generative model is minimax optimal,” Conference on Learning Theory , pp. 67–83, 2020. [7] G. Li, Y. Wei, Y. Chi, Y. Gu, and Y. Chen, “Breaking the sample size barrier in model-based reinforcement learning with a generative model,” in Proc. Advances in Neural Information Processing Systems (NeurIPS) 
+
+(H. Larochelle, M. Ranzato, R. Hadsell, M. F. Balcan, and H. Lin, eds.), vol. 33, pp. 12861–12872, Curran Associates, Inc., December 2020. arXiv: 2005.12900. [8] D. Zhou, J. Chen, and Q. Gu, “Provable multi-objective reinforcement learning with generative models,” 
+
+arXiv preprint arXiv:2011.10134 , 2020. [9] Z. Chen and Z. Zhang, “Optimal multi-reward reinforcement learning,” arXiv preprint arXiv:2609.36486 ,2026. [10] H. Lu, D. Herman, and Y. Yu, “Multi-objective reinforcement learning: Convexity, stationarity and pareto optimality,” in The Eleventh International Conference on Learning Representations , 2023. [11] Y. Li, P. Ju, and N. B. Shroff, “How to find the exact pareto front for multi-objective mdps?,” arXiv preprint arXiv:2410.15557 , 2024. [12] S. Mannor and N. Shimkin, “A geometric approach to multi-criterion reinforcement learning,” Journal of machine learning research , vol. 5, no. Apr, pp. 325–360, 2004. [13] T. Zhou, F. Hairi, H. Yang, J. Liu, T. Tong, F. Yang, M. Momma, and Y. Gao, “Finite-time conver-gence and sample complexity of actor-critic multi-objective reinforcement learning,” arXiv preprint arXiv:2405.03082 , 2024. [14] A. Abels, D. Roijers, T. Lenaerts, A. Nowé, and D. Steckelmacher, “Dynamic weights in multi-objective deep reinforcement learning,” in International conference on machine learning , pp. 11–20, PMLR, 2019. [15] B. Zhu, M. Dang, and A. Grover, “Scaling pareto-efficient decision making via offline multi-objective rl,” 
+
+arXiv preprint arXiv:2305.00567 , 2023. [16] S. Vaswani, L. Yang, and C. Szepesvári, “Near-optimal sample complexity bounds for constrained mdps,” 
+
+Advances in Neural Information Processing Systems , vol. 35, pp. 3110–3122, 2022. [17] J. Wu, V. Braverman, and L. Yang, “Accommodating picky customers: Regret bound and exploration complexity for multi-objective reinforcement learning,” Advances in Neural Information Processing Systems , vol. 34, pp. 13112–13124, 2021. [18] S. Qiu, D. Zhang, R. Yang, B. Lyu, and T. Zhang, “Traversing pareto optimal policies: Provably efficient multi-objective reinforcement learning,” arXiv preprint arXiv:2407.17466 , 2024. [19] M. Hu and M. Yu, “Near-minimax multi-objective RL under predictable adversarial preferences and preference-free exploration in linear MDPs,” in Forty-third International Conference on Machine Learning ,2026. [20] C. Jin, A. Krishnamurthy, M. Simchowitz, and T. Yu, “Reward-free exploration for reinforcement learning,” in International Conference on Machine Learning , pp. 4870–4879, PMLR, 2020. [21] X. Zhang, Y. Ma, and A. Singla, “Task-agnostic exploration in reinforcement learning,” Advances in Neural Information Processing Systems , vol. 33, pp. 11734–11743, 2020. [22] P. Ménard, O. D. Domingues, A. Jonsson, E. Kaufmann, E. Leurent, and M. Valko, “Fast active learning for pure exploration in reinforcement learning,” in International Conference on Machine Learning ,pp. 7599–7608, PMLR, 2021. [23] G. Li, Y. Yan, Y. Chen, and J. Fan, “Minimax-optimal reward-agnostic exploration in reinforcement learning,” Mathematics of Operations Research , 2026. [24] O. Ridel and A. Cohen, “Improved bounds for reward-agnostic and reward-free exploration,” arXiv preprint arXiv:2602.16363 , 2026. [25] M. L. Puterman, Markov Decision Processes: Discrete Stochastic Dynamic Programming . John Wiley & Sons, 1994. [26] W. Hoeffding, “Probability inequalities for sums of bounded random variables,” Journal of the American statistical association , vol. 58, no. 301, pp. 13–30, 1963. [27] A. Maurer and M. Pontil, “Empirical bernstein bounds and sample variance penalization,” arXiv preprint arXiv:0907.3740 , July 2009. arXiv: 0907.3740. 17 Preprint 
+
+[28] E. N. Gilbert, “A comparison of signalling alphabets,” The Bell system technical journal , vol. 31, no. 3, pp. 504–522, 1952. [29] T. Lattimore and C. Szepesvári, Bandit algorithms . Cambridge University Press, 2020. [30] E. Kaufmann, O. Cappé, and A. Garivier, “On the complexity of best-arm identification in multi-armed bandit models,” The Journal of Machine Learning Research , vol. 17, no. 1, pp. 1–42, 2016. 
+
+# A Proof of the state-saturation upper bound 
+
+Proof. Write t = Lsat /n . The displayed sample condition implies t ≤ 1. For every fixed f0 ∈ F h and every row, apply Lemma 4.2 with B = H to Xi = f0(Yi) ∈ [0 , H ], where Y1, . . . , Y n are the samples at that row. On an event with failure probability at most 6 e−Lsat , it implies the following bound; for K =̂ P this is (7), and for K = P it follows from (6) because √2 ≤ 2 and 2 /3 ≤ 4: 
+
+|(̂P − P )f0| ≤ 2√t σ K (f0) + 4 Ht, K ∈ { P, ̂ P }.
+
+A union bound makes these statements simultaneous over rows and grid points with failure probability at most δ. For any f ∈ [0 , H ]S , choose f0 ∈ F h with ∥f − f0∥∞ ≤ h. The row error changes by at most 2 h, and the triangle inequality for centered L2(K) implies |σK (f ) − σK (f0)| ≤ h. Consequently, on the same event, 
+
+|(̂P − P )f | ≤ 2√t σ K (f ) + 4 Ht + 4 h, K ∈ { P, ̂ P }, f ∈ [0 , H ]S . (19) All inequalities here are coordinatewise. We next prove a deterministic evaluation comparison that can be used in either direction. Let ( K0, K 1) be either ( P, ̂ P ) or ( ̂P , P ). For any reward r ∈ [0 , 1] SA , let f = vr(K0) and let π be a deterministic stationary optimal policy in the base kernel K0. Define 
+
+K = K1 
+
+> π
+
+, R = ( I − γK )−1, E = ∥γR |(K1 
+
+> π
+
+− K0 
+
+> π
+
+)f |∥ ∞.
+
+The vector f satisfies 0 ≤ f ≤ H1. Its Bellman equation in the base model implies the one-sided bound 
+
+b ≜ f − γKf = rπ + γ(K0 
+
+> π
+
+− K1 
+
+> π
+
+)f ≤ 1 + γ|(K1 
+
+> π
+
+− K0 
+
+> π
+
+)f |.
+
+Lemma 4.4, applied with u = f , c = H, and β = 1 + γ|(K1 
+
+> π
+
+− K0 
+
+> π
+
+)f |, for which Rβ ≤ (H + E)1 because 
+
+R1 = H1, implies 
+
+γ∥Rσ K (f )∥∞ ≤ √2H3 + 2 H2E. 
+
+Apply γR to (19) with the variance taken under K1 (the true variance when K1 = P , the empirical variance when K1 =̂ P ), evaluated at the rows ( s, π (s)). By the row convention, this implies 
+
+E ≤ 2√t√2H3 + 2 H2E + 4 H2t + 4 Hh 
+
+≤ 2√2H3/2√t + 2 √2H√tE + 4 H2t + 4 Hh. 
+
+Young’s inequality bounds the second term by E/ 2 + 4 H2t. Rearranging therefore implies 
+
+E ≤ Bn ≜ 4√2H3/2√t + 16 H2t + 8 Hh. 
+
+By the definitions of n and h, and since ε ≤ H,
+
+Bn ≤
+
+( 4√2128 + 11024 + 1125 
+
+)
+
+ε < ε
+
+4 .
+
+The exact policy-evaluation identity bounds the difference between f = vr (K0) and the value of π under K1
+
+by E.Apply this comparison to a true optimal policy and then to an empirical optimal policy, using opposite choices of ( K0, K 1). Empirical optimality makes the middle term in the resulting three-term value decomposition nonpositive. The true suboptimality of the empirical optimal policy is therefore at most EP →̂P + ÊP →P ≤
+
+2Bn < ε/ 2. Here the two errors use different policies and resolvents, and each is bounded by Bn. The concentration event covers every vector in [0 , H ]S , so both comparisons hold for every reward and every corresponding optimal policy simultaneously. Finally, |F h| ≤ (1000 H2/ε + 2) S , which implies the stated sample-complexity bound. 18 Preprint 
+
+# B The scalar change-of-measure argument 
+
+Proof of Theorem 6.5. Let k = S − 2 decision states x1, . . . , x k share two absorbing states y+ and y−. The first objective rewards one at y+ and zero elsewhere; all other objectives are zero. We use preference e1.Every action at a decision state exits with probability p = H−1 and otherwise self-loops. Conditional on exit, it selects y+ with probability qi,a and y− otherwise. The null model has qi,a = 1 /2 for every row. Alternative ( i, a ) changes only that row to qi,a = 1 /2 + α, with 
+
+α = 16 ε/H ≤ 1/4. Lemma 6.1 implies 
+
+V π (xi) = Dγ ∑
+
+> a
+
+zi,a qi,a , V ∗(xi) = Dγ max  
+
+> a
+
+qi,a .
+
+Here zi is a model-independent probability vector determined by the output policy at e1. In alternative ( i, a ), the value gap to every other stationary action is Dγα ≥ Hα/ 4 = 4 ε. An ε-optimal output must therefore have zi,a ≥ 3/4. For fixed i, the output events Ei,a = {zi,a ≥ 3/4} are disjoint. Thus at least A − 1 ≥ A/ 2 actions satisfy 
+
+P0(Ei,a ) ≤ 1/2, while the success requirement in their respective alternatives implies Pi,a (Ei,a ) ≥ 3/4. Treat simulator rows as arms. The changed rows have the same positive support, and the number of queries is bounded. The change-of-measure inequality of [30, Lemma 1], followed by binary Pinsker, implies 
+
+E0Ni,a p kl(1 /2∥1/2 + α) ≥ kl (P0(Ei,a ), Pi,a (Ei,a )) ≥ 2(3 /4 − 1/2) 2 = 1 /8.
+
+Only queries to row ( i, a ) differ between the experiments. Their null-to-alternative divergence satisfies 
+
+p kl(1 /2∥1/2 + α) = − p
+
+2 log(1 − 4α2) ≤ 2pα 2
+
+1 − 4α2 ≤ 3pα 2.
+
+The first inequality uses − log(1 − x) ≤ x/ (1 − x), and the second uses α ≤ 1/4. The preceding change-of-measure inequality therefore implies 
+
+E0Ni,a ≥ 124 pα 2 .
+
+Summing over at least kA/ 2 selected rows and using the maximum query budget N implies 
+
+N ≥ kA 
+
+48 pα 2 = (S − 2) AH 3
+
+12288 ε2 .
+
+As in Lemma 6.3, early stopping is handled by padding with queries to a known absorbing state. 
+
+# C A lower bound using only pure preferences 
+
+The following variant uses one objective for each action–subset pair. It implies the same logarithmic objective dependence for a fixed number of actions, and shows that the lower-bound mechanism already appears when the learner must support only the simplex vertices. 
+
+Theorem C.1 (Simulator lower bound for simultaneous preferences) . Let A ≥ 2, let k ≥ 1, and let d ≥ 128 
+
+be even. Suppose S ≥ k + d and m ≥ (A − 1)2 d. For γ ∈ [1 /2, 1) , H = (1 − γ)−1, and 0 < ε ≤ H/ 2048 , there is a family of discounted MDPs with S states, A actions, and m known reward functions in [0 , 1] for which every learner satisfying (1) with probability at least 3/4 in every model requires 
+
+N ≥ 2−25 k(A − 1) dH 3
+
+ε2 .
+
+The conclusion allows adaptive simulator queries and arbitrary randomized history-dependent output policies. Proof. Write B = A − 1, and use the balanced code Cd of Lemma 6.2. Set p = H−1 and α = 1024 ε/H ≤ 1/2. As in the main construction, take decision states x1, . . . , x k and absorbing outcome states y1, . . . , y d. Any additional states are absorbing with zero rewards. Actions are 0 , 1, . . . , B . At xi, every action self-loops with probability 1 − p. Conditional on exit, action 0 uses u, and action a ∈ [B] uses qθi,a , where Θ = ( θi,a ) ∈ C kB d .For each a ∈ [B] and U ⊆ [d], provide the known reward coordinate 
+
+ra,U (xi, b ) = 34 1{b ∈ { 0, a }} , ra,U (yj , b ) = 14 1{j ∈ U }.
+
+19 Preprint 
+
+Pad unused reward coordinates with zero. These rewards lie in [0 , 1], and we use only their pure simplex preferences ea,U . Lemma 6.1 implies the effective rewards 
+
+gb = 34 1{b ∈ { 0, a }} + γ
+
+4 qb(U ).
+
+The target actions 0 , a have gb ≥ 3/4, whereas every other action has gb ≤ 1/4. Thus all other unknown rows are irrelevant to the optimal comparison. For distinct codewords θ, θ ′, take Uθ,θ ′ = {j : θj = 1 , θ ′ 
+
+> j
+
+= −1}. Its size is at least d/ 8, and qθ (U ) − u(U ) and 
+
+qθ′ (U ) − u(U ) equal respectively α|U |/d and −α|U |/d . The two target stationary actions exchange optimality, with value gap at least 
+
+D γα |Uθ,θ ′ |
+
+4d ≥ Hα 
+
+128 = 8 ε. 
+
+The occupancy za of the learned policy must therefore satisfy za ≥ 7/8 when the row is θ, and za ≤ 1/8 when it is θ′. This follows directly from the convex-combination value formula: the losses are at least 8 ε(1 − za)and 8 εz a, respectively. For each row ( i, a ), decode a candidate θ precisely when its output policies satisfy za ≥ 7/8 at every preference 
+
+ea,U θ,θ ′ , θ′̸ = θ; break a nonunique or empty candidate set arbitrarily. On the simultaneous success event, the true codeword passes every comparison, and any false codeword fails its comparison against the true one. The output thus identifies all kB codewords. Lemma 6.3 implies 
+
+N ≥ kBd 
+
+32 pα 2 = 2 −25 k(A − 1) dH 3
+
+ε2 .
+
+Taking an even d below both S/ 2 and log 2(m/ (A − 1)), and setting k = S − d, yields 
+
+N ≥ c SAH 3
+
+ε2 min {S, log( m/ (A − 1)) }
+
+when the indicated minimum is sufficiently large. In particular, for fixed A this is the min {S, log m}
+
+dependence. The main construction improves its objective budget by using mixed preferences to encode the target action pair. 20

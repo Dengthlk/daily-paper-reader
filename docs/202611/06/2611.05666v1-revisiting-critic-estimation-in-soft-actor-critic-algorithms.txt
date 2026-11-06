@@ -1,0 +1,1898 @@
+Title: Revisiting Critic Estimation in Soft Actor-Critic Algorithms
+
+URL Source: https://arxiv.org/pdf/2611.05666v1
+
+Published Time: Thu, 05 Nov 2026 01:26:14 GMT
+
+Number of Pages: 33
+
+Markdown Content:
+# Revisiting Critic Estimation in Soft Actor-Critic Algorithms 
+
+Jan Felix Kleuker j.f.kleuker@liacs.leidenuniv.nl 
+
+Koen Ponse k.ponse@liacs.leidenuniv.nl 
+
+Aske Plaat a.plaat@liacs.leidenuniv.nl 
+
+Thomas M. Moerland t.m.moerland@liacs.leidenuniv.nl Leiden Institute of Advanced Computer Science (LIACS) Leiden University 
+
+## Abstract 
+
+Soft Actor-Critic (SAC) is a widely used deep reinforcement learning algorithm that combines entropy regularization with an actor-critic architecture. Standard implementations rely on one-step temporal-difference learning of Q-functions, yet alternative critic design choices remain underexplored. In this work, we revisit three such choices: learning soft advantages instead of soft Q-values, the use of multi-step return targets, and the training of multi-step critics from replay buffer data. Keeping the policy objective fixed, we compare the six critic variants these choices generate: (i) advantage and (ii) dueling-advantage critics learned from one-step transitions, and λ-return and soft Generalized Advantage Estimation (GAE) critics learned either (iii, iv) on-policy or (v, vi) from replayed trajectory segments. Each variant is evaluated across an entire random hyperparameter search on fourteen tasks, treating the hyperparameters as part of the algorithm. Learning soft advantages instead of soft Q-values does not improve performance, and the soft GAE critic adds nothing over the simpler 
+
+λ-return critic. What does improve performance, most clearly on continuous control, is training a λ-return critic on replayed trajectory segments, even without importance weighting or trace cutting. This extends earlier evidence that uncorrected multi-step targets work well under replay to the full soft λ-return, entropy terms included. By design, the underlying ideas studied here extend beyond SAC, and our empirical findings aim to encourage their application to a broader class of reinforcement learning algorithms. 
+
+## 1 Introduction Baseline subtraction 
+
+> Yes ( 𝐴 !)No ( 𝑄 !)
+
+SAC SAC-𝜆 SAC-GAE SAC-A/ SAC-DA 
+
+> Target depth
+
+SAC-GAE-R 
+
+> Experience Replay
+> Single-Step Multi-Step Multi-Step
+
+SAC-𝜆 -R
+
+Figure 1: Design choices and resulting variants. The critic is trained on replayed or on-policy data, with one-step or multi-step λ-return targets, and predicts soft Q-values Qπα or soft advantages Aπα. SAC oc-cupies the one-step, replay-based Q-value cell; the other five cells are the variants we study. Soft Actor-Critic (SAC; Haarnoja et al. 2018a) is one of the most widely adopted algorithms in deep reinforcement learning. Its entropy regularization sustains exploration (Haarnoja et al., 2018a), improves robustness (Eysenbach & Levine, 2022), and yields a unique optimal policy, unlike the unregularized objec-tive (Jhaveri et al., 2025). Modern implementations (Raffin et al., 2021; Bou et al., 2024) follow Haarnoja et al. (2018b) in learning one or two soft Q-functions from one-step temporal-difference errors. This design is a convention rather than a requirement: SAC is defined by its actor-critic structure and entropy regularization, not by a particular critic. This leaves considerable freedom in how the critic is learned – freedom that remains largely unexplored. We study three dimensions of this freedom, which together span the grid of critic variants in Figure 1: (i) learning soft advantages instead of soft Q-values; (ii) the rollout depth of the target, through soft λ-returns; and (iii) whether multi-step targets are computed from on-policy rollouts or replayed from a 1arXiv:2611.05666v1 [cs.LG] 3 Nov 2026 buffer. Since all variants share the policy update, the implementation and the evaluation protocol, differences in outcome can be attributed to the critic. In A3C (Mnih et al., 2016) and Proximal Policy Optimization (PPO; Schulman et al. 2017), advantages reduce the variance of score-function policy gradients. This role does not carry over to SAC, whose policy gradient is unaffected by state-dependent shifts of the critic (Section 2). Advantages can nevertheless be numerically favorable: SAC’s policy depends only on the differences between actions, which can be small relative to the value itself and hard to resolve with an approximate Q-function (Tallec et al., 2019), whereas an advantage critic learns them directly (Baird, 1994; Wang et al., 2016). We test whether this makes SAC more robust to its hyperparameters, learning soft advantages with an explicit advantage loss (SAC-A) or jointly with a soft state value in a dueling architecture (SAC-DA); all other components are inherited from SAC. The rollout depth of the target trades off bias and variance in the critic’s learning signal. Generalized Advantage Estimation (GAE; Schulman et al. 2015) interpolates between one-step bootstrapped targets and Monte Carlo returns, and PQN (Gallici et al., 2024) recently carried the same idea over to Q-learning, replacing the replay buffer with many parallel environments. Following the idea of PQN, we drop the replay buffer, and train a soft Q-function on soft λ-returns from parallel on-policy rollouts (SAC-λ). Combining both axes, we also implement a variant in which we estimate soft advantages using GAE (SAC-GAE). Multi-step targets are harder to combine with replay, since a replayed trajectory was generated by an older policy and biases the target. Many methods correct for this with importance weights or truncated traces (Espeholt et al., 2018), including concurrent work on SAC (Łyskawa et al., 2025), yet uncorrected multi-step targets from a buffer have been demonstrated to work well in value-based methods (Hessel et al., 2018; Fedus et al., 2020; Clark et al., 2024) and in actor-critic continuous control (Kozuno et al., 2021). For the entropy-regularized target, the picture is less settled: Kozuno et al. (2021) found its per-step entropy terms destabilizing and kept only the final one. We train both multi-step critics on replayed segments with the full soft λ-return and no correction (SAC-λ-R, SAC-GAE-R), and compare them with their on-policy counterparts to see whether the bias outweighs the benefit of reusing data. All of these choices solely concern critic learning and fit into existing SAC implementations with little overhead. We present them for reinforcement learning with a general convex regularizer, of which SAC’s entropy bonus is the most prominent instance, and then measure what each buys in SAC across an entire random hyperparameter search on fourteen tasks from three benchmark suites. Soft advantages improve on soft Q-values neither in return nor in robustness, and the GAE critic adds nothing over the λ-return critic. In continuous control, multi-step gains come with replay rather than depth: within our sampled ranges, neither a larger λ nor a longer horizon helps, whereas training on replayed segments does, despite the uncorrected bias. This extends earlier evidence for uncorrected multi-step targets under replay to the full soft λ-return. In practice, the critic parameterization can be chosen on grounds other than return, and in SAC, too, multi-step targets can be paired with replay without an off-policy correction. 
+
+## 2 Preliminaries 
+
+We assume a standard Markov Decision Process (MDP) defined by a tuple M = ( S, A, p 0, p, γ ). Here, S is the state space, A is the action space, p0 ∈ ∆( S) is the initial state distribution, p(·, ·| s, a ) ∈ ∆( S × R) is the probabilistic transition and reward function, and γ ∈ [0 , 1) is the discount factor. We usually abbreviate the reward by r(s, a ) = Es′,r ∼p(s′,r |s,a )[r]. The behavior of an agent interacting with this MDP is defined by a policy, that is, a mapping π : S → ∆( A)assigning a distribution over actions to each state. Each policy induces a distribution pπ (τ ) on the set of trajectories τ = ( s0, a 0, s 1, . . . ) (Agarwal et al., 2021a). The value function is defined as V π (s) = 
+
+Eτ ∼pπ (τ )|s0=s[∑∞ 
+
+> t=0
+
+γt r(st, a t)], resulting in the RL objective π∗(·| s) = arg max π∈Π V π (s). 
+
+Regularized MDP. A natural extension of the RL objective adds a regularization term at the reward level, also referred to as MDP regularization (Ziebart, 2010; Lee et al., 2019). More precisely, given a convex function 
+
+h : ∆( A) → R, the corresponding regularized value function for some regularization weight (temperature) 2α ≥ 0 is defined as V πα (s) := Eτ ∼pπ (τ )|s0=s[∑∞ 
+
+> t=0
+
+γt{r(st, a t) − α h (π(·| st)) }] (Neu et al., 2017; Lan, 2023). The resulting regularized MDP objective can be expressed as π∗(·| s) = arg max π∈Π V πα (s). Following the convention of prior literature (Haarnoja et al., 2018a; Mei et al., 2020; Zhan et al., 2023), we define the regularized Q-function as Qπα(s, a ) := r(s, a ) + γEs′∼p(·| s,a )[V πα (s′)]. This entails the relationship 
+
+V πα (s) = Ea∼π(·| s)[Qπα(s, a ) − αh (π(·| s))] between the two soft functions (e.g. Zhan et al. 2023), and gives rise to the soft Bellman Operator (Haarnoja et al., 2018a): 
+
+T πα Q(s, a ) = r(s, a ) + γEs′∼p(·| s,a ),a ′∼π(·| s′)[Q(s′, a ′) − αh (π(·| s′))] . (1) Throughout, we fix h to the negative Shannon entropy, h(p) = Ex∼p[log( p(x))] = −H (p) for p ∈ ∆( A), which biases the search towards more exploratory policies and forms the basis of the SAC algorithm (Ziebart, 2010; Haarnoja et al., 2017; 2018a). 
+
+2.1 Soft action-values and soft advantages 
+
+Advantages measure how much better an action is than the policy’s average in a given state, separating the action-dependent part of the value from its state-dependent level. For soft Q-functions, the difference 
+
+Qπα − V πα does not generally vanish in expectation, so we follow prior work (Mei et al., 2020; Choe & Kim, 2025) and define the soft advantages as 
+
+Aπα(s, a ) := Qπα(s, a ) − Ea∼π(·| s)[Qπα(s, a )] . (2) For α = 0 this recovers the standard advantage, since then V π (s) = Ea∼π(·| s)[Qπ (s, a )]. As Qπα and Aπα differ only by a state-dependent term, soft advantages can replace the soft Q-function in the SAC policy update: 
+
+πk+1 (·| s) = arg min  
+
+> π∈Π
+
+Ea∼π(·| s)[−Qπk 
+
+> α
+
+(s, a )] + α h (π(·| s)) = arg min  
+
+> π∈Π
+
+Ea∼π(·| s)[−Aπk 
+
+> α
+
+(s, a )] + α h (π(·| s)) . (3) The two forms yield identical gradients, exactly for discrete actions and for every sample of SAC’s reparame-terized estimator, so a Q-critic and an advantage critic can differ only in how well they are learned. We will use the following properties of soft advantages. 
+
+Lemma 2.1. The soft advantages Aπα satisfy the following properties for any (s, a ) ∈ S × A , α ≥ 0:(i) The soft advantages can be obtained from the soft value function as Aπα(s, a ) = r(s, a ) − αh (π(·| s)) + 
+
+γEs′∼p(·| s,a )[V πα (s′)] − V πα (s),(ii) The soft advantages vanish in expectation, i.e. Ea∼π(·| s)[Aπα(s, a )] = 0 .
+
+Property (i) expresses the soft advantages in terms of the soft value function and is the key ingredient for several algorithms in the next section. Property (ii) confirms that they retain only the action-dependent part of the Q-function. For completeness, we provide proofs in Appendix A. 
+
+## 3 Estimating the targets 
+
+The soft Bellman operator of Eq. 1 and Lemma 2.1 are all that is needed to train critics other than SAC’s one-step Q-function. We now formalize the variants of Figure 1, with training pipelines shown in Figure 2: after the SAC critic, we introduce one-step advantage critics, then critics trained on soft λ-returns and soft GAE, and finally their replay-based counterparts. All variants share the policy objective of Eq. 3; pseudo-code and the remaining implementation differences are given in Appendix D. 3V-Network Soft GAEs Q-Network A-Network Learning Batch Replay Buffer    
+
+> Update Experience Batch Interact Environ-ment Actor-Network Value Estimation
+> Replay Buffer
+> Learning Batch Replay Buffer
+> Learning Batch
+
+(a) SAC-A & SAC-DA (b) SAC, SAC-λ & SAC-λ-R (c) SAC-GAE & SAC-GAE-R Figure 2: Training pipelines of the SAC variants. (a) SAC-A and SAC-DA keep SAC’s replay-based one-step pipeline but learn soft advantages. (b) SAC trains its Q-network on replayed transitions, SAC-λ on parallel on-policy rollouts, and SAC-λ-R on replayed trajectory segments. (c) SAC-GAE and SAC-GAE-R learn a soft value network, on rollouts or replayed segments, and compute soft GAEs for the policy update. 
+
+3.1 Soft Actor-Critic 
+
+Following Haarnoja et al. (2018b), in the now common form without a separate value network, SAC trains 
+
+Qθ on the soft one-step temporal difference error of Eq. 1 
+
+LSAC critic (θ) = E(s,a,s ′)∼D 
+
+[{ 
+
+Qθ (s, a ) − r(s, a ) − γEa′∼π(·| s′)
+
+[Q¯θ (s′, a ′)] + αγh (π(·| s′))}2]
+
+. (4) Here, ¯θ refers to a target network, and D to a buffer of stored one-step transitions (Raffin et al., 2021; Bou et al., 2024). Throughout, the expectations over π are estimated by sampling for continuous actions. 
+
+3.2 Soft Actor-Critic with Advantages 
+
+Based on Lemma 2.1 we can provide a Bellman-like equation for the soft values, and hence a loss for an approximation of the soft values Vϕ:
+
+LV(ϕ) = E(s,a,s ′)∼D 
+
+[
+
+{Vϕ(s) − r(s, a ) + αh (π(·| s)) − γV ¯ϕ(s′)}2]
+
+. (5) Using the value estimates, an advantage network Aθ can be trained, based on Lemma 2.1: 
+
+LAcritic (θ) = E(s,a,s ′)∼D 
+
+[{Aθ (s, a ) − r(s, a ) + αh (π(·| s)) − γV ϕ(s′) + Vϕ(s)}2]
+
+. (6) Since Eq. 5 uses the action stored in the buffer, under replay Vϕ targets the soft value of the behavior policy rather than of π, and SAC-A inherits this bias. The dueling formulation below avoids it, as its combined critic is trained on the standard soft Q-target, which is valid off-policy. 
+
+Dueling Q-Networks. Advantage and value networks can also be trained under a single objective, following the dueling architecture of Wang et al. (2016), in which the two are recombined into a Q-function that is then trained on the one-step temporal difference error. Since Qπα(s, a ) = Aπα(s, a ) + V πα (s) + αh (π(·| s)) by definition, we set 
+
+Qθ,ϕ (s, a ) = Aθ (s, a ) + Vϕ(s) + αh (π(·| s)) − κd̂ E[Aθ (s, ·)], (7) where the last term is the regularizer of Wang et al. (2016). For a finite action set we compute it exactly, ̂
+
+E[Aθ (s, ·)] = 1
+
+> |A|
+
+∑ 
+
+> a′∈A
+
+Aθ (s, a ′); for continuous actions the mean is estimated from samples a′ ∼ π(·| s). The combined critic is trained with the SAC loss of Eq. 4, 
+
+LDA critic (θ, ϕ ) = E(s,a,s ′)
+
+[{ 
+
+Qθ,ϕ (s, a ) − r(s, a ) − γEa′∼π
+
+[Q¯θ, ¯ϕ(s′, a ′)] + αγh (π(·| s′))}2]
+
+. (8) In our experiments, κd = 0 worked best, leaving the split into Aθ and Vϕ unidentifiable: SAC-DA thus tests the dueling parameterization of the soft Q-critic, while SAC-A learns soft advantages explicitly. By design, both variants use a single advantage and value network instead of the two SAC critics; otherwise, they train on one-step transitions from a replay buffer and drop into existing SAC implementations unchanged (Figure 2a). We refer to them as SAC-A and SAC-DA. 43.3 Soft Actor-Critic with λ-returns 
+
+The second dimension is the rollout depth of the target (Figure 1, middle row), for which we adopt the two changes that lead from DQN to PQN. First, we replace the one-step target with a truncated λ-return (Sutton, 1988; Watkins, 1989; Seijen & Sutton, 2014), defined through the soft Bellman operator as 
+
+T πλ,α Q := (1 − λ) 
+
+> N−1
+
+∑
+
+> n=1
+
+λn−1(T πα )nQ + λN −1(T πα )N Q, (9) where λ ∈ [0 , 1], N is the horizon, and ( T πα )n applies Eq. 1 n times. Second, we replace the replay buffer by parallel environments (Figure 2b). For our choice h = −H , the regularizer contributes the entropy bonus αH(π(·| s)) at every visited state, and a trajectory sampled from π yields an unbiased estimate of ( T πα )nQ(st, a t), the soft n-step return 
+
+R(n) 
+
+> α,t
+
+:= 
+
+> n−1
+
+∑
+
+> k=0
+
+γk{rt+k + γα H(π(·| st+k+1 ))} + γnEa∼π(·| st+n)
+
+[Q(st+n, a )]. (10) The soft λ-return Rλα,t := (1 − λ) ∑N −1 
+
+> n=1
+
+λn−1R(n) 
+
+> α,t
+
++ λN −1R(N ) 
+
+> α,t
+
+then satisfies the recursion 
+
+Rλα,t = rt + γ{(1 − λ)Ea∼π(·| st+1 )[Q(st+1 , a )] + αH(π(·| st+1 )) + λR λα,t +1 
+
+} (11) with Rλα,t = rt if st+1 is terminal, which allows it to be computed efficiently backwards along a trajectory (Appendix A). This is the soft analogue of Peng’s Q( λ) (Peng & Williams, 1994), the target that PQN uses with a maximum and that Kozuno et al. (2021) combine with SAC. The critic is trained on 
+
+Lλ
+
+> critic
+
+(θ) = Eτ
+
+[ |τ |
+
+∑
+
+> t=0
+
+{Qθ (st, a t) − Rλα,t }2]
+
+, (12) with targets computed by target networks (Appendix D); we refer to this variant as SAC-λ.
+
+3.4 Generalized Soft Advantage Estimation 
+
+Combining multi-step targets with soft advantages (Figure 1, middle right) allows the advantages themselves to be estimated by Generalized Advantage Estimation (GAE; Schulman et al. 2015). Formally, for λ ∈ (0 , 1] given a trajectory τ = ( s1, a 1, . . . , s T ) we estimate the advantages via 
+
+Aλ(st, a t) =  
+
+> T−t−1
+
+∑
+
+> i=0
+
+(λ γ )iδ(st+i, a t+i), (13) where δ(st, a t) = r(st, a t) + γV (st+1 ) − V (st). For λ = 1 it recovers the ( T − t)-step advantage estimate of Mnih et al. (2016), Aλ=1 (st, a t) = QT −t(st, a t) − V (st). Following Choe & Kim (2025) and property (i) of Lemma 2.1, this extends to soft advantages as 
+
+Aλα(st, a t) :=  
+
+> T−t−1
+
+∑
+
+> i=0
+
+(λ γ )iδα(st+i, a t+i), (14) where δα(st, a t) := r(st, a t) − αh (π(·| st)) + γV πα (st+1 ) − V πα (st); again, λ = 1 recovers the analogous ( T − t)-step expression (Appendix A). We train a soft value network on the soft λ-returns, the multi-step counterpart of Eq. 5, use it to compute soft GAEs from sampled rollouts (Figure 2c) and refer to this variant as SAC-GAE. Since GAE provides advantages only at sampled actions, SAC-GAE updates its policy with the soft score-function gradient (Shi et al., 2019; Choe & Kim, 2025) (Appendix D); here, unlike in SAC-A and SAC-DA, the advantage acts as a variance-reducing baseline. 53.5 Experience Replay 
+
+We consider SAC an off-policy algorithm, because its one-step target can be computed from transitions generated by any policy: the current policy only enters at the next state, through the expectation over 
+
+a′ ∼ π(·| s′). SAC-DA inherits this property; SAC-A only in part (Section 3.2). A multi-step target, in contrast, follows the actions taken along a trajectory, so without a correction such as importance weighting or trace cutting (Espeholt et al., 2018; Łyskawa et al., 2025), it is unbiased only for trajectories sampled from the policy being evaluated. Replay is nonetheless attractive, since reusing data typically improves sample efficiency. Following other methods that combine uncorrected multi-step targets with a replay buffer (Hessel et al., 2018; Fedus et al., 2020; Kozuno et al., 2021; Clark et al., 2024), we train both multi-step critics on trajectory segments drawn from a buffer and deliberately apply no correction. The result is an off-policy estimate of an on-policy target, which is biased by the age of the stored segments; for SAC-GAE-R, whose score-function update also uses the replayed actions, the same holds for the policy gradient. Whether that bias matters in practice is an empirical question we return to in the next section. These two variants, SAC-λ-R and SAC-GAE-R, complete the grid in Figure 1. 
+
+## 4 Experiments 
+
+We evaluate all variants on fourteen tasks from three suites: classic control (Acrobot, CartPole, MountainCar, Pendulum; Osband et al. 2020) and MinAtar (Freeway, Asterix, Breakout, SpaceInvaders; Young & Tian 2019), both from Gymnax (Lange, 2022), and six MuJoCo control tasks from Brax (Ant, HalfCheetah, Hopper, Humanoid, Reacher, Walker2d; Freeman et al. 2021). Since Pendulum and Brax tasks have continuous action spaces and the remaining seven tasks discrete ones, we report the two groups separately. As external reference points we include PPO and, on discrete tasks, PQN, sampled under the same protocol. All implementations build on Jaxnasium (Ponse et al., 2026); additional results, experimental details, and pseudo-code are given in Appendices B, C and D. 
+
+Evaluation protocol. We treat hyperparameters as part of the algorithm rather than tuning them away before reporting: a method that performs well only in a narrow region of its hyperparameter space demands more expertise to deploy on a new task than one that performs well broadly. For a fixed algorithm, let 
+
+Xh,m denote the normalized return after training with hyperparameters h ∈ Λ on task m ∈ M . Even for fixed h and m it is random, through initialization, training seeds and hardware nondeterminism (Agarwal et al., 2021b), and through the stochasticity of environment and policy at evaluation. We therefore treat 
+
+Xh,m : Ω train × Ωtest → R as a random variable and report properties of its distribution over h and m.Returns are normalized per task so that zero corresponds to the lowest achievable return and one to the 95th percentile of per-run mean returns pooled over all algorithms, which ties the scale neither to a single method nor to a single noisy draw. Configurations are drawn by Sobol sampling from a region centered on a configuration tuned once for SAC, with no prior tuning of any variant, which amounts to roughly 27 ,000 training runs; all sampled ranges are listed in Appendix C. Two properties of this protocol shape how the results should be read: Any statement about a distribution over hyperparameters is conditional on Λ: widening it lowers every score, and re-centering it can reorder methods. Centering on the baseline’s optimum is the conservative choice with respect to our variants. Moreover, Λ does not have the same dimension for every method: variants with a second critic carry additional learning rates and update counts, and are therefore sampled more sparsely at a fixed budget of H configurations per task, which again works against them. Each metric is defined in the subsection that reports it. 
+
+4.1 Robustness to Hyperparameter Selection 
+
+We first ask how likely a randomly drawn configuration is to work at all. The tail probability 
+
+P(h,m )∼U (Λ ,M)(Xh,m > τ ) is the probability that an algorithm reaches performance level τ on a randomly drawn task under uniformly drawn hyperparameters. We estimate it with an extended version of the score 6SAC SAC-A SAC-DA SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN 0.00 0.25 0.50 0.75 1.00 1.25  
+
+> normalised score τ
+> 0.0 0.2 0.4 0.6 0.8 1.0 ̂
+> FX(τ)
+
+(a) Discrete tasks 0.00 0.25 0.50 0.75 1.00 1.25   
+
+> normalised score τ
+> 0.0 0.2 0.4 0.6 0.8 1.0 ̂
+> FX(τ)
+
+(b) Continuous tasks 0.75 0.90 1.05  
+
+> peak score
+> 0.00 0.15 0.30 0.45
+> sensitivity Φ
+> 10% 20% 30%
+
+(c) Discrete tasks 0.50 0.75 1.00 1.25  
+
+> peak score
+> 0.00 0.15 0.30 0.45
+> sensitivity Φ
+> 10% 20% 30%
+
+(d) Continuous tasks 
+
+Figure 3: Performance profiles and peak performance. (a) & (b) Performance profiles: the share of configurations reaching normalized score τ (Eq. 15). (c) & (d) Peak score against sensitivity Φ; dashed lines mark constant relative sensitivity Φ /Peak, and the lower right corner is best. Bands and bars are 95% stratified bootstrap confidence intervals. PQN is only defined for discrete action spaces and is omitted for continuous action spaces. distribution of Agarwal et al. (2021b), ˆFX (τ ) := 1
+
+M
+
+> M
+
+∑
+
+> m=1
+
+1
+
+H
+
+> H
+
+∑
+
+> h=1
+
+1
+
+S
+
+> S
+
+∑
+
+> s=1
+
+1
+
+S′
+
+> S′
+
+∑
+
+> s′=1
+
+1{xh,m,s,s ′ >τ }, (15) where xh,m,s,s ′ is the normalized return of configuration h on task m under training seed s and evaluation seed 
+
+s′, and M , H, S, and S′ denote the numbers of tasks, configurations per task, training seeds per configuration, and post-training evaluations per training seed. In discrete-action tasks (Fig. 3a), no SAC variant rises clearly above SAC, while the two on-policy multi-step variants, SAC-λ and SAC-GAE, fall clearly below it. On continuous-action tasks (Fig. 3b), SAC-λ-R dominates every other method at every threshold and SAC-λ is second, both holding a larger share of workable configurations than SAC, the advantage variants and PPO. Two contrasts within the figure already localize the effect. Exchanging soft Q-values for soft advantages moves nothing: SAC-A and SAC-DA stay close to SAC throughout. Adding a replay buffer moves a great deal: SAC-λ-R and SAC-GAE-R sit above SAC-λ and SAC-GAE across the whole range, without any importance weighting or trace cutting of the replayed targets. 
+
+4.2 Peak vs. Sensitivity 
+
+A high chance of drawing a well-performing configuration does not need to come with a high ceiling. Peak performance measures the best score attainable per task, Peak m(X) = max  
+
+> h
+
+xh,m Peak( X) = 1
+
+M
+
+> M
+
+∑
+
+> m=1
+
+Peak m(X), (16) with xh,m = 1
+
+> S
+
+∑Ss=1 1
+
+> S′
+
+∑S′ 
+
+> s′=1
+
+xh,m,s,s ′ the empirical mean performance of a configuration on a task. Since peak performance permits per-task tuning, it says little about how well a configuration generalizes across tasks. We therefore pair it with the sensitivity (Adkins et al., 2024), the performance lost when a single configuration must serve all tasks, Φ( X) := Peak( X) − max 
+
+> h
+
+1
+
+M
+
+> M
+
+∑
+
+> m=1
+
+xh,m . (17) In discrete tasks (Fig. 3c), peaks cluster near 1 .1 for SAC, SAC-A, SAC-DA and SAC-λ-R, with relative sensitivities of roughly 20–30%. The on-policy multi-step variants lose about a third of that peak, and the GAE variants trade peak for a modest reduction in sensitivity without reaching PPO. 7SAC SAC-A SAC-DA SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN 0.0 0.4 0.8 1.2  
+
+> normalised score
+> per-task best transferred
+
+(a) Discrete Tasks 0.0 0.4 0.8 1.2   
+
+> normalised score
+> per-task best transferred
+
+(b) Continuous Tasks 8 16 32 64 128 256   
+
+> horizon N
+> 0.3 0.4 0.5 0.6
+> normalised score
+
+(c) Discrete Tasks 8 16 32 64 128 256   
+
+> horizon N
+> 0.2 0.4 0.6 0.8
+> normalised score
+
+(d) Continuous Tasks 
+
+Figure 4: Hyperparameter transfer performance and effect of the horizon. (a) & (b) Best per-task configuration against the best configuration transferred from all other tasks. (c) & (d) Normalized score against target horizon N . The on-policy variants (solid) are sampled at N ≤ 32, the replay-based ones (dashed) at N ≥ 32. Bands and bars are 95% stratified bootstrap confidence intervals. In continuous tasks (Fig. 3d) the picture is clearer. SAC-λ-R reaches a clearly higher peak than SAC at roughly the same absolute sensitivity. Because Φ is an absolute quantity, it flatters methods whose ceiling is low to begin with, so we read it relative to the peak: here SAC-λ-R leads with 0 .138, against 0 .175 for SAC and 0 .379 for PPO, and is thus at once the strongest variant and among the cheapest to tune. It ranks first in peak score on five of the seven continuous tasks (Fig. 6) and leads at every random-search budget (Fig. 7). SAC-GAE-R attains the second-highest peak, far above SAC-GAE, though at a higher sensitivity; replacing on-policy rollouts by replayed segments thus lifts both target types. The advantage variants do not improve on SAC here either: SAC-A, which by design has a single critic, reaches a lower peak, and SAC-DA a similar peak at a higher sensitivity. 
+
+4.3 Hyperparameter Transfer Performance 
+
+Sensitivity charges one configuration with serving every task at once. A milder question is what a configuration tuned on other tasks is worth on an unseen one. Let h− 
+
+> m
+
+= arg max h 1 
+
+> M−1
+
+∑  
+
+> m′̸=m
+
+xh,m ′ be the best shared configuration over all tasks except m; its score on m defines the transfer performance 
+
+Tm(X) = xh−
+
+> m,m
+
+, T (X) = 1
+
+M
+
+> M
+
+∑
+
+> m=1
+
+Tm(X). (18) Figure 4a plots transfer against peak score. On discrete tasks, SAC-A and SAC-DA match SAC on both bars, and the replay-based variants retain a larger share of their peak than the one-step variants, even where that peak is lower, as for SAC-GAE-R; given the intervals, however, no variant separates from SAC. On continuous tasks (Fig. 4b), SAC-λ-R leads on both bars and retains about 75% of its peak after transfer, followed by SAC-λ, whereas PPO loses more than half of its peak. 
+
+4.4 A closer look at the multi-step variants 
+
+In continuous tasks, the λ-return critics, and SAC-λ-R in particular, are the clearest improvement over SAC. Three ingredients set them apart: the λ-weighting of the target, its horizon, and, for SAC-λ-R and SAC-GAE-R, the replay buffer. All three vary within our search (Appendix C), so each can be examined without further runs, within the sampled ranges. 
+
+More weight on long returns does not help. Since λ is sampled independently of every other hyperparameter, its effect can be read off directly. Performance is flat or mildly decreasing in λ on both splits: of the sixteen slope estimates in Appendix B.5, two exclude zero, and both are negative. 
+
+Nor does a longer horizon. The on-policy variants use rollouts of 8 to 32 steps and the replay-based ones replay segments of 32 to 256, so an aggregate comparison between the two families conflates replay with a 8horizon up to eight times longer. Within each family, the score does not show a consistent increase with the horizon N on either split (Fig. 4c,d). 
+
+Replay does, despite the uncorrected bias. At N = 32, the one horizon both families share, the replay-based variants lead for both the λ-return and the GAE critic and on both splits (Fig. 4c,d), so the gain is not due to the horizon. Across all fourteen tasks, a randomly drawn run of a replay-based variant outperforms one of its on-policy counterparts for both critics (see also Fig. 8). This gain persists despite the uncorrected bias of the replayed targets. Since the replay-based variants also use larger batches and their own update schedule, this comparison bounds the combined effect of replay rather than isolating the bias. These results neither make the multi-step target dispensable nor isolate its contribution. Both the λ and the horizon ranges begin well above the one-step limit, so they show only that additional depth beyond them buys nothing. Relative to the one-step SAC, SAC-λ-R is clearly ahead on continuous tasks (Fig. 3b,d), but the two differ in more than their target, since the replay-based λ-return critic is trained on sampled segments, with larger batches and its own update schedule. We therefore attribute the gain of SAC-λ-R on continuous control to the combination it implements, λ-return targets computed on replayed segments, rather than to any single ingredient. What our data does rule out is that this gain depends on a large λ, a long horizon, or an off-policy correction. 
+
+## 5 Related Work 
+
+SAC as an instance of Policy Mirror Descent. Policy Mirror Descent (PMD; Geist et al. 2019; Vieillard et al. 2020; Xiao 2022; Vaswani et al. 2022; Lan 2023; Zhan et al. 2023) has emerged as a unifying framework for common RL algorithms. The PMD policy update (e.g. Lan 2023, Algorithm 1) 
+
+πk+1 (·| s) = arg min 
+
+> π∈Π
+
+{
+
+Ea∼π(·| s)[−Qπk 
+
+> α
+
+(s, a )] + α h (π(·| s)) + ηk Bω (π, π k; s)
+
+}
+
+, (19) where ηk > 0 is a sequence of step sizes, h some convex function and Bω some Bregman Divergence, which acts as a trust-region term that prevents large deviations from the previous policy. SAC is thus an instance of PMD, with h the negative Shannon entropy and no trust-region term, and the design choices studied here should transfer to other PMD algorithms, including those built on more general convex regularizers (Lee et al., 2019; Alfano et al., 2024). They are also complementary to efforts that add trust-region terms to SAC (Tomar et al., 2021; Neumann et al., 2025). 
+
+Multi-step returns & advantages in maximum-entropy RL. Soft advantage estimators are not new: Huang et al. (2020) introduced a variant of GAE for entropy-regularized objectives, and Choe & Kim (2025) use a closely related soft GAE in PPO-style algorithms, whereas we integrate soft advantages into SAC. Multi-step targets have likewise been studied in entropy-regularized settings (Shil et al., 2023), including for transformer-based policies (Tian et al., 2025); Huang et al. (2021) and Łyskawa et al. (2025) train SAC on replayed λ- and n-step returns, corrected by importance sampling and truncated importance sampling, respectively. Kozuno et al. (2021) show that Peng’s Q( λ), which applies no correction, often outperforms conservative operators in continuous control, and characterize when its bias is benign; for SAC, however, they drop the entropy bonus from all but the last step of the target for stability. Our results add to these findings: the full soft λ-return, entropy terms included and with a learned temperature, trains stably from replay across a distribution of hyperparameters. More broadly, recent work revisits core design assumptions in SAC, particularly regarding critic learning and target construction (Shil et al., 2023; Zhou et al., 2024; Asad et al., 2025); we complement it with a systematic study of soft advantages, multi-step targets and replay within a unified SAC framework. 
+
+## 6 Conclusion 
+
+We asked which choices in SAC’s critic influence its outcomes by keeping the policy objective fixed and varying three of these choices: the learned quantity, the rollout depth of the target, and experience replay. In total, we evaluated across six critic variants over an entire random hyperparameter search on fourteen tasks. 9Learning soft advantages instead of soft Q-values neither makes SAC more robust to its hyperparameters nor improves its performance: the advantage and dueling critics stay close to SAC in the share of well-performing configurations and in transfer, and on continuous tasks SAC-A even reaches a lower peak. Since SAC’s policy gradient is unaffected by state-dependent shifts of the critic, this is a finding about critic learning: in our setting, fitting the state-dependent level of the value is not what limits SAC’s critic. The soft GAE critic, in turn, adds nothing over the simpler λ-return critic. The clearest gain comes from training a λ-return critic on replayed segments. In continuous tasks, SAC-λ-R holds the largest share of well-performing configurations, reaches the highest peak score at a lower relative sensitivity than SAC, and keeps most of that peak under transfer across tasks. Its lead over the on-policy SAC-λ persists at a matched horizon, while neither a larger λ nor a longer horizon helps within the sampled ranges; on discrete tasks, no variant improves on SAC. In line with earlier evidence for uncorrected multi-step targets, the missing off-policy correction does not prevent these gains, and our results extend this observation to the full soft λ-return. In practice, SAC’s critic parametrization can thus be chosen on grounds other than return, and multi-step targets can be paired with replay without correction. Several limitations bound these conclusions. Our continuous-control evidence rests on a limited number of continuous action tasks, and given SAC’s prevalence in that domain, further benchmarks are warranted. The replay comparison bounds the combined effect of target staleness, larger batches and a different update schedule rather than isolating the bias, and since SAC-λ-R also differs from SAC in its training regime, we attribute its gain to the combination rather than to the multi-step target alone. Any statement about a distribution over hyperparameters is conditional on the search space, which we centered on a configuration tuned for SAC. Finally, we studied the variants in isolation from other recent SAC extensions to attribute effects cleanly; combining them remains open. 
+
+Acknowledgments 
+
+This work was financially supported by Shell Information Technology International Limited and the Nether-lands Enterprise Agency under the grant PPS23-3-03529461. 
+
+## References 
+
+Jacob Adkins, Michael Bowling, and Adam White. A method for evaluating hyperparameter sensitivity in reinforcement learning. Advances in Neural Information Processing Systems , 37:124820–124842, 2024. Alekh Agarwal, Nan Jiang, Sham M Kakade, and Wen Sun. Reinforcement Learning: Theory and Algorithms, 2021a. Rishabh Agarwal, Max Schwarzer, Pablo Samuel Castro, Aaron C Courville, and Marc Bellemare. Deep Reinforcement Learning at the Edge of the Statistical Precipice. In Advances in Neural Information Processing Systems , volume 34, pp. 29304–29320. Curran Associates, Inc., 2021b. Carlo Alfano, Sebastian Rene Towers, Silvia Sapora, Chris Lu, and Patrick Rebeschini. Learning mirror maps in policy mirror descent. In Seventeenth European Workshop on Reinforcement Learning , 2024. Reza Asad, Reza Babanezhad, and Sharan Vaswani. Revisiting actor-critic methods in discrete action off-policy reinforcement learning, 2025. URL https://arxiv.org/abs/2509.09838 .Leemon C Baird. Reinforcement learning in continuous time: Advantage updating. In Proceedings of 1994 IEEE International Conference on Neural Networks (ICNN’94) , volume 4, pp. 2448–2453. IEEE, 1994. Albert Bou, Matteo Bettini, Sebastian Dittert, Vikash Kumar, Shagun Sodhani, Xiaomeng Yang, Gianni De Fabritiis, and Vincent Moens. Torchrl: A data-driven decision-making library for pytorch. In B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun (eds.), International Conference on Representation Learning , volume 2024, pp. 1778–1811, 2024. Jean Seong Bjorn Choe and Jong-kook Kim. Maximum entropy softmax policy gradient via entropy advantage estimation. In James Kwok (ed.), Proceedings of the Thirty-Fourth International Joint Conference on 
+
+10 Artificial Intelligence, IJCAI-25 , pp. 4958–4966. International Joint Conferences on Artificial Intelligence Organization, 8 2025. doi: 10.24963/ijcai.2025/552. Main Track. Tyler Clark, Mark Towers, Christine Evers, and Jonathon Hare. Beyond the rainbow: High performance deep reinforcement learning on a desktop pc. arXiv preprint arXiv:2411.03820 , 2024. Jesse Dodge, Suchin Gururangan, Dallas Card, Roy Schwartz, and Noah A Smith. Show your work: Improved reporting of experimental results. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) , pp. 2185–2194, 2019. Lasse Espeholt, Hubert Soyer, Remi Munos, Karen Simonyan, Vlad Mnih, Tom Ward, Yotam Doron, Vlad Firoiu, Tim Harley, Iain Dunning, et al. Impala: Scalable distributed deep-rl with importance weighted actor-learner architectures. In International conference on machine learning , pp. 1407–1416. PMLR, 2018. Benjamin Eysenbach and Sergey Levine. Maximum entropy RL (provably) solves some robust RL problems. In International Conference on Learning Representations , 2022. William Fedus, Prajit Ramachandran, Rishabh Agarwal, Yoshua Bengio, Hugo Larochelle, Mark Rowland, and Will Dabney. Revisiting fundamentals of experience replay. In International conference on machine learning , pp. 3061–3071. PMLR, 2020. C. Daniel Freeman, Erik Frey, Anton Raichuk, Sertan Girgin, Igor Mordatch, and Olivier Bachem. Brax - a differentiable physics engine for large scale rigid body simulation, 2021. URL http://github.com/ google/brax .Matteo Gallici, Mattie Fellows, Benjamin Ellis, Bartomeu Pou, Ivan Masmitja, Jakob Nicolaus Foerster, and Mario Martin. Simplifying deep temporal difference learning. arXiv preprint arXiv:2407.04811 , 2024. Matthieu Geist, Bruno Scherrer, and Olivier Pietquin. A Theory of Regularized Markov Decision Processes. In Proceedings of the 36th International Conference on Machine Learning , pp. 2160–2169. PMLR, may 2019. Tuomas Haarnoja, Haoran Tang, Pieter Abbeel, and Sergey Levine. Reinforcement Learning with Deep Energy-Based Policies. In Proceedings of the 34th International Conference on Machine Learning , pp. 1352–1361. PMLR, jul 2017. Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor. In Proceedings of the 35th International Conference on Machine Learning , pp. 1861–1870. PMLR, jul 2018a. Tuomas Haarnoja, Aurick Zhou, Kristian Hartikainen, George Tucker, Sehoon Ha, Jie Tan, Vikash Kumar, Henry Zhu, Abhishek Gupta, Pieter Abbeel, et al. Soft actor-critic algorithms and applications. arXiv preprint arXiv:1812.05905 , 2018b. Matteo Hessel, Joseph Modayil, Hado Van Hasselt, Tom Schaul, Georg Ostrovski, Will Dabney, Dan Horgan, Bilal Piot, Mohammad Azar, and David Silver. Rainbow: Combining improvements in deep reinforcement learning. In Proceedings of the AAAI conference on artificial intelligence , 2018. Shiyu Huang, Bin Wang, Hang Su, Dong Li, Jianye Hao, Jun Zhu, and Ting Chen. Off-policy training for truncated td ( λ) boosted soft actor-critic. In Pacific Rim International Conference on Artificial Intelligence ,pp. 46–59. Springer, 2021. Yubo Huang, Xuechun Wang, Luobao Zou, Zhiwei Zhuang, and Weidong Zhang. Soft policy optimization using dual-track advantage estimator. In 2020 IEEE International Conference on Data Mining (ICDM) ,pp. 1064–1069. IEEE, 2020. Yash Jhaveri, Harley Wiltzer, Patrick Shafto, Marc G Bellemare, and David Meger. Convergence theorems for entropy-regularized and distributional reinforcement learning. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. 11 Tadashi Kozuno, Yunhao Tang, Mark Rowland, Rémi Munos, Steven Kapturowski, Will Dabney, Michal Valko, and David Abel. Revisiting peng’s q ( 
+
+λ
+
+) for modern reinforcement learning. In International Conference on Machine Learning , pp. 5794–5804. PMLR, 2021. Guanghui Lan. Policy mirror descent for reinforcement learning: Linear convergence, new sampling complexity, and generalized problem classes. Mathematical Programming , 198(1):1059–1106, mar 2023. ISSN 1436-4646. doi: 10.1007/s10107-022-01816-5. Robert Tjarko Lange. gymnax: A JAX-based reinforcement learning environment library, 2022. URL 
+
+http://github.com/RobertTLange/gymnax .Kyungjae Lee, Sungyub Kim, Sungbin Lim, Sungjoon Choi, and Songhwai Oh. Tsallis reinforcement learning: A unified framework for maximum entropy reinforcement learning. arXiv preprint arXiv:1902.00137 , 2019. Jincheng Mei, Chenjun Xiao, Csaba Szepesvari, and Dale Schuurmans. On the global convergence rates of softmax policy gradient methods. In International conference on machine learning , pp. 6820–6829. PMLR, 2020. Volodymyr Mnih, Adria Puigdomenech Badia, Mehdi Mirza, Alex Graves, Timothy Lillicrap, Tim Harley, David Silver, and Koray Kavukcuoglu. Asynchronous methods for deep reinforcement learning. In 
+
+International conference on machine learning , pp. 1928–1937. PmLR, 2016. Gergely Neu, Anders Jonsson, and Vicenç Gómez. A unified view of entropy-regularized markov decision processes. arXiv preprint arXiv:1705.07798 , 2017. Samuel Neumann, Jiamin He, Adam White, and Martha White. Investigating the utility of mirror descent in off-policy actor-critic. In Reinforcement Learning Conference , 2025. Ian Osband, Yotam Doron, Matteo Hessel, John Aslanides, Eren Sezener, Andre Saraiva, Katrina McKinney, Tor Lattimore, Csaba Szepesvári, Satinder Singh, Benjamin Van Roy, Richard Sutton, David Silver, and Hado van Hasselt. Behaviour suite for reinforcement learning. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum?id=rygf-kSYwH .Jing Peng and Ronald J Williams. Incremental multi-step q-learning. In Machine Learning Proceedings 1994 ,pp. 226–232. Elsevier, 1994. Koen Ponse, Aske Plaat, and Thomas M. Moerland. Jaxnasium: Embracing pytrees for any-agent, cross-suite reinforcement learning, 2026. URL https://arxiv.org/abs/2610.36075 .Antonin Raffin, Ashley Hill, Adam Gleave, Anssi Kanervisto, Maximilian Ernestus, and Noah Dormann. Stable-baselines3: Reliable reinforcement learning implementations. Journal of machine learning research ,22(268):1–8, 2021. John Schulman, Philipp Moritz, Sergey Levine, Michael Jordan, and Pieter Abbeel. High-dimensional continuous control using generalized advantage estimation. arXiv preprint arXiv:1506.02438 , 2015. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. Harm Seijen and Rich Sutton. True online td (lambda). In International Conference on Machine Learning ,pp. 692–700. PMLR, 2014. Wenjie Shi, Shiji Song, and Cheng Wu. Soft Policy Gradient Method for Maximum Entropy Deep Reinforce-ment Learning, September 2019. Manas Shil, G. N. Pillai, and M. K. Gupta. Improved Soft Actor-Critic: Reducing Bias and Estimation Error for Fast Learning. In 2023 IEEE International Students’ Conference on Electrical, Electronics and Computer Science (SCEECS) , pp. 1–6, February 2023. doi: 10.1109/SCEECS57921.2023.10063058. 12 Richard S Sutton. Learning to predict by the methods of temporal differences. Machine learning , 3(1):9–44, 1988. Corentin Tallec, Léonard Blier, and Yann Ollivier. Making deep q-learning methods robust to time discretiza-tion. In International Conference on Machine Learning , pp. 6096–6104. PMLR, 2019. Dong Tian, Ge Li, Hongyi Zhou, Onur Celik, and Gerhard Neumann. Chunking the critic: A transformer-based soft actor-critic with n-step returns. arXiv preprint arXiv:2503.03660 , 2025. Manan Tomar, Lior Shani, Yonathan Efroni, and Mohammad Ghavamzadeh. Mirror Descent Policy Opti-mization, jun 2021. Sharan Vaswani, Olivier Bachem, Simone Totaro, Robert Müller, Shivam Garg, Matthieu Geist, Marlos C Machado, Pablo Samuel Castro, and Nicolas Le Roux. A general class of surrogate functions for stable and efficient reinforcement learning. In International Conference on Artificial Intelligence and Statistics , pp. 8619–8649. PMLR, 2022. Nino Vieillard, Tadashi Kozuno, Bruno Scherrer, Olivier Pietquin, Rémi Munos, and Matthieu Geist. Leverage the average: an analysis of kl regularization in reinforcement learning. Advances in Neural Information Processing Systems , 33:12163–12174, 2020. Ziyu Wang, Tom Schaul, Matteo Hessel, Hado Hasselt, Marc Lanctot, and Nando Freitas. Dueling network architectures for deep reinforcement learning. In International conference on machine learning , pp. 1995– 2003. PMLR, 2016. Christopher John Cornish Hellaby Watkins. Learning from delayed rewards, 1989. Lin Xiao. On the convergence rates of policy gradient methods. Journal of Machine Learning Research , 23 (282):1–36, 2022. Kenny Young and Tian Tian. Minatar: An atari-inspired testbed for thorough and reproducible reinforcement learning experiments. arXiv preprint arXiv:1903.03176 , 2019. Wenhao Zhan, Shicong Cen, Baihe Huang, Yuxin Chen, Jason D Lee, and Yuejie Chi. Policy mirror descent for regularized reinforcement learning: A generalized framework with linear convergence. SIAM Journal on Optimization , 33(2):1061–1091, 2023. Haibin Zhou, Tong Wei, Zichuan Lin, Junliang Xing, Yuanchun Shi, Li Shen, Chao Yu, Deheng Ye, et al. Revisiting discrete soft actor-critic. arXiv preprint arXiv:2209.10081 , 2022. Haibin Zhou, Tong Wei, Zichuan Lin, junyou li, Junliang Xing, Yuanchun Shi, Li Shen, Chao Yu, and Deheng Ye. Revisiting Discrete Soft Actor-Critic, November 2024. Brian D Ziebart. Modeling purposeful adaptive behavior with the principle of maximum causal entropy .Carnegie Mellon University, 2010. Jakub Łyskawa, Jakub Lewandowski, and Paweł Wawrzyński. Sacn: Soft actor-critic with n-step returns, 2025. URL https://arxiv.org/abs/2512.13165 .13 A Proofs 
+
+A.1 Soft Advantages 
+
+As highlighted in the related work, we can see the SAC policy update as an instance of Policy Mirror Descent (PMD; e.g. Zhan et al. 2023). In fact, for all instances of PMD, the (soft) action-value function Qπα can be replaced by the corresponding (soft) advantage function. 
+
+πk+1 (·| s) = arg min 
+
+> π∈Π
+
+{Ea∼π(·| s)[−Qπk 
+
+> α
+
+(s, a )] + α h (π(·| s)) + ηk Bω (π, π k; s)}
+
+= arg min 
+
+> π∈Π
+
+{Ea∼π(·| s)[−Aπk 
+
+> α
+
+(s, a )] − Ea∼πk (·| s)[Qπk 
+
+> α
+
+(s, a )] + α h (π(·| s)) + ηk Bω (π, π k; s)} . (20) The term Ea∼πk (·| s)[Qπk 
+
+> α
+
+(s, a )] in the final expression can be dropped because it does not depend on π. This holds for any convex h and is not limited to the negative Shannon entropy. 
+
+Proof of Lemma 2.1. We prove the two properties of Lemma 2.1 together with a third, which relates soft and unregularized advantages. 
+
+Lemma A.1 (Lemma 2.1, extended) . The soft advantages Aπα satisfy the following properties for any 
+
+(s, a ) ∈ S × A , α ≥ 0:(i) Aπα(s, a ) = r(s, a ) − αh (π(·| s)) + γEs′∼p(·| s,a )[V πα (s′)] − V πα (s),(ii) Ea∼π(·| s)[Aπα(s, a )] = 0 ,(iii) Aπα(s, a ) = Aπ (s, a ) + αH (π|s) − αH (π|s, a ), where H(π|s, a ) and H(π|s) denote the cumulative discounted negative entropy starting with state-action pair s, a and in state s, respectively: 
+
+H(π|s, a ) := Eτ ∼pπ |s0=s,a 0=a[∑
+
+> t≥0
+
+γth(π(·| st))] 
+
+H(π|s) := Ea∼π(·| s)) [H(π|s, a )] 
+
+Proof. Recall that the soft Q-function is defined as 
+
+Qπα(s, a ) = r(s, a ) + γEs′∼p(·| s,a )[V πα (s′)] . (21) Additionally, we can re-express the relation between Qπα and V πα as 
+
+Ea∼π(·| s)[Qπα(s, a )] = V πα (s) + αh (π(·| s)) . (22) (i) Now, we can insert the relations of Eqs. 21 and 22 into the definition of the soft advantages 
+
+Aπα(s, a ) = Qπα(s, a ) − Ea∼π(·| s)[Qπα(s, a )] = r(s, a ) + γEs′∼p(·| s,a )[V πα (s′)] − V πα (s) − αh (π(·| s)) . (23) (ii) follows from definition as 
+
+Ea∼π(·| s)[Aπα(s, a )] = Ea∼π(·| s)[Qπα(s, a )] − Ea∼π(·| s)[Qπα(s, a )] = 0 . (24) (iii) By definition again, we can express 
+
+V πα (s) = V π (s) − αH (π|s). (25) Inserting this into the expression obtained in (i) yields (after some reorganization of terms) 
+
+Aπα(s, a ) = r(s, a ) + γEs′∼p(·| s,a )[V πα (s′)] − V πα (s) − αh (π(·| s)) (26) = r(s, a ) + γEs′∼p(·| s,a )[V π (s′)] − V π (s) (27) + αH (π|s) (28) 
+
+− α γ Es′∼p(·| s,a ),a ′∼π(·| s′)[H(π|s′, a ′)] − αh (π(·| s)) (29) = Aπ (s, a ) + αH (π|s) − αH (π|s, a ). (30) 14 Notably, we can also immediately see that if we use the soft value function as baseline subtraction, i.e. ˜Aπα(s, a ) := Qπα(s, a ) − V πα (s), we obtain 
+
+Ea∼π(·| s)[ ˜Aπα(s, a )] = Ea∼π(·| s)[Qπα(s, a )] − V πα (s) = αh (π(·| s)) , (by Eq. 22) which does not vanish for non-deterministic policies in the regularized case ( α > 0). 
+
+A.2 Soft n-step returns 
+
+Though soft n-step returns have been used before with SAC (Shil et al., 2023; Łyskawa et al., 2025; Tian et al., 2025), we give the details behind Eqs. 10 and 11 for completeness. Throughout, we write 
+
+Eπ Q(s) := Ea∼π(·| s)[Q(s, a )] and H(s) := H(π(·| s)). 
+
+Claim The n-step soft Bellman Operator satisfies the following expression: (T πα )nQ(st, a t) = Eτ |st,a t
+
+[n−1∑
+
+> k=0
+
+γkrt+k − α
+
+> n
+
+∑
+
+> k=1
+
+γk log π(at+k | st+k) + γnQ(st+n, a t+n)
+
+]
+
+.
+
+Proof. Let π be a fixed policy and define the soft Bellman operator (T πα Q)( s, a ) = r(s, a ) + γ (P π (Q − α log π))( s, a ),
+
+where ( P π f )( s, a ) := Es′∼p(·| s,a ), a ′∼π(·| s′)
+
+[f (s′, a ′)] and log π(s, a ) := log π(a | s). We proceed by induction on n.
+
+Base case ( n = 1 ). By definition of the soft Bellman operator, (T πα Q)( st, a t) = rt + γEτ |st,a t [Q(st+1 , a t+1 ) − α log π(at+1 | st+1 )] ,
+
+which coincides with the claimed expression for n = 1. 
+
+Inductive step. Assume the statement holds for some n ≥ 1, i.e. (T πα )nQ(st, a t) = Eτ |st,a t
+
+[n−1∑
+
+> k=0
+
+γkrt+k − α
+
+> n
+
+∑
+
+> k=1
+
+γk log π(at+k | st+k) + γnQ(st+n, a t+n)
+
+]
+
+.
+
+Consider n + 1. Using the operator definition, (T πα )n+1 Q(st, a t) = rt + γEτ |st,a t [( T πα )nQ(st+1 , a t+1 ) − α log π(at+1 | st+1 )] .
+
+Applying the induction hypothesis at time t + 1 and using the law of total expectation yields (T πα )n+1 Q(st, a t) = Eτ |st,a t
+
+[
+
+rt +
+
+> n−1
+
+∑
+
+> k=0
+
+γk+1 rt+1+ k
+
+− α
+
+(
+
+γ log π(at+1 | st+1 ) + 
+
+> n
+
+∑
+
+> k=1
+
+γk+1 log π(at+1+ k | st+1+ k)
+
+)
+
++ γn+1 Q(st+n+1 , a t+n+1 )
+
+]
+
+.
+
+Re-indexing the sums gives (T πα )n+1 Q(st, a t) = Eτ |st,a t
+
+[ n∑
+
+> k=0
+
+γkrt+k − α
+
+> n+1
+
+∑
+
+> k=1
+
+γk log π(at+k | st+k) + γn+1 Q(st+n+1 , a t+n+1 )
+
+]
+
+,
+
+which is exactly the desired form. This completes the induction. 15 Along a trajectory sampled from π, at+k ∼ π(·| st+k), so by the tower property each term −α log π(at+k|st+k)can be replaced by its conditional expectation αH(st+k), and the bootstrap Q(st+n, a t+n) by Eπ Q(st+n), without changing the expectation: (T πα )nQ(st, a t) = Eτ |st,a t
+
+[n−1∑
+
+> k=0
+
+γkrt+k + α
+
+> n
+
+∑
+
+> k=1
+
+γkH(st+k) + γnEπ Q(st+n)
+
+]
+
+.
+
+This motivates the soft n-step return of Eq. 10 as an unbiased estimate of the n-step soft Bellman operator, 
+
+R(n) 
+
+> α,t
+
+=
+
+> n−1
+
+∑
+
+> k=0
+
+γk{rt+k + γα H(st+k+1 )} + γnEπ Q(st+n). (31) Unlike in Tian et al. (2025), the entropy enters as a discounted bonus for the next state. This matches the soft Bellman operator, since R(1)  
+
+> α,t
+
+= rt + γ(Eπ Q(st+1 ) + αH(st+1 )) is the one-step target of Eq. 1. Based on Eq. 9, we further define the λ-return for a trajectory of length N as 
+
+Rλα,t := (1 − λ) 
+
+> N−1
+
+∑
+
+> n=1
+
+λn−1R(n) 
+
+> α,t
+
++ λN −1R(N ) 
+
+> α,t
+
+.
+
+While the recursive relation in Eq. 11 was used before, e.g. by Huang et al. (2021), we provide a formal proof for completeness. 
+
+Claim The soft λ-returns satisfy the recursion 
+
+Rλα,t =
+
+{
+
+rt if st+1 is terminal, 
+
+rt + γ{(1 − λ)Eπ Q(st+1 ) + αH(st+1 ) + λR λα,t +1 
+
+} otherwise. (11) 
+
+Proof. Write rα,π t := rt + γα H(st+1 ). Then R(1)  
+
+> α,t
+
+= rα,π t + γ Eπ Q(st+1 ) and, separating the first term, 
+
+R(n) 
+
+> α,t
+
+= rα,π t + γR (n−1)  
+
+> α,t +1
+
+for n ≥ 2. Inserting both into the definition, 
+
+Rλα,t = (1 − λ)(rα,π t + γ Eπ Q(st+1 )) + (1 − λ) 
+
+> N−1
+
+∑
+
+> n=2
+
+λn−1(rα,π t + γR (n−1) 
+
+> α,t +1
+
+) + λN −1(rα,π t + γR (N −1) 
+
+> α,t +1
+
+)
+
+= rα,π t + (1 − λ)γ Eπ Q(st+1 ) + γλ 
+
+{
+
+(1 − λ) 
+
+> N−2
+
+∑
+
+> n=1
+
+λn−1R(n) 
+
+> α,t +1
+
++ λN −2R(N −1) 
+
+> α,t +1
+
+}
+
+,
+
+where we grouped rα,π t and re-indexed the sum. The expression in braces is Rλα,t +1 , hence 
+
+Rλα,t = rα,π t + (1 − λ)γ Eπ Q(st+1 ) + γλR λα,t +1 = rt + γ{(1 − λ)Eπ Q(st+1 ) + αH(st+1 ) + λR λα,t +1 
+
+}.
+
+By convention, Eπ Q(st+1 ) = 0, Rλα,t +1 = 0 and rα,π t = rt if st+1 is terminal, which yields the stated recursion. Algorithm 4 computes the same recursion in the equivalent form Rλα,t = rt + γ{(1 − λ) ¯V (st+1 ) + λ(Rλα,t +1 +
+
+αH(st+1 )) }, with the soft value ¯V (s) = Eπ Q(s) + αH(s). 16 A.3 GAE for soft advantages 
+
+As in the unregularized case ( α = 0), for λ = 1 the soft GAE recovers a ( T − t)-step lookahead minus the value of the current state: 
+
+Aλ=1  
+
+> α
+
+(st, a t) =  
+
+> T−t−1
+
+∑
+
+> i=0
+
+γi{r(st+i, a t+i) − αh (π(·| st+i)) + γV α(st+i+1 ) − Vα(st+i)}
+
+= 
+
+> T−t−1
+
+∑
+
+> i=0
+
+γi{r(st+i, a t+i) − αh (π(·| st+i)) } + γT −tVα(sT ) − Vα(st) (telescoping) = R(T −t) 
+
+> α,t
+
+− Vα(st) − αh (π(·| st)) ,
+
+where the last step holds for h = −H , with Q = Qπα in Eq. 31 and Vα(sT ) = Eπ Q(sT ) + αH(sT ). 17 B Additional Results 
+
+This appendix complements the main results with a variance decomposition, per-task rankings, probabilities of improvement at matched horizon, random-search budget curves, the λ ablation and per-task performance profiles. 
+
+B.1 Variance Decomposition 
+
+An interesting question is whether the design choices change where performance variance originates. Per-formance varies with the task, the configuration, the training seed and the evaluation episode, and we decompose the total sum of squares accordingly. With Sm training seeds on task m, nm = HS mS′,
+
+xh,m,s = 1
+
+> S′
+
+∑ 
+
+> s′
+
+xh,m,s,s ′ , xh,m as in Section 4, μm = 1
+
+> H
+
+∑ 
+
+> h
+
+xh,m and μ = 1
+
+> M
+
+∑ 
+
+> m
+
+μm,
+
+SS task = ∑
+
+> m
+
+nm(μm − μ)2,SS config = ∑
+
+> m
+
+SmS′ ∑
+
+> h
+
+(xh,m − μm
+
+)2,SS seed = ∑
+
+> m
+
+S′ ∑
+
+> h,s
+
+(xh,m,s − xh,m 
+
+)2,SS episode = ∑
+
+> h,m,s,s ′
+
+(xh,m,s,s ′ − xh,m,s 
+
+)2,
+
+(32) and each share is SS ℓ
+
+/ ∑  
+
+> ℓ′
+
+SS ℓ′ .The resulting profiles are shown in Figures 5. On continuous tasks the one-step methods draw about 75% of their variance from differences between tasks, whereas the multi-step variants draw only 24–45%, with correspondingly more coming from configuration, seed and episode noise. A smaller between-task share means performance depends less on which task happens to be drawn, which is consistent with the stronger transfer reported above. On discrete tasks the pattern reverses, and what distinguishes the multi-step variants there is instead a smaller training-noise share at comparable evaluation noise. The comparison is biased by performance level, since a method that fails uniformly has little seed-to-seed variance left to decompose. Restricting the decomposition to each method’s top-quartile configurations (Fig. 5b,d) shrinks the configuration share and raises the seed and episode shares, as expected, but leaves the between-task trend mostly intact. SAC SAC-A SAC-DA SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN 0% 50% 100% 
+
+> variance share
+> episode seed config task
+
+(a) Discrete Tasks all configurations 0% 50% 100% 
+
+> variance share
+> episode seed config task
+
+(b) Discrete Tasks top-quartile configurations 0% 50% 100% 
+
+> variance share
+> episode seed config task
+
+(c) Continuous Tasks all configurations 0% 50% 100% 
+
+> variance share
+> episode seed config task
+
+(d) Continuous Tasks top-quartile configurations 
+
+Figure 5: Variance decomposition. Share of total variance attributable to task, configuration, training seed and evaluation episode, over all configurations (a, c) and over each method’s top-quartile configurations (b, d), on discrete (a, b) and continuous (c, d) tasks. 18 SAC SAC-A SAC-DA SAC-λ                                                                                                                                                                                                                  
+
+> SAC-λRSAC-GAE SAC-GAE-R PPO PQN Acrobot CartPole MountainCar MinAsterix MinBreakout MinFreeway MinSpaceInvaders Pendulum Ant Halfcheetah Hopper Humanoid Reacher Walker2d
+> 38271645911111111984361527931264879514392856736582971425491863725381746476218536532174868512437265847312435187686741523
+> SAC SAC-A SAC-DA SAC-λ
+> SAC-λRSAC-GAE SAC-GAE-R PPO PQN
+> 68572431986723145953487612942875963114273856946783952137581942634271856374218653641285767541328365428712543187676821435
+> 123456789
+> rank (1 = best)
+
+Figure 6: Per-task ranks (1 = best). Left: by peak score max h xh,m ; right: by IQM h(xh,m ). PQN is not defined for continuous action spaces. 
+
+B.2 Per Task Ranking 
+
+Due to the amount of environment-algorithm combinations, most of our analysis has been focused on aggregate metrics. To complement this view Figure 6 shows the per-task ranks of all methods, by peak score max h xh,m 
+
+(left) and by the interquartile mean over configurations, IQM h(xh,m ) (right), a proxy for performance under limited tuning. By peak score, SAC-λ-R ranks first on nine of the fourteen tasks, including five of the seven continuous ones, and never below fourth. By IQM the picture is similar but less pronounced: SAC-λ-R ranks first or second on every continuous task, but drops to seventh on MountainCar. 
+
+B.3 Random-Search Budget Curve 
+
+Ranking by the IQM in Section B.2 was used as a proxy for how rankings change with limited tuning. To further investigate that effect, we use budget curves (Dodge et al., 2019): they give the expected score of the best shared configuration among n randomly drawn ones, 
+
+B(n) = ES⊆{ 1,...,H }, |S| =n
+
+[
+
+max 
+
+h∈S 
+
+1
+
+M
+
+M∑
+
+m=1 
+
+xh,m 
+
+]
+
+. (33) On continuous tasks (Figure 7a), SAC-λ-R leads at every budget and SAC-λ is second, so their advantage does not depend on how much tuning is spent. On discrete tasks (Figure 7b), SAC, the advantage variants and the replay-based variants overlap almost fully and gain similarly from tuning, the on-policy multi-step variants stay below, and PQN gains most from additional configurations. 19 SAC SAC-A SAC-DA SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN 21 23 25
+
+configurations n
+
+0.4 0.6 0.8 1.0 
+
+> B(n)
+
+(a) Continuous 21 23 25
+
+configurations n
+
+0.4 0.6 0.8  
+
+> B(n)
+
+(b) Discrete 
+
+Figure 7: Random-search budget curves. Expected normalized score of the best shared configuration among n sampled ones. Bands are 95% bootstrap confidence intervals. 0.0 0.5 1.0   
+
+> P(X>Y)
+> Acrobot CartPole MountainCar MinAsterix MinBreakout MinFreeway MinSpaceInvaders Pendulum Ant Halfcheetah Hopper Humanoid Reacher Walker2d discrete continuous all 14 tasks
+
+(a) X=SAC-GAE-R, Y=SAC-GAE 0.0 0.5 1.0   
+
+> P(X>Y)
+> Acrobot CartPole MountainCar MinAsterix MinBreakout MinFreeway MinSpaceInvaders Pendulum Ant Halfcheetah Hopper Humanoid Reacher Walker2d discrete continuous all 14 tasks
+
+(b) X=SAC-λ-R, Y=SAC-λ
+
+Figure 8: Probability of improvement at N = 32 of the replay-based over the on-policy variant, per task and aggregated. (a): SAC-GAE-R vs. SAC-GAE; (b): SAC-λ-R vs. SAC-λ; the dashed line marks 0 .5. Bars are 95% stratified bootstrap confidence intervals. 
+
+B.4 Replay at Matched Horizon: Probability of Improvement 
+
+To complement Figure 4c,d, we compare each replay-based variant with its on-policy counterpart at the shared horizon N = 32, using the probability of improvement of Agarwal et al. (2021b), extended to configurations and evaluation seeds. For methods X and Y ,
+
+P (X > Y ) = 1
+
+M
+
+M∑
+
+m=1 
+
+Pm(X > Y ),Pm(X > Y ) = 1(HSS ′)2
+
+∑
+
+h,s,s ′
+
+∑
+
+˜h, ˜s, ˜s′
+
+(
+
+1{xh,m,s,s ′ >y ˜h,m, ˜s, ˜s′ } + 12 1{xh,m,s,s ′ =y˜h,m, ˜s, ˜s′ }
+
+)
+
+,
+
+(34) where the sums run over the configurations sampled with N = 32. For both replay-base variants the CI for the probability of improvement does not contain zero on either suite (Figure 8a,b), demonstrating a statistically significant improvement. 20 0.6 0.7 0.8 0.9 
+
+## sampled λ (bin centres) 
+
+0.30 0.45 0.60 
+
+> normalised score
+
+discrete 0.6 0.7 0.8 0.9 
+
+## sampled λ (bin centres) 
+
+0.4 0.6 0.8 
+
+continuous SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN Figure 9: Effect of the sampled λ. normalized score against λ, binned at bin centers, for every method that samples it. The λ-return critics are sampled on [0 .50 , 0.95] and the GAE critics on [0 .85 , 0.99], so the two families occupy different parts of the axis and should not be compared by slope across families. Bands are 95% bootstrap confidence intervals; slopes are given in Table 1. 
+
+B.5 λ Ablations 
+
+λ is sampled for every multi-step variant, independently of all other hyperparameters, so the score against 
+
+λ within one variant is a genuine ablation of the multi-step target: same architecture, data and update schedule, but a longer effective horizon (Figure 9). We quantify it by two weighted least-squares slopes of the task-averaged score of a configuration, 1
+
+> M
+
+∑ 
+
+> m
+
+xh,m , in λ (Table 1). The marginal slope regresses on λ alone and thus averages over all other hyperparameters; the partial slope is the λ coefficient in a regression on all hyperparameters sampled for the method, with learning rates, sizes and counts on a log scale. Since λ is sampled independently of the other hyperparameters, both estimate the same effect, but the partial slope is more precise, as the controls absorb variance that λ does not explain. Of the sixteen estimates, only two exclude zero, and both are negative: within the sampled ranges, placing more weight on long-range returns does not improve performance. 21 Table 1: Effect of λ on performance. Slopes of the task-averaged normalized score of a configuration (in percentage points) per +0 .1 in λ, from weighted least squares. The marginal slope regresses on λ alone; the partial slope is the λ coefficient in a regression on all hyperparameters sampled for the method, with learning rates, sizes and counts on a log scale. For the GAE critics, λ is the GAE coefficient, sampled on [0 .85 , 0.99]; the λ-return critics sample λ ∈ [0 .50 , 0.95]. Lower and upper bounds are 95% bootstrap confidence intervals; bold marks intervals that exclude zero.                                                        
+
+> Marginal Partial Method slope lower upper slope lower upper
+> Discrete
+> SAC-λ+0 .3−1.3+2 .0+0 .3−1.1+1 .8SAC-λ-R −2.0−4.1+0 .1−2.2−3.6−0.6SAC-GAE −2.6−8.2+3 .1−3.2−6.9+0 .4SAC-GAE-R −0.8−7.3+5 .2−0.9−5.5+3 .5
+> Continuous
+> SAC-λ−2.7−5.3−0.1−1.4−3.2+0 .5SAC-λ-R −1.1−3.3+1 .1−1.4−3.1+0 .2SAC-GAE −1.4−6.0+3 .1+0 .5−3.5+4 .1SAC-GAE-R −3.5−10 .0+3 .3−1.1−6.5+4 .8
+
+B.6 Per Environment Performance Profiles 
+
+22 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂
+
+> FX(τ)
+
+(a) CartPole 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(b) Acrobot 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(c) Pendulum 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(d) MountainCar 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂
+
+> FX(τ)
+
+(e) MinAsterix 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(f) MinBreakout 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(g) MinFreeway 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(h) MinSpaceInvaders 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂
+
+> FX(τ)
+
+(i) Ant 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(j) Halfcheetah 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(k) Hopper 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(l) Walker2d 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂
+
+> FX(τ)
+
+(m) Reacher 0.00 0.25 0.50 0.75 1.00 1.25 
+
+normalised score τ
+
+0.0 0.2 0.4 0.6 0.8 1.0 ̂ 
+
+> FX(τ)
+
+(n) Humanoid SAC SAC-A SAC-DA SAC-λ SAC-λR SAC-GAE SAC-GAE-R PPO PQN 
+
+Figure 10: Per-task performance profiles : share of configurations and seeds reaching normalized score τ
+
+on each task (Eq. 15 with M = 1). 23 C Experiment Details 
+
+C.1 Random Search Protocol 
+
+For each of the M environments, we perform a random hyperparameter search consisting of H sampled configurations. For each configuration, we train an agent S times with different random seeds. After training each agent, we additionally perform S′ = 50 evaluation rollouts per seed, yielding robust estimates of post-training performance. Hyperparameter configurations are drawn by Sobol sampling over the ranges specified in Table 3. All remaining hyperparameters are held fixed to the default SAC settings. The numbers for each sweep are specified in Table 2. Hyperparameters that exist only in a subset of the variants are sampled on the same footing as the shared ones: λ ∈ [0 .50 , 0.95] for the λ-return critics, the GAE coefficient in [0 .85 , 0.99] for the GAE critics, and the horizon N , i.e. the rollout length for the on-policy variants and the replayed segment length for the replay-based ones. Table 2: Configurations per task ( H; minimum and maximum across the tasks of a suite), training seeds per configuration ( S) and resulting training runs per suite.                                                                                                                            
+
+> Hmin Hmax STraining runs Method Brax CC MinAtar Brax CC MinAtar Brax CC MinAtar Brax CC MinAtar PPO 64 64 64 64 64 64 3531152 1280 768 PQN –64 64 –64 64 –53–960 768 SAC 64 58 64 64 65 64 3531152 1255 768 SAC-A 64 64 64 64 64 64 3531152 1280 768 SAC-DA 64 64 64 64 64 64 3531152 1280 768 SAC-GAE 64 64 64 64 64 64 3531152 1280 768 SAC-GAE-R 64 64 64 64 64 64 3531152 1280 768 SAC-λ64 64 64 64 64 64 3531152 1280 768 SAC-λ-R 64 64 64 64 64 64 3531152 1280 768
+
+Notably, the replay variants of SAC-λ and SAC-GAE allow for a higher rollout length in our implementation. For SAC-λ and SAC-GAE N had to be short, so that there were a reasonable amount of actor updates. 24 Table 3: Sampled hyperparameter ranges. Continuous ranges are given as intervals, discrete ones as sets; “log” denotes log-uniform sampling. 
+
+Hyperparameter 
+
+Shared by all methods 
+
+Discount factor γ [0 .95 , 0.995] Actor learning rate [5 ×10 −5, 3×10 −3], log Critic learning rate [5 ×10 −5, 3×10 −3], log Temperature learning rate [5 ×10 −5, 3×10 −3], log 
+
+One-step replay critics (SAC, SAC-A, SAC-DA) 
+
+Batch size {64 , 128 , 512 , 1024 , 2048 }
+
+Replay buffer size {10 5, 2.5×10 5, 10 6}
+
+Critic updates per iteration {4, 8, 16 , 32 , 64 }
+
+On-policy multi-step critics (SAC-λ, SAC-GAE) 
+
+Rollout length N {8, 16 , 32 }
+
+Critic epochs per iteration {4, 8, 16 , 32 }
+
+Critic minibatches {2, 4, 8, 16 }
+
+Replay-based multi-step critics (SAC-λ-R, SAC-GAE-R) 
+
+Replayed segment length N {32 , 64 , 128 , 256 }
+
+Batch size {1024 , 2048 , 4096 }
+
+Replay buffer size {10 5, 2.5×10 5, 1.5×10 6}
+
+Critic updates per iteration {4, 8, 16 , 32 }
+
+Method-specific 
+
+λ (λ-return critics) [0 .50 , 0.95] 
+
+λ (GAE critics) [0 .85 , 0.99] Advantage-critic learning rate [5 ×10 −5, 3×10 −3], log Advantage-critic updates (SAC-A only) {4, 8, 16 , 32 , 64 }
+
+C.2 Environment Return ranges 
+
+Table 4 lists the reference returns used to normalize scores (Section 4). 25 Table 4: Reference returns used for normalization. The floor is the minimum achievable return and maps to 0; the 95th percentile of per-run mean returns, pooled over all algorithms, maps to 1. The pooled maximum is given for reference. Lower and upper bounds are 95% bootstrap confidence intervals.                                                                                                           
+
+> 95th percentile Maximum Task Floor value lower upper value lower upper
+> Discrete
+> CartPole 0500 500 500 500 500 500 Acrobot −500 −78 .0−78 .5−77 .5−65 .6−69 .4−65 .6MountainCar −200 −99 .3−100 .2−98 .9−95 .2−95 .9−95 .2MinAsterix 025 .322 .928 .157 .445 .357 .4MinBreakout 093 .492 .195 .0112 .0107 .7112 .0MinFreeway 051 .449 .652 .860 .559 .160 .5MinSpaceInvaders 0166 165 167 176 172 176
+> Continuous
+> Pendulum −500 −143 .3−143 .9−142 .7−137 .9−139 .0−137 .9Reacher −400 −8.03 −8.79 −7.59 −4.94 −5.82 −4.94 Ant 05940 5728 6130 7911 7368 7911 HalfCheetah 016100 14800 16900 21400 19900 21400 Hopper 02710 2075 3248 4286 3825 4286 Humanoid 05760 5338 6488 9412 8773 9412 Walker2d 04465 4010 4793 8798 7590 8798
+
+## D Algorithm Details 
+
+Following the main text, θ denotes critic parameters, ϕ value-network parameters and ψ policy parameters; target networks are indicated by ¯θ and ¯ϕ. N denotes the horizon (rollout or segment length), as in the main text, and C the period of the hard target-network updates. 
+
+Implementation differences at a glance. All variants share the policy objective of Eq. 3, the learned temperature with its target-entropy schedule (Remark D.3) and the optimizer. Beyond the critic target, they differ as follows: (i) SAC, SAC-λ and SAC-λ-R use two critics (Remark D.1), whereas SAC-A and SAC-DA use, by design, a single advantage and value network; (ii) the GAE variants use an unsquashed Gaussian policy, the score-function gradient of Eq. 35 and batch-normalized advantages, which rescales the advantages relative to α and thus the effective temperature of their policy update; (iii) the on-policy variants take a single full-batch policy step per iteration, all others Kπ minibatch steps; (iv) the GAE variants use no target network. 
+
+D.1 SAC 
+
+Remark D.1 (double Q function) . To reduce the bias induced by overestimation of the Q-values, we implement an ensemble of Q-networks, here of size two. The operator agg j=1 ,2 aggregates the two critics and depends on the action space: for continuous actions we take the minimum, min j=1 ,2 Q¯θj , whereas for discrete actions we take the mean, 12
+
+∑ 
+
+> j=1 ,2
+
+Q¯θj (Zhou et al., 2022). The same aggregation is used in the critic target (with target critics) and in the policy loss (with online critics). 
+
+Remark D.2 (Discrete vs. continuous action spaces) . The algorithm handles either discrete or continuous action spaces, but not mixed ones. For discrete actions, πψ (· | s) is a categorical distribution, and the critics output one value per action, Qθj (s, ·) ∈ R|A| , from which Qθj (si, a i) is selected. All expectations over a ∼ πψ
+
+(in the critic target, the policy loss and the temperature loss) are then computed exactly as ∑ 
+
+> a∈A
+
+πψ (a | s) [ · ]. For continuous actions, πψ is a tanh-squashed Gaussian, the critics take ( s, a ) as input, and every expectation is estimated with a single reparameterized sample a ∼ πψ (· | s). 
+
+Remark D.3 ( α-schedule) . The temperature is learned, parameterized as log α and initialized at α0 = 0 .2, following (Haarnoja et al., 2018b). The target entropy is linearly annealed via a scale σt that goes from 26 Algorithm 1 Vanilla Soft Actor-Critic (SAC) 
+
+Initialize: critics Qθ1 , Qθ2 , target critics Q¯θj ← Qθj , policy network πψ
+
+Initialize learned temperature α = exp(log α) and target-entropy schedule ¯Ht
+
+Initialize replay buffer D ← ∅ and fill it with W warm-up transitions collected by πψ
+
+for t = 1 , . . . , budget do 
+
+environment step: sample action a ∼ πψ (· | s), next state s′ ∼ p(· | s, a )Store transition ( s, a, r (s, a ), d, s ′) in D, with d the termination flag 
+
+if t mod U = 0 then 
+
+(Policy Evaluation Step) 
+
+for k = 1 , . . . , K Q do 
+
+Sample minibatch B = {(si, a i, r i, d i, s ′
+
+> i
+
+)}bi=1 from D
+
+Compute soft target 
+
+Ti = ri + (1 − di) γ Ea′∼πψ (·| s′
+
+> i)
+
+[ agg 
+
+> j=1 ,2
+
+Q¯θj (s′
+
+> i
+
+, a ′) − α log( πψ (a′ | s′
+
+> i
+
+)) ] cf. Eq. 1 For each critic calculate critic loss 
+
+LSAC critic (θj ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+{Qθj (si, a i) − Ti
+
+}2 cf. Eq. 4 Update critics via gradient descent on ∇θj LSAC critic 
+
+(Target network update) ¯θj ← τ θ j + (1 − τ )¯θj
+
+end for 
+
+(Policy Improvement Step) 
+
+for k = 1 , . . . , K π do 
+
+Sample minibatch of states {si}bi=1 from D and compute 
+
+Lπ (ψ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+Ea∼πψ (·| si)
+
+[ − agg 
+
+> j=1 ,2
+
+Qθj (si, a ) + α log( πψ (a | si)) ] cf. Eq. 3 Update policy via gradient descent on ∇ψ Lπ
+
+end for 
+
+(Temperature Step) 
+
+for k = 1 , . . . , K α do 
+
+Sample minibatch of states {si}bi=1 from D and compute 
+
+L(α) = − 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+α Ea∼πψ (·| si)
+
+[ log( πψ (a | si)) + ¯Ht
+
+]
+
+Update temperature via gradient descent on ∇log αL
+
+end for end if end for 
+
+1 to 0 .1 over the course of training: for discrete actions ¯Ht = 0 .89 σt log |A| , and for continuous actions ¯Ht = −(2 − σt) dim( A). In both cases the target entropy decreases, driving the policy towards less stochastic behavior. 27 Remark D.4 (Target network updates) . We use hard target updates, ¯θ ← θ every C critic gradient steps, i.e. τ (c) = 1{C mod N =0 } (not environment steps), which performed better than Polyak averaging in our implementation. The same holds for all variants with target networks. 28 D.2 SAC-A 
+
+Algorithm 2 SAC-A 
+
+Initialize: advantage critic Aθ , soft value network Vϕ, target value network V ¯ϕ ← Vϕ, policy network πψ
+
+Initialize learned temperature α and target-entropy schedule ¯Ht (cf. Remark D.3) Initialize replay buffer D ← ∅ and fill it with W warm-up transitions collected by πψ
+
+for t = 1 , . . . , budget do 
+
+environment step: sample action a ∼ πψ (· | s), next state s′ ∼ p(· | s, a )Store transition ( s, a, r (s, a ), d, s ′) in D, with d the termination flag 
+
+if t mod U = 0 then 
+
+(Policy Evaluation Step) 
+
+Freeze a reference copy Vϕold ← Vϕ for value clipping 
+
+for k = 1 , . . . , K V do 
+
+Sample minibatch B = {(si, a i, r i, d i, s ′
+
+> i
+
+)}bi=1 from D
+
+Compute soft target T Vi = ri + αH(πψ (·| si)) + (1 − di) γV ¯ϕ(s′
+
+> i
+
+), and the clipped value loss 
+
+LV(ϕ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+max 
+
+{{Vϕ(si) − T Vi
+
+}2, {V clip  
+
+> ϕ
+
+(si) − T Vi
+
+}2}
+
+cf. Eq. 5 with V clip  
+
+> ϕ
+
+(si) = Vϕold (si) + clip (Vϕ(si) − Vϕold (si), −ϵ, ϵ )
+
+update the value network via gradient descent on ∇ϕLV
+
+(Target network update) ¯ϕ ← τ ϕ + (1 − τ ) ¯ϕ
+
+end for for k = 1 , . . . , K A do 
+
+Sample minibatch B = {(si, a i, r i, d i, s ′
+
+> i
+
+)}bi=1 from D
+
+Compute advantage targets T Ai = ri + αH(πψ (·| si)) + (1 − di) γV ϕ(s′
+
+> i
+
+) − Vϕ(si), and the advantage loss 
+
+LAcritic (θ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+{Aθ (si, a i) − T Ai
+
+}2 cf. Eq. 6 Update critic via gradient descent on ∇θ LAcritic 
+
+end for 
+
+(Policy Improvement Step) 
+
+for k = 1 , . . . , K π do 
+
+Sample minibatch of states {si}bi=1 from D and compute 
+
+Lπ (ψ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+(
+
+Ea∼πψ (·| si)
+
+[ − Aθ (si, a )] − αH(πψ (· | si)) 
+
+)
+
+cf. Eq. 3 Update policy via gradient descent on ∇ψ Lπ
+
+end for 
+
+(Temperature Step) as in Algorithm 1 
+
+end if end for 
+
+Remark D.5 (Shared components) . Data collection, the temperature step, the gradient-based updates and the hard target updates (now counted in value-network steps) are identical to SAC. By design, and in contrast to SAC, there is no critic ensemble: a single advantage network Aθ and a single value network Vϕ are used. 29 Remark D.6 (Consistency weight κ). The consistency term enforces Ea∼πψ [Aθ (s, a )] = 0. In our experiments we set κ = 0, i.e. the advantage critic is trained on the regression loss alone. 
+
+D.3 SAC-DA 
+
+Algorithm 3 SAC-DA 
+
+Initialize: critic Aθ , soft value network Vϕ, target networks A¯θ ← Aθ , V ¯ϕ ← Vϕ, policy network πψ
+
+Initialize learned temperature α and target-entropy schedule ¯Ht (cf. Remark D.3) Initialize replay buffer D ← ∅ and fill it with W warm-up transitions collected by πψ
+
+for t = 1 , . . . , budget do 
+
+environment step: sample action a ∼ πψ (· | s), next state s′ ∼ p(· | s, a )Store transition ( s, a, r (s, a ), d, s ′) in D, with d the termination flag 
+
+if t mod U = 0 then 
+
+(Policy Evaluation Step) 
+
+for k = 1 , . . . , K Q do 
+
+Sample minibatch B = {(si, a i, r i, d i, s ′
+
+> i
+
+)}bi=1 from D
+
+Combine advantages and values to Q-values 
+
+Qθ,ϕ (si, a i) = Aθ (si, a i) + Vϕ(si) − αH(πψ (·| si)) − κd̂ E[Aθ (si, ·)] cf. Eq. 7 Compute soft targets using the joint soft Q of the target networks 
+
+Ti = ri + (1 − di) γ
+
+(
+
+Ea′∼πψ (·| s′
+
+> i)
+
+[Q¯θ, ¯ϕ(s′
+
+> i
+
+, a ′)] + αH(πψ (· | s′
+
+> i
+
+)) 
+
+)
+
+cf. Eq. 1 Calculate the critic loss 
+
+LDA critic (θ, ϕ ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+{Qθ,ϕ (si, a i) − Ti}2 cf. Eq. 8 Update advantages and values jointly via gradient descent on ∇θ,ϕ LDA critic 
+
+(Target network updates) ¯ϕ ← τ ϕ + (1 − τ ) ¯ϕ and ¯θ ← τ θ + (1 − τ )¯θ
+
+end for 
+
+(Policy Improvement Step) as in Algorithm 2 
+
+(Temperature Step) as in Algorithm 1 
+
+end if end for 
+
+Remark D.7 (Shared components) . Data collection, the temperature step, the gradient-based updates and the hard target updates are identical to SAC. By design, a single advantage and value network are used, as in SAC-A. In contrast to SAC-A Aθ and Vϕ are trained jointly on a single loss. Both target networks A¯θ and 
+
+V ¯ϕ receive a hard update every N joint critic steps. 
+
+Remark D.8 (Regularizer weight κd). κd = 0 worked best in preliminary experiments and is used throughout (Section 3.2). The split into Aθ and Vϕ is then not identifiable, and SAC-DA tests the dueling parametrization of the soft Q-critic. 30 D.4 SAC-λ
+
+Algorithm 4 SAC-λ
+
+Initialize: critics Qθ1 , Qθ2 , target critics Q¯θj ← Qθj , policy network πψ
+
+Initialize learned temperature α and target-entropy schedule ¯Ht (cf. Remark D.3) 
+
+for t = 1 , . . . , budget do 
+
+environment step: continue E parallel environments for T steps under πψ , giving trajectory segments 
+
+{τi}Ei=1 , τi = ( si,n , a i,n , r i,n , d i,n , e i,n , s ′
+
+> i,n
+
+)Tn=1 , with d the termination and e the termination-or-truncation flag 
+
+(Calculate λ-returns) 
+
+Compute soft values ¯Vi,n = Ea′∼πψ (·| s′
+
+> i,n )
+
+[ agg j=1 ,2 Q¯θj (s′
+
+> i,n
+
+, a ′) − α log( πψ (a′ | s′
+
+> i,n
+
+)) ]
+
+for i = 1 , . . . , E do 
+
+set Ri,T = ri,T + γ (1 − di,T ) ¯Vi,T 
+
+for n = T − 1, . . . , 1 do 
+
+λi,n = λ (1 − ei,n )
+
+Ri,n = ri,n + γ {(1 − λi,n )(1 − di,n ) ¯Vi,n + λi,n 
+
+(Ri,n +1 + αH(πψ (· | s′
+
+> i,n
+
+)) )} {cf. Eq. 11} 
+
+end for end for 
+
+(Policy Evaluation Step) 
+
+for k = 1 , . . . , K ep  
+
+> Q
+
+epochs, and each of Kmb  
+
+> Q
+
+shuffled minibatches B ⊂ { (i, n )} do 
+
+For each critic calculate value loss 
+
+Lλ
+
+> critic
+
+(θj ) = 1
+
+|B|
+
+∑
+
+> (i,n )∈B
+
+{Qθj (si,n , a i,n ) − Ri,n 
+
+}2 cf. Eq. 12 Update the critics via gradient descent on ∇θj Lλ
+
+> critic
+
+(Target network update) ¯θj ← τ θ j + (1 − τ )¯θj
+
+end for 
+
+(Policy Improvement Step) 
+
+Compute 
+
+Lπ (ψ) = 1
+
+E
+
+> E
+
+∑
+
+> i=1
+
+1
+
+T
+
+> T
+
+∑
+
+> n=1
+
+Ea∼πψ (·| si,n )
+
+[ − agg 
+
+> j=1 ,2
+
+Qθj (si,n , a ) + α log( πψ (a | si,n )) ] cf. Eq. 3 Update policy via gradient descent on ∇ψ Lπ
+
+(Temperature Step) as in Algorithm 1, on the states of the current rollout 
+
+end for 
+
+Remark D.9 (Shared components) . The critic ensemble and its aggregation agg, the discrete/continuous handling, the temperature step, the optimizer and the hard target updates (counted in critic gradient steps) are identical to SAC. 
+
+Remark D.10 (On-policy training) . SAC-λ uses no replay buffer. Every iteration collects E ·T fresh transitions, where the segments continue from the previous iteration rather than starting new episodes. The λ-returns are computed once per iteration with the current target critics and temperature, and they stay fixed during the subsequent updates. The critics are trained for Kep  
+
+> Q
+
+epochs over Kmb  
+
+> Q
+
+shuffled minibatches each, while the policy and the temperature each take a single full-batch gradient step per iteration. 
+
+Remark D.11 (Soft Peng’s Q( λ)) . With ¯V (s) = Ea∼πψ [Q¯θ (s, a )] + αH(πψ (·| s)), the recursion equals Eq. 11: with weight 1 − λ the return bootstraps from the soft value of the next state under the current policy rather 31 than from the action actually taken, and with weight λ it continues with the next return plus the entropy bonus at the next state. This is the soft analogue of Peng’s Q( λ) (Peng & Williams, 1994); unlike Kozuno et al. (2021), we keep the entropy bonus at every step. At segment ends and episode boundaries ( ei,n = 1) the trace is cut, and bootstrapping is suppressed only on termination ( di,n = 1), so on truncation the return bootstraps from the true final state. 
+
+D.5 SAC-GAE 
+
+In order to get a suitable gradient estimator for our empirical policy loss 
+
+Lπ (ψ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+Ea∼πψ (·| si)[− ˆA(si, a ) + α log( πψ (a|si))] ,
+
+some care is needed. We only have access to the advantage estimator ˆA(si, a i) at the sampled action ai, not under all actions, so the loss above cannot be implemented directly. The soft policy gradient theorem (Shi et al., 2019; Choe & Kim, 2025) resolves this, and the same proof yields 
+
+∇ψ Ea∼πψ (·| s)[ ˆA(s, a ) − α log( πψ (a|s))] = Ea∼πψ (·| s)[∇ψ log( πψ (a|s)) { ˆA(s, a ) − α(log( πsg( ψ)(a|s)) + 1) }],
+
+where sg( ·) refers to a stop gradient. We can use this expression to obtain a gradient estimator for the above loss as 
+
+∇ψ Lπ (ψ) = 1
+
+b
+
+> b
+
+∑
+
+> i=1
+
+∇ψ log( πψ (ai|si)) {− ˆA(si, a i) + α(log( πsg( ψ)(ai|si)) + 1) } (35) 
+
+Remark D.12 (No target network) . In contrast to all other variants, SAC-GAE uses no target network. The advantages and returns are computed once per iteration with the value network Vϕold from before the update and stay fixed during the subsequent updates. The same Vϕold serves as reference for the value clipping with 
+
+ϵ = 10. 
+
+D.6 Replay-buffer variants 
+
+SAC-λ-R and SAC-GAE-R combine the off-policy training loop of SAC (Algorithm 1) with the return estimators of SAC-λ (Algorithm 4) and SAC-GAE (Algorithm 5), respectively. Data collection, the replay buffer, the update schedule ( KQ critic steps, then Kπ policy steps and Kα temperature steps every U
+
+environment steps), the temperature step and the hard target updates are exactly as in SAC. The networks and losses are those of the on-policy counterparts: SAC-λ-R uses the twin critics Qθj and the SAC policy loss, and SAC-GAE-R uses a single value network Vϕ without target network, the untanh’d Gaussian policy and the policy-gradient loss of Eq. (35). The only structural change is how a minibatch is formed: instead of 
+
+b independent transitions, each gradient step samples contiguous traces from D and computes the returns on them with the current networks. The critic (resp. value) loss is then the one of the on-policy counterpart on B, i.e. 1
+
+> b
+
+∑ 
+
+> (i,m )∈B
+
+{Qθj (si,m , a i,m )−
+
+Ri,m }2 for each critic in SAC-λ-R, and the value loss of Algorithm 5 in SAC-GAE-R. The policy loss of SAC-GAE-R uses the advantages of a separately sampled trace minibatch, computed after the critic updates and normalized over that minibatch. SAC-λ-R and the temperature step only need the states si,m and use no returns. In contrast to the on-policy variants, where returns are computed once per rollout and kept fixed, here they are recomputed for every sampled minibatch with the current target critics (SAC-λ-R) or the current value network (SAC-GAE-R), and with the current policy and temperature. Hence the traces are stale, but their returns are not. 32 Algorithm 5 SAC-GAE 
+
+Initialize: soft value network Vϕ, policy network πψ
+
+Initialize learned temperature α and target-entropy schedule ¯Ht (cf. Remark D.3) 
+
+for t = 1 , . . . , budget do 
+
+environment step: continue E parallel environments for T steps under πψ
+
+Store trajectory segments in trajectory batch {τi}Ei=1 , τi = ( si,n , a i,n , r i,n , d i,n , e i,n , s ′
+
+> i,n
+
+)Tn=1 , with d the termination and e the termination-or-truncation flag Freeze a reference copy Vϕold ← Vϕ
+
+(Calculate soft GAEs) {cf. Eq. 14} 
+
+for i = 1 , . . . , E do 
+
+set Ai,T +1 = 0 
+
+for n = T, . . . , 1 do 
+
+δi,n = ri,n + α H(πψ (·| si,n )) + γ (1 − di,n ) Vϕold (s′
+
+> i,n
+
+) − Vϕold (si,n )
+
+Ai,n = δi,n + γ λ (1 − ei,n ) Ai,n +1 
+
+Ri,n = Ai,n + Vϕold (si,n )
+
+end for end for 
+
+(Policy Evaluation Step) 
+
+for k = 1 , . . . , K ep  
+
+> V
+
+epochs, and each of Kmb  
+
+> V
+
+shuffled minibatches B ⊂ { (i, n )} do 
+
+Calculate clipped value loss 
+
+LV(ϕ) = 12|B|
+
+∑
+
+> (i,n )∈B
+
+max 
+
+{
+
+{Vϕ(si,n ) − Ri,n }2 ,
+
+{
+
+V clip  
+
+> ϕ
+
+(si,n ) − Ri,n 
+
+}2 }
+
+cf. Eq. 5 with V clip  
+
+> ϕ
+
+(s) = Vϕold (s) + clip (Vϕ(s) − Vϕold (s), −ϵ, ϵ )
+
+Update the value network via gradient descent on ∇ϕLV
+
+end for 
+
+(Policy Improvement Step) 
+
+Normalize advantages ˜Ai,n = ( Ai,n − μA)/(σA + 10 −8) over the batch and compute 
+
+Lπ (ψ) = 1
+
+E
+
+> E
+
+∑
+
+> i=1
+
+1
+
+T
+
+> T
+
+∑
+
+> n=1
+
+log( πψ (ai,n |si,n )) {− ˜Ai,n + α(log( πsg( ψ)(ai,n |si,n )) + 1) } cf. Eq. 35 Update policy via gradient descent on ∇ψ Lπ
+
+(Temperature Step) as in Algorithm 1, on the states of the current rollout 
+
+end for 
+
+33

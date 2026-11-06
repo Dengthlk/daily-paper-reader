@@ -1,0 +1,566 @@
+Title: Diversity-Aware Experience Replay via Statistical Leverage Scores
+
+URL Source: https://arxiv.org/pdf/2611.05929v1
+
+Published Time: Thu, 05 Nov 2026 01:57:47 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Diversity-Aware Experience Replay via Statistical Leverage Scores 
+
+Shaifalee Saxena 1,2 and Alexander Scheinker 1
+
+Abstract — Off-policy deep reinforcement learning trains on random samples from a replay buffer of past experience. In physical robot settings, that buffer is dominated by routine: thousands of near-identical transitions from normal operation, while the rare events that define the edges of the task are rarely sampled. We propose scoring every stored transition by its 
+
+statistical leverage , which measures how unusual it is relative to the buffer’s own data, computed from the stored numbers alone, with no labels, rewards, or value network. We draw each mini-batch from a mixture of this score and uniform sampling. First, the natural way to build the score along the directions where the data varies most turns out to be blind when actions are stored as one-hot indicators, because indicator columns always win the variance ranking; we instead select the feature columns with the heaviest tails (largest kurtosis) where small far-away populations are revealed. Second, the importance weights that prioritized replay uses to keep gradients unbiased cancel the method exactly: with full correction, training matches uniform sampling, so we drop the correction and deliberately optimize the rebalanced objective. Third, when the rare situations of a log are relational, visible only in how a stretch of behavior relates to its goal, not in any single stored coordinate—per-transition scores are blind; applying the same tail rule to short trajectory windows described relative to their goal restores the signal, and on a three-joint arm that must push an object around an obstacle it raises the rare-task success from 0.49 to 0.69 against a labeled-oracle ceiling of 0.74. 
+
+I. INTRODUCTION Deep reinforcement learning (RL) [1] has become a prac-tical tool for synthesizing feedback controllers directly from interaction data. The modern off-policy template descends from the Deep Q-Network (DQN) [2], which revived the classical idea of experience replay [3]: transitions (s, a, r, s ′)
+
+are stored in a large ring buffer, and mini-batches drawn from the buffer decorrelate consecutive updates and allow each interaction to be reused many times. Deep Deterministic Policy Gradient (DDPG) [4], followed by Twin Delayed DDPG (TD3) [5] and Soft Actor-Critic (SAC) [6] carried this template to continuous control, where they remain the workhorse algorithms of robot learning [7]. Sample effi-ciency has been improved mainly by extracting more gradient signal from the same stored data: ensembling and high update-to-data ratios [8], normalization and network scaling [9], and learned state–action representations with prioritized replay [10]. These advances support real-robot manipulation               
+
+> *This work was supported by Los Alamos National Laboratory
+> 1Shaifalee Saxena and Alexander Scheinker are in the Instrumentation &Controls Group at Los Alamos National Laboratory, Los Alamos, New Mexico 87545, USA. (Email:
+
+shaifalees@lanl.gov, ascheink@lanl.gov )                
+
+> 2Shaifalee Saxena is aPhD student at the University of New Mexico, Albuquerque, New Mexico, 87131, USA. (Email:
+
+shaifalisaxena@unm.edu )
+
+pipelines that train in minutes to hours [11], [12] and autonomous control of large scientific instruments, including the tuning of particle accelerators [13], [14]. Despite this progress, uniform sampling remains the default replay rule in standard off-policy RL. Uniform sampling implicitly assumes that every stored transition is equally worth revisiting, and this assumption degrades precisely as learning succeeds. A partially con-verged policy fills the buffer with thousands of near-identical transitions, such as the gripper hovering over the object in almost the same pose, or the beam sitting at a near-optimal setpoint with very low beam loss. At the same time, rare transitions that delineate the boundaries of the task (unusual contacts, failed grasps, off-nominal beam excursions) are sampled with vanishing frequency and eventually overwrit-ten. In this work, we make the buffer’s own geometry the sampling signal. We view the buffer as a tall data matrix, one standardized transition per row, and score each transition by its statistical leverage [15]: the squared, whitened length of its projection onto a chosen score subspace, equivalently a (truncated) Mahalanobis distance from the buffer’s own empirical distribution. Mini-batches are drawn from a mix-ture placing weight β on the normalized leverage scores and 
+
+1−β on the uniform distribution. Because N ≫ d, the scores can be refreshed efficiently with buffer-wide statistics and a vectorized pass over the stored transitions. Our contributions are: (1) a leverage-mixture replay rule using excess-kurtosis column selection to avoid variance-subspace blindness under one-hot actions, and omitting importance-sampling correction, which we show cancels the rebalancing exactly; (2) exact, numerically verified sampling-share laws on Gaussian-mixture buffers, including a rarity-independent amplification ceiling and a multi-cluster mass law; (3) offline Q-learning experiments against exact Q∗,demonstrating improved learning in an underrepresented region; and (4) a window-level extension for relational rare behaviors, where goal-relative trajectory scoring on a three-joint arm trained with TD3+BC improves over transition-level replay and approaches a labeled oracle. II. RELATED WORK Non-uniform replay is not a new idea, and its adoption is strikingly uneven. Prioritized Experience Replay (PER) [16], which samples transitions in proportion to their temporal-difference (TD) error, is a standard ingredient of value-based and distributed agents. Yet in the DDPG/TD3/SAC lineage that dominates continuous control, the de facto standard remains plain uniform sampling: the original algorithms use it [4], [5], [6], and it is the default in many implementations. arXiv:2611.05929v1 [cs.RO] 4 Nov 2026 Fig. 1. Overview of the proposed kurtosis-based leverage-mixture replay framework. (b) ground truth V & escape policy (a) buffer (ε=0.02): samples per cell              
+
+> Fig. 2. Two-room gridworld. (a) The logged buffer at ε= 0 .05 : routine operation covers the main room ( ≈275 samples/cell) while the corridor and annex region B, dashed, receive ≈12 .(b) Ground-truth Q∗with the optimal escape policy: the annex’s value structure follows its own geometry and cannot be inferred from region-A data.
+
+Where modern robot-learning systems do bias the buffer, they use simple fixed composition rules rather than per-transition priorities: symmetric 50/50 sampling of online and offline data in RLPD and SERL [11], [12]. Empirically, PER’s gains transfer inconsistently from Atari to continuous control, where studies find it often matches or underperforms uniform sampling [17], [18]. Theoretically, prioritized sampling combined with its importance-sampling correction is largely equivalent to uniform sampling under a reshaped loss, so much of its effect can be replicated (or cancelled) by loss design [17]; priorities are computed only when a transition was last visited and therefore go stale; the scheme introduces sensitive hyperparameters; and TD-error-based scores systematically chase noise and outliers in stochastic environments [16], [18], [19]. Broader studies of replay find that buffer capacity, replay ratio, and retention policy often matter as much as the sampling rule itself [20], [21], [22]. When outlier sensitivity is repaired, as in the loss-adjusted prioritization used in TD7 [17], [10], prioritization becomes beneficial again in continuous control, suggesting that the obstacle is not non-uniform sampling per se but the fragility of error-based scores. This motivates a complementary signal that does not depend on the current critic at all. A smaller body of work targets buffer coverage directly. Experience-selection studies show that which transitions are retained and replayed can matter as much as how many [22]; determinantal point processes (DPPs) have been used to select diverse trajectories and goals within hindsight replay [23] and to prioritize diverse transitions in high-dimensional environments [24]. The recurring obstacle in this line is computational: DPP kernels over N stored transitions are expensive, and much of the engineering effort in these works goes into approximating them. Our proposal can be read as the cheap linear-algebra limit of this idea: rank-k leverage scores are exactly the single-point marginals of a projection DPP, computable for the entire buffer in O(N dk ) per refresh and maintainable incrementally at O(d2) per transition. To the best of our knowledge, leverage-score sampling has not previously been studied as a replay-sampling rule for RL. Recent robot learning has increasingly shifted toward large-scale imitation and vision-language-action models [25]. These trends reduce the role of replay in some settings, but do not eliminate the regime considered here: when physical interaction is expensive, sample-efficient off-policy learning remains important [11], [12]. Recent work such as FastTD3 further shows that replay-based off-policy learning can remain competitive even at large scale and transfer to real hardware [26], while emerging VLA systems are themselves beginning to incorporate reinforcement-learning post-training from autonomously collected experience [27]. Thus, the replay buffer is not disappearing; the question is how stored experience should be selected and reused. III. LEVERAGE-MIXTURE REPLAY 
+
+A. Buffer geometry and leverage scores 
+
+Each stored transition contributes a feature row xi ∈ Rd;a buffer of size N is the matrix X ∈ RN ×d. Which columns enter xi is itself a design decision that validation forced us to make explicit (Sec. III-B); by default xi contains the continuous state features. Columns are standardized, 
+
+¯xij = xij − μj
+
+cj + ϵ0
+
+, ϵ0 ≈ 10 −8, (1) with μj , c j the buffer mean and standard deviation of column 
+
+j. The thin SVD ¯X = U ΣV ⊤ gives principal directions 
+
+vj , PCA scores T = ¯XV , and covariance eigenvalues 
+
+λj = σ2 
+
+> j
+
+/(N − 1) of C = 1  
+
+> N−1
+
+¯X⊤ ¯X. For a score subspace spanned by an index set K of directions, the leverage score of transition i is 
+
+ℓi = 1
+
+N − 1
+
+X
+
+> j∈K
+
+ ¯x⊤ 
+
+> i
+
+vj
+
+2
+
+λj
+
+, 0 ≤ ℓi ≤ 1,
+
+> N
+
+X
+
+> i=1
+
+ℓi = |K| .
+
+(2) With K = {1, . . . , d } and invertible C this is exactly the squared Mahalanobis distance of xi from the buffer’s own mean and covariance, divided by N − 1:
+
+ℓi = 1  
+
+> N−1
+
+¯x⊤ 
+
+> i
+
+C−1 ¯xi = 1  
+
+> N−1
+
+(xi − μ)⊤S−1(xi − μ), (3) where S is the raw-coordinate covariance; the standardization cancels. Equivalently, up to constants ℓi is the negative log-density of transition i under a Gaussian fit to the buffer: high leverage means precisely “improbable under the buffer.” Leverage scores are also the single-point inclusion marginals of the projection DPP with kernel K = UKU ⊤K , so this is the cheap, independent-sampling limit of DPP-style diverse batch selection. Because N ≫ d, we never form the N ×
+
+N side: one O(N d 2) pass (or O(d2) incremental moments) plus an O(d3) eigendecomposition, then all N scores in one matrix multiply. 
+
+B. Which columns to score, and how to pick the subspace 
+
+Version 1 of this method scored [ s | a ] rows and chose K
+
+as the top-k principal directions with the smallest k capturing 
+
+90% of variance. Validation shows both choices fail. 
+
+Categorical blindness. Suppose the action enters as a K-level one-hot block. Then a takes K equally likely values encoded as indicators 1j . Each standardized column has unit variance, and for j̸ = k, Cov( 1j , 1k) = −1/K 2
+
+gives correlation − 1 
+
+> K−1
+
+. The block correlation matrix is therefore R = KK−1 I − 1 
+
+> K−1
+
+J, with eigenvalue 0 on the all-ones vector and K/ (K − 1) with multiplicity K − 1
+
+on its complement. Since every standardized continuous 
+
+column has variance exactly 1, the one-hot contrasts always head the ranking ( 4/3 for K=4 , 3/2 for K=3 ). Rare-mode separation is therefore hidden inside that unit budget. Variance ranking therefore always places the action contrasts first: in our gridworld ( K=4 ) the measured ϕ(s, a ) spectrum is (1 .334 , 1.333 , 1.332 , 1.014 , 0.986 , 0) .
+
+Low-variance separating directions. If the rare mode sepa-rates along a direction whose within-mode variance is small, truncated leverage is blind until k reaches that direction’s variance rank r and diluted beyond it (Sec. IV); the use-ful subspace is the smallest one containing the separating directions, which variance ordering does not target. 
+
+The amended rule. We select columns , not eigendirections, by a tail statistic: the excess kurtosis κj = E[¯ x4 
+
+> ·j
+
+] − 3 of each standardized continuous column, keeping the top-m columns (m=1 by default) and computing (2) within them. For m=1 
+
+the selected direction is the coordinate axis ej∗ , where j∗ =arg max j {κj }, rather than an eigenvector, so the projection in (2) is the standardized entry itself, ¯x⊤ 
+
+> i
+
+ej∗ = ¯ xij ∗ , whose normalizing variance e⊤ 
+
+> j∗
+
+C e j∗ = 1 by standardization (up to the immaterial N/ (N − 1) convention factor), giving 
+
+ℓi = ¯x2
+
+> ij ∗
+
+N − 1 ∝ ¯x2 
+
+> ij ∗
+
+. (4) No eigendecomposition is required. The normalization PNi=1 ℓi = |K| = m of (2) is preserved, and because the mixture (19) uses only the normalized scores ℓi/ P 
+
+> k
+
+ℓk, the prefactor is immaterial: a transition’s score is simply the squared standardized value of its heaviest-tailed feature. A column carrying a rare mass fraction ε at standardized distance z gains ≈ εz 4 of kurtosis, while uniform or Gaus-sian background columns are platykurtic; the statistic is the classical projection-pursuit signal for interesting directions [28]. Selecting fixed axes avoids the eigenvector degener-acy that per-column standardization induces (uncorrelated standardized columns give C ≈ I, so principal directions rotate arbitrarily across seeds), and is immune to the one-hot pathology. The selection is not free of failure modes of its own—eigen-direction moments can be captured by skewed categorical contrasts, which is why we restrict to continuous columns—and full state-block Mahalanobis ( K
+
+= all state directions) is the selection-free fallback, in which case (2) is evaluated over all state directions and collapses to the Mahalanobis form (3); this variant is selection-free and never blind, but pays the dilution cost of (10) with k = ds.Reward is excluded from scoring: including r re-introduces outcome-chasing, the very failure of error-based priorities the geometric signal is meant to complement; categorical action encodings are excluded whenever the logged action marginal is region-independent, since they then contribute only dilution and the pathology above. IV. ANALYTIC GAUSSIAN MIXTURE STUDY We first study the sampling rule analytically in an idealized scenario where the standardized buffer ¯X of (1) is a mixture of two Gaussian clusters: a common cluster A holding a fraction 1 − ε of the transitions and a rare cluster B holding the remaining fraction ε. The two clusters differ along a single direction, described by a unit vector u and their means are a distance ∆ from each other giving the mixture (1 − ε)N (μA, s 2
+
+> A
+
+) + ε N (μB , s 2 
+
+> B
+
+). By projecting each transition onto it, ti = u⊤ ¯xi, we get one number per transition, its coordinate along u. Along u the common cluster scatters around its center with standard deviation sA
+
+and the rare cluster around its own center with standard deviation sB . The buffer is centered, so the weighted average of the two centers is zero: the common center sits at −ε∆
+
+and the rare center at (1 −ε)∆ . The total variance of ti is the average within-cluster variance ¯s2 = (1 − ε)s2 
+
+> A
+
++ εs 2 
+
+> B
+
+plus the extra variance created by the two centers being apart, 
+
+λ = ¯ s2+(1 −ε)( ε∆) 2+ε (1 −ε)∆ 2 = ¯ s2+ε(1 −ε)∆ 2. (5) With K = {u}, the leverage score (2) is ℓi = t2 
+
+> i
+
+/[( N − 1) λ]:the squared coordinate along u, normalized so that the scores sum to one over the buffer. Under pure leverage sampling (β = 1 in (19)) the probability of drawing a rare transition is therefore the total score of cluster B divided by the total score of the buffer. The average of t2 
+
+> i
+
+inside a cluster is its variance plus its squared center, so the average score of a rare point and of a common point, relative to the buffer-wide Fig. 3. Sampling-share laws on two-cluster Gaussian buffers ( N = 2 × 10 5, d = 20 , sA = sB = s = 1 ): theory (lines) vs. simulation (markers). (a) Rare share under pure-leverage sampling; dashed: uniform sampling (ϵ), dotted: full-inversion limit (1 − ϵ). (b) Rare batch fraction versus mixing weight                      
+
+> βat ϵ= 0 .02 , for mixture draws (squares) and stratified batches (triangles). (c) Amplification over uniform sampling at β= 1 /2; dotted: theoretical ceiling 1 + ∆ 2/(2 s2), dashed: naive 1/(2 ϵ).
+> Fig. 4. Effect of rare cluster width ( sA=1 ). (a) Rare share of pure-leverage draws at ∆=5 for sB/s Afrom 0.1to 3, divided by the equal-width value: lines (7). (b) Fraction of rare points whose score falls below the 99 th percentile of the common cluster’s scores ( ε=0 .01 ).
+
+average score of 1, are 
+
+mB = s2 
+
+> B
+
++ (1 − ε)2∆2
+
+λ , mA = s2 
+
+> A
+
++ ε2∆2
+
+λ , (6) with (1 − ε)mA + εm B = 1 . Cluster B holds a fraction ε
+
+of the points, each worth mB average points, so its share of pure-leverage draws is εm B /[εm B + (1 − ε)mA] = εm B :
+
+share B = ε s2 
+
+> B
+
++ (1 − ε)2∆2
+
+(1 − ε)s2 
+
+> A
+
++ εs 2 
+
+> B
+
++ ε(1 − ε)∆ 2 , (7) verified to 0.003 absolute error across ε ∈ [0 .002 , 0.3] ,
+
+∆ ∈ { 5, 10 , 20 } for equal widths (Fig. 3a) and to 0.006 
+
+for sB /s A ∈ [0 .1, 3] (Fig. 4a). Everything in (7) is governed by one dimensionless number, ε(1 − ε)∆ 2/¯s2: the variance “bump” the rare cluster adds along u, relative to the within-cluster variance. If ∆ = 0 the clusters are indistinguishable and share B = ε, i.e. uniform sampling. If the bump is large, 
+
+ε∆2 ≫ ¯s2, then share B → 1−ε: the rare cluster receives the share the common cluster used to have, a full inversion of the buffer’s composition; for a 1% event this needs a separation of well over ten standard deviations. If the bump is small, 
+
+ε∆2 ≪ s2
+
+> A
+
+, then share B ≈ ε(∆ 2 + s2 
+
+> B
+
+)/s 2
+
+> A
+
+.The rare cluster’s own width plays only a minor role, as seen in (6): a rare point’s score is its squared distance from the buffer mean, which is ∆2 from the offset plus s2 
+
+> B
+
+from the cluster’s internal scatter, measured against a total variance that is set by the common cluster’s width sA (and by the bump). Therefore sB only enters additively next to ∆2. At 
+
+∆ = 5 and ε = 0 .01 a tight rare cluster ( sB ≤ 0.3 sA)receives 3% less share than an equal-width one and a diffuse cluster ( sB = 3 sA) 24% more; at ∆ = 10 all widths are within 4% of each other (Fig. 4a). A tight rare cluster is, if anything, found more cleanly: all of its points sit at the same distance from the mean, so none of them is scored like a routine transition, whereas for sB = 3 sA at ∆ = 5 one fifth of the rare points score below the 99 th percentile of the common cluster (Fig. 4b). Leverage looks for distance from the bulk, not for local density, so a compact rare mode cannot hide from it the way it can from a density- or nearest-neighbor-based novelty score. The column-selection rule behaves the same way: in these sweeps the separating column has the largest excess kurtosis of all 20 columns for every ε ≤ 0.1 and every width tested, so the rule of Sec. III-B finds it without labels; between ε = 0 .1 and 0.3 the column turns from heavy-tailed into bimodal and its excess kurtosis becomes negative (in the tight, far limit the column is a two-point distribution whose excess kurtosis crosses zero at ε ≈ 0.21 ; wider rare clusters cross later), so the rule stops selecting it, which is consistent with its purpose as a rare-mode detector. Under the mixture rule (19) a fraction 1 − β
+
+of each batch is drawn uniformly and β by leverage, so the expected rare fraction of a batch is 
+
+pB (β) = (1 − β) ε + β share B , (8) and pB (β)/ε is rare cluster amplification over uniform. Three consequences of this analysis inform our method. 
+
+(i) Amplification is separation-limited, not rarity-limited. Making the event rarer at fixed ∆ gives share B /ε → (∆ 2 +
+
+s2 
+
+> B
+
+)/s 2
+
+> A
+
+, so pB (β)/ε → 1 + β(∆ 2 + s2 
+
+> B
+
+)/s 2 
+
+> A
+
+− 1, which for equal widths is 1 + β∆2/s 2; at β = 12 the amplification saturates at 1 + ∆ 2/2s2, i.e. 13 .5×, 51 ×, and 201 × for 
+
+∆ = 5 , 10 , 20 , not at the naive 1/2ε that would put half of every batch in the rare cluster ( 250 × at ε = 0 .002 ). The ceiling is reached to within 10% once ε∆2/s 2 
+
+> A
+
+≲ 0.1: at 
+
+ε = 0 .002 the simulated amplifications are 12 .9×, 42 .8×,and 111 ×, so the ∆=5 curve is at its ceiling while the ∆=20 
+
+curve is still far below it (it would need ε ≲ 3 × 10 −4). In practice, a rare mode that is not geometrically distinct from routine operation will not be amplified much no matter how rare or how compact it is, and the boost of one that is distinct can be predicted from ∆/s A. (ii) Batch composition is exactly linear in β, (8), and a stratified batch made of 
+
+(1 − β)B uniform draws and βB leverage draws has the same expected composition as B draws from the mixture (Fig. 3b, agreement within 0.002 ); an implementation can therefore keep its uniform sampler and simply append a leverage-sampled half-batch. (iii) Multi-cluster mass law. 
+
+With q clusters of fractions π1, . . . , π q whose centers are far apart compared with their spreads, the centered centers span a (q−1) -dimensional subspace; taking K to be that subspace, every point of cluster c sits essentially at its center, and (2) gives it the score 1/(N π c) − 1/N (the N π c points of a cluster share one location’s pull on the fit, minus a centering correction), the total leverage cluster c mass is 
+
+Mc = 1 − πc, P 
+
+> c
+
+Mc = q − 1 = |K| , (9) and pure-leverage shares are (1 − πc)/(q − 1) : a cluster’s share depends only on its size, with an amplification (1 −
+
+πc)/[( q − 1) πc] that exceeds one for small clusters and falls below one for large ones. For four clusters of fractions 
+
+0.70 /0.20 /0.08 /0.02 , each minority cluster displaced by ∆
+
+along its own feature column, the 2% cluster is amplified 
+
+14 .5× and the 70% cluster suppressed to 0.19 × at ∆ = 20 ,approaching the limits 16 .3× and 0.14 × (16 .0× and 0.15 ×
+
+at ∆ = 50 ; Fig. 5a); the law requires ∆2 ≫ 1/π c for every cluster. The three highest-kurtosis columns are exactly the three displaced columns, so the selection rule recovers this subspace with no labels anywhere. Real buffers vary along many directions with very different variances, and the rare cluster is displaced along only one of them, the separating direction , whose total variance is 
+
+λ = ¯ s2 + ε(1 − ε)∆ 2 from (5): its within-cluster variance plus the small bump. Let r be its variance rank , its position when all directions of the buffer are sorted from largest to smallest variance. If K is the top-k principle directions, then for k < r the separating direction is not in the subspace at all and leverage is blind , share B = ε; for k ≥ r it is included together with k −1 background directions that carry no information about the clusters, and since every transition, rare or common, receives on average one unit of score along each such direction, the share is diluted to 
+
+share B (k) = ε (k − 1 + mB )
+
+ε (k − 1 + mB ) + (1 − ε)( k − 1 + mA) ,
+
+(10) with mB , m A from (6); this equals (7) at k = 1 and decays back toward ε as k grows. In the example of Fig. 5b ( r = 8 ), top-k leverage amplifies the rare cluster 1.0× for k < 8,
+
+5.0× at k = 8 , and 2.6× with all d = 20 directions (the full Mahalanobis score), against 32 .8× for the separating direction alone. For the boundary between the two regimes, the separating direction enters the top k when the bump lifts its variance above the k-th largest background variance λw(k),
+
+ε(1 − ε)∆ 2 > λ w(k)/¯s2 − 1, (11) which reproduces the blind/visible boundary of the simulated 
+
+(ε, ∆) phase diagram in 97% of its cells (Fig. 5c). Ridge leverage, ℓγi = 1  
+
+> N−1
+
+¯x⊤ 
+
+> i
+
+(C + γI )−1 ¯xi, keeps every direction and shrinks the low-variance ones, so it is never blind, but it is diluted by the effective dimension deff (γ) = P 
+
+> j
+
+λj /(λj +
+
+γ) that it retains; its optimum is interior (too small a γ
+
+dilutes over all d directions, too large a γ shrinks away a low-variance separating direction), and in the same example the best γ recovers only 2.9×. The design goal is thus the 
+
+smallest score subspace containing the separating directions. Variance ranking does not target it, because it orders di-rections by how much the data spreads, not by whether a small, far-away group is present; a column carrying such a group has heavy tails regardless of its variance, which is the motivation for tail-based column selection of Sec. III-B. V. EXPERIMENTS 
+
+A. Simple 2D Grid World 
+
+As a proof-of-principal experiment we consider a Q-learning Deep RL agent trying to find the goal in a simple 2D grid world which is a 24 × 12 lattice ( x ∈ { 0, . . . , 23 },
+
+y ∈ { 0, . . . , 11 }), with a main room consisting of 144 cells located at x ∈ { 0, 11 }, y ∈ { 0, 11 }, a narrow corridor whose cells are x ∈ { 12 , . . . , 15 }, y = 5 , and an annex whose cells are x ∈ { 16 , . . . , 23 }, y ∈ { 2, . . . , 9}. The goal in this case is always located at position (1 , 5) in the main room. The goal is in the main room, escaping the annex requires values propagated along the chain: annex → corridor → room, this structure is invisible when focused on only main-room data. We model this as a Markov decision process (MDP) tuple (S, A, P, r, γ ), a state space, action space, transition probabilities P (s′|s, a ), a reward function, and a discount factor. Here the state is the cell we occupy, s = ( x, y );the actions are A =(up, down, left, right); the transition rule is “move one cell in the chosen direction, except with probability 0.1 the action slips to a uniformly random one, and bumping into a wall leaves you in place”; the reward is r = −1 for every step; the episode ends at the goal 
+
+(1 , 5) ; and γ = 0 .99 . Maximizing the return is equivalent to minimizing the number of steps required to reach the goal. Starting at t = 0 and taking T steps to reach the goal gives 
+
+G = 
+
+> T−1
+
+X
+
+> t=0
+
+γt(−1) = − 1 − γT
+
+1 − γ . (12) Fig. 5. Leverage behavior in higher-dimensional buffers. (a) Multi-cluster leverage mass Mc versus the law 1 − πc in (9). (b) Rare share under top-k    
+
+> PCA leverage when the separating direction has variance rank r= 8 ; lines show (10) and leverage along the separating direction alone. (c) Rare-cluster amplification under top-4 PCA leverage over (ϵ, ∆) ; white curve shows the predicted boundary (11)
+
+For a policy π, if action a is taken now and π is followed afterwards, the expected return is 
+
+Qπ (s, a ) = E [Gt|st = s, a t = a, then follow π] , (13) and the optimal action-value function is Q∗(s, a ) =max π Qπ (s, a ), which is the best expected return achievable from (s, a ), whose state version is V ∗(s) = max a Q∗(s, a ).According to the Bellman optimality equation, Q∗ is the optimal solution of 
+
+Q∗(s, a ) = Es′∼P (·| s,a )
+
+h
+
+r + γ max  
+
+> a′
+
+Q∗(s′, a ′)
+
+i
+
+(14) 
+
+= −1 + γ X
+
+> a′′
+
+p(a′′ |a)V ∗(next (s, a ′′ )) , (15) where V ∗(goal ) = 0 and we have simplified the equation because in our case r ≡ − 1, and the randomness comes from the slip so a′′ represents the action actually taken. We can use this rule iteratively to find Q∗ exactly for this simple finite-state grid world. The setup is shown in Figure 2 with the image on the far right colored by Q∗ for each cell. For our Q-learning setup, we assume we do not have access to P and we use a fixed replay buffer of transitions (s, a, r, s′), where Q-learning replaces the expectation in the Bellman equation with a single sampled transition, each giving a temporal-difference (TD) target 
+
+y = r + γ(1 − done ) max  
+
+> a′
+
+Q(s′, a ′), (16) and we train a neural network model to learn Qθ (s, a )
+
+by minimizing the training cost function (Qθ (s, a ) − y)2
+
+over mini-batches from the buffer. As Qθ (s, a ) is trained, for each state s = ( x, y ) it outputs four numbers which are its estimates of the expected discounted return for each action taken from that cell. TThe agent then chooses actions greedily according to 
+
+π(s) = argmax 
+
+> a∈A
+
+Qθ (s, a ). (17) We perform an experiment in which we fill a buffer with 
+
+N = 40 , 000 transitions (s, a, r, s′), with a fraction ϵ = 0 .05 
+
+of them coming from the rare corridor + annex region and 
+
+1 − ϵ = 0 .95 from the main room. We use the approach described above, standardizing every column by subtracting its mean and dividing by its standard deviation, and consider the excess kurtosis of each standardized column 
+
+¯xij = xij − μj
+
+cj
+
+, κj = 1
+
+N
+
+X
+
+> i
+
+¯x4 
+
+> ij
+
+− 3. (18) In this simple example, we score only the state coordinates because r ≡ − 1, and get excess kurtosis values of 1.87 
+
+for the x−column and −1.19 for the y-column. We then compare various buffer sampling approaches for training.  
+
+> •
+
+Uniform: pi = 1 /N to each entry in the buffer.  
+
+> •
+
+β-leverage: 
+
+pi = (1 − β) 1
+
+N + β ℓi
+
+P 
+
+> j
+
+ℓj
+
+, β ∈ [0 , 1] . ℓj = z2
+
+> ij ∗
+
+(19) Column of standardized x values chosen by kurtosis.  
+
+> •
+
+Tail-flat: This approach uses the score to only find the top-decile tail T and then samples uniformly inside of there, taking T as the top-decile leverage tail, giving 
+
+pi = (1 − β) 1
+
+N + β 1[i ∈ T ]
+
+|T | . (20)  
+
+> •
+
+Oracle: The oracle knows rare/common locations uni-formly samples half of its values from each. We use a total batch size of B = 256 and our network 
+
+Qθ : R2 → R4 is a simple dense network with 2 hidden layers of width 24 each and ReLU activation functions. Once we start training the network, we check its performance on the common room region (A) and on the rare corridor + annex region (B) after every 500 training (network weight gradient update) steps. For each check, we start in every single one of the 68 cells in region B as well as in every single one of the 143 cells in region A, apply the greedy policy of Equation (17) for a maximum of 100 steps, and record the total fraction of starts which reach the goal within TABLE I SUCCESS RATE ON TASK B AND Q-VALUE RMSE ON TASKS B AND A 
+
+> UNDER EACH SAMPLING CONDITION
+
+(MEAN ± STD .) OVER 20 SEEDS .Q-RMSE Condition Final succ. B B AUniform 0.882 ± 0.018 3.33 0.31 Leverage ( β = 0 .5) 0.941 ± 0.010 2.42 0.36 Leverage ( β = 0 .75 ) 0.928 ± 0.021 1.43 0.38 Tail-flat ( β = 0 .5) 0.978 ± 0.007 1.63 0.57 Tail-flat ( β = 0 .75 ) 0.989 ± 0.006 1.58 0.87 PER ( α = 0 .6) 0.888 ± 0.024 2.71 0.26 Oracle 50/50 0.987 ± 0.009 1.06 0.72 uniform leverage, β=0.5 leverage, β=0.75 tail-flat, β=0.5 tail-flat, β=0.75 PER (a=0.6) oracle 50/50 
+
+region A 
+
+Fig. 6. Success rate for each method for regions A and B as a function of training steps of Qθ (s, a ) are shown for the various methods. All methods quickly succeed in the common region A (opaque curves), and their performance separates in the rare/difficult region B with our proposed methods all outperforming PER and uniform sampling. 
+
+those 100 steps. We also calculate the root mean squared error of Qθ in each region R ∈ { A, B}, relative to the ground truth Q∗ according to RMSE R =
+
+s 14|R| 
+
+X
+
+> s∈R
+
+X
+
+> a
+
+[Qθ (s, a ) − Q∗(s, a )] 2. (21) We repeat this for 20 different random seeds, for β = 0 .5
+
+and β = 0 .75 . The success rate vs training step results are shown in Figure 6 and are summarized in Table I. 
+
+B. Robot Arm & Window Tail-Flat 
+
+The gridworld’s rare region B is the set of large x, so the kurtosis rule found it in a single column. The second experiment is built so that this is not the case. A three-link planar arm (Fig. 7) pushes a disk from a start o0 to a goal g past a fixed obstacle centered at C; the log is generated by a scripted controller with exploration noise, with 950 straight episodes, in which the line of sight from 
+
+o0 to g clears the obstacle, and 35 orbit episodes, in which 
+
+g lies behind it and the object must be pushed around; the learner is TD3+BC [29], trained offline on this fixed log. The object start o0 and goal g are drawn from the same annulus around C, so every object and goal coordinate has the same marginal; what makes an orbit transition rare is where the goal sits relative to the object and the obstacle, and that this 
+
+TABLE II TD3+BC FOR 20 SEEDS & 10 K GRADIENT STEPS . O RBIT PERFORMANCE IS AVERAGED OVER THE LAST THREE EVALUATIONS .
+
+Orbit Batch Condition (last-3) Straight orbit share Uniform 0.49 1.00 0.069 Window tail-flat ( b = 0 .5) 0.69 1.00 0.220 Leverage ( β = 0 .5) 0.51 1.00 0.110 Leverage ( β = 0 .75 ) 0.44 1.00 0.131 Tail-flat ( β = 0 .5) 0.45 1.00 0.098 Tail-flat ( β = 0 .75 ) 0.38 0.99 0.113 PER ( α = 0 .6) 0.51 0.99 0.084 Oracle 50/50 0.74 1.00 0.500 
+
+Fig. 7. The dashed circles show the annulus from which the object start 
+
+o0 and goal g are drawn. (a) For straight tasks the line of sight o0 → g
+
+clears the obstacle. (b) For orbit tasks the goal lies behind the obstacle and the object must be pushed around it. Solid curves are logged object paths (scripted controller with exploration noise), dotted curves the tool-tip path. 
+
+relation persists for tens of steps while the object travels around. Per-transition scoring of the state columns does not see this, so the rule of Sec. III-B falls back on a joint-angle tail. Extreme arm configurations arereached in both families, and the row-level leverage and tail-flat samplers raise the orbit share of a batch only from 0.069 to 0.10 –0.13 , leaving orbit success at the uniform level. This is the failure mode anticipated in Sec. III-B, where the choice of which columns enter xi was flagged as decisive. 
+
+Window tail-flat. Each logged episode is cut into consec-utive windows w of Lw = 24 transitions, and a window is described relative to its own goal, 
+
+zw =  gw, gw − ¯ow, ∥gw − ¯ow∥  ∈ R5, (22) where ¯ow = 1
+
+> |w|
+
+P 
+
+> i∈w
+
+oi is the mean object position over the common task uniform leverage, β=0.5 leverage, β=0.75 tail-flat, β=0.5 tail-flat, β=0.75 PER (a=0.6) oracle 50/50 win tail-flat, β=0.5 Fig. 8. Comparison of the various approaches for the 3-joint robot arm. 
+
+window and gw its (episode-constant) goal: where the goal is, the offset from where the object currently is to it, and how far it still has to go. The descriptors are standardized as in (1) and scored by the selection-free Mahalanobis form (3) over all dw = 5 descriptor directions, 
+
+ℓw = ¯ z⊤ 
+
+> w
+
+R−1 
+
+> z
+
+¯zw, (23) with Rz the descriptor correlation matrix; with ≈ N/L w
+
+windows and dw = 5 this is one 5 × 5 inverse. The top-decile tail Tw = {w : ℓw ≥ Q0.9(ℓ)} is then replayed with the tail-flat randomly chosen as in (V-A) applied to windows with p = 0 .5 a window uniformly and a transition uniformly inside it; p = 0 .5, a uniform transition 
+
+pi = (1 − β) 1
+
+N + β 1[w(i) ∈ Tw]
+
+|Tw| | w(i)| , β = 0 .5, (24) where w(i) is the window containing transition i. As in (8) the orbit share of a batch is linear in β, (1 − β)ε + β π T with 
+
+πT the orbit fraction of the tail’s transitions; here πT ≈ 0.37 ,more than five times the base rate ε = 0 .069 , so at β = 0 .5
+
+the batch share rises to 0.22 with no labels, rewards, or critic involved. Window tail-flat is thus the rule of Sec. III with two of its free choices made differently. The unit scored is a window rather than a transition, and the feature row is a goal-relative summary of that window rather than raw state columns. The score (3), the tail, and the mixture (V-A) are unchanged. Table II and Figure 8 summarize the results. VI. C ONCLUSION 
+
+We introduced a diversity-aware experience replay frame-work that uses statistical leverage to preferentially revisit underrepresented experience without relying on rewards, labels, or the current value function. Analysis of Gaussian-mixture buffers characterized when leverage amplifies rare data, showing that amplification is governed by geometric separation rather than rarity alone. The analysis also revealed that variance-ranked subspaces can miss rare modes, moti-vating kurtosis-based feature selection. In the gridworld, the resulting leverage and tail-based replay rules improved learn-ing in the underrepresented region compared with uniform replay and PER. The robot-arm experiment further showed that the representation used for scoring is critical: when rare behavior could not be distinguished from individual state coordinates, transition-level scoring provided little improve-ment, whereas scoring short goal-relative trajectory windows increased rare-task success from 0.49 to 0.69, compared with 0.74 for a labeled oracle. These results suggest that statistical leverage provides a simple, critic-independent mechanism for rebalancing imbalanced replay buffers. REFERENCES [1] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduc-tion , 2nd ed. Cambridge, MA: MIT Press, 2018. [2] V. Mnih, K. Kavukcuoglu, D. Silver, A. A. Rusu, J. Veness, M. G. Bellemare, A. Graves, M. Riedmiller, A. K. Fidjeland, G. Ostrovski 
+
+et al. , “Human-level control through deep reinforcement learning,” 
+
+nature , vol. 518, no. 7540, pp. 529–533, 2015. [3] L.-J. Lin, “Self-improving reactive agents based on reinforcement learning, planning and teaching,” Machine Learning , vol. 8, no. 3– 4, pp. 293–321, 1992. [4] T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver, and D. Wierstra, “Continuous control with deep reinforce-ment learning,” arXiv preprint arXiv:1509.02971 , 2015. [5] S. Fujimoto, H. van Hoof, and D. Meger, “Addressing function approximation error in actor-critic methods,” in Proceedings of the 35th International Conference on Machine Learning (ICML) , ser. Proceedings of Machine Learning Research, vol. 80, 2018. [6] T. Haarnoja, A. Zhou, P. Abbeel, and S. Levine, “Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor,” in Proceedings of the 35th International Conference on Machine Learning (ICML) , ser. Proceedings of Machine Learning Research, vol. 80, 2018, pp. 1861–1870. [7] J. Ibarz, J. Tan, C. Finn, M. Kalakrishnan, P. Pastor, and S. Levine, “How to train your robot with deep reinforcement learning: Lessons we have learned,” The International Journal of Robotics Research ,vol. 40, no. 4–5, pp. 698–721, 2021. [8] X. Chen, C. Wang, Z. Zhou, and K. Ross, “Randomized ensembled double Q-learning: Learning fast without a model,” in International Conference on Learning Representations (ICLR) , 2021. [9] A. Bhatt, D. Palenicek, B. Belousov, M. Argus, A. Amiranashvili, T. Brox, and J. Peters, “CrossQ: Batch normalization in deep rein-forcement learning for greater sample efficiency and simplicity,” in 
+
+International Conference on Learning Representations (ICLR) , 2024. [10] S. Fujimoto, W.-D. Chang, E. J. Smith, S. S. Gu, D. Precup, and D. Meger, “For SALE: State-action representation learning for deep reinforcement learning,” in Advances in Neural Information Process-ing Systems , vol. 36, 2023. [11] P. J. Ball, L. Smith, I. Kostrikov, and S. Levine, “Efficient online reinforcement learning with offline data,” in Proceedings of the 40th International Conference on Machine Learning (ICML) , ser. Proceed-ings of Machine Learning Research, vol. 202, 2023. [12] J. Luo, Z. Hu, C. Xu, Y. L. Tan, J. Berg, A. Sharma, S. Schaal, C. Finn, A. Gupta, and S. Levine, “Serl: A software suite for sample-efficient robotic reinforcement learning,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 16 961–16 969. [13] S. Saxena, A. Williams, R. Fierro, and A. Scheinker, “Improved robustness of deep reinforcement learning for control of time-varying systems by bounded extremum seeking,” in 2026 American Control Conference (ACC) . IEEE, 2026, pp. 1165–1172. [14] S. Saxena and A. Scheinker, “Mahalanobis-guided latent ood detection for hybrid es-drl control in time-varying systems,” arXiv preprint arXiv:2606.11474 , 2026. [15] P. Drineas, M. Magdon-Ismail, M. W. Mahoney, and D. P. Woodruff, “Fast approximation of matrix coherence and statistical leverage,” 
+
+Journal of Machine Learning Research , vol. 13, pp. 3475–3506, 2012. [16] T. Schaul, J. Quan, I. Antonoglou, and D. Silver, “Prioritized experi-ence replay,” in International Conference on Learning Representations (ICLR) , 2016, arXiv:1511.05952. [17] S. Fujimoto, D. Meger, and D. Precup, “An equivalence between loss functions and non-uniform sampling in experience replay,” in 
+
+Advances in Neural Information Processing Systems , vol. 33, 2020. [18] T. Lahire, M. Geist, and E. Rachelson, “Large batch experience re-play,” in Proceedings of the 39th International Conference on Machine Learning (ICML) , ser. Proceedings of Machine Learning Research, vol. 162, 2022, pp. 11 790–11 813. [19] Y. Pan, J. Mei, A.-m. Farahmand, M. White, H. Yao, M. Rohani, and J. Luo, “Understanding and mitigating the limitations of prioritized experience replay,” in Proceedings of the 38th Conference on Un-certainty in Artificial Intelligence (UAI) , ser. Proceedings of Machine Learning Research, vol. 180, 2022, pp. 1561–1571. [20] W. Fedus, P. Ramachandran, R. Agarwal, Y. Bengio, H. Larochelle, M. Rowland, and W. Dabney, “Revisiting fundamentals of experience replay,” in Proceedings of the 37th International Conference on Machine Learning (ICML) , ser. Proceedings of Machine Learning Research, vol. 119, 2020. [21] S. Zhang and R. S. Sutton, “A deeper look at experience replay,” arXiv preprint arXiv:1712.01275 , 2017. [22] T. de Bruin, J. Kober, K. Tuyls, and R. Babuˇ ska, “Experience selection in deep reinforcement learning for control,” Journal of Machine Learning Research , vol. 19, no. 9, pp. 1–56, 2018. [23] T. Dai, H. Liu, K. Arulkumaran, G. Ren, and A. A. Bharath, “Diversity-based trajectory and goal selection with hindsight expe-rience replay,” in Pacific rim international conference on artificial intelligence . Springer, 2021, pp. 32–45. [24] K. Zhao, Y. Wang, Y. Chen, Y. Li, L. H. U, and X. Niu, “Efficient diversity-based experience replay for deep reinforcement learning,” in 
+
+Proceedings of the 34th International Joint Conference on Artificial Intelligence (IJCAI) , 2025, pp. 7083–7091. [25] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter et al. , “ π0: A vision-language-action flow model for general robot control,” arXiv preprint arXiv:2410.24164 , 2024. [26] Y. Seo, C. Sferrazza, H. Geng, M. Nauman, Z.-H. Yin, and P. Abbeel, “FastTD3: Simple, fast, and capable reinforcement learning for hu-manoid control,” arXiv preprint arXiv:2505.22642 , 2025. [27] Y. Guo, J. Zhang, X. Chen, X. Ji, Y.-J. Wang, Y. Hu, and J. Chen, “Improving vision-language-action model with online reinforcement learning,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 15 665–15 672. [28] P. J. Huber, “Projection pursuit,” The Annals of Statistics , vol. 13, no. 2, pp. 435–475, 1985. [29] S. Fujimoto and S. S. Gu, “A minimalist approach to offline rein-forcement learning,” in Advances in Neural Information Processing Systems , vol. 34, 2021, pp. 20 132–20 145.

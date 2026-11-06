@@ -1,0 +1,2918 @@
+ModalSearcher: Weaving Visual Evidence into
+Autonomous Cross-Modal Deep Search
+Zhihan Yin1,†, Ruyi Li2,†, Chengyu Fang3, Yifeng Yao1, Nonghai Zhang1,
+Pengfei Xiong4, Terry Zhang4, Huishuai Zhang1,∗, Dongyan Zhao1,5,∗
+1Peking University, 2Southwest University, 3Tsinghua University, 4Independent Researcher,
+5National Engineering Research Center of New Electronic Publishing Technologies
+†Equal contribution.
+∗Corresponding authors: Huishuai Zhang and Dongyan Zhao.
+Abstract
+Static and incomplete parametric knowledge limits the performance of multimodal large language
+models on novel-knowledge and knowledge-intensive tasks, especially those requiring multi-hop
+evidence acquisition. Existing multimodal agentic search methods often fix visual evidence at the
+input or a predefined trajectory position, making it difficult for agents to select search modalities as
+their information needs evolve and to handle complex real-world queries. We define this capability
+as autonomous cross-modal search: an agent chooses among direct reasoning, text-to-text search,
+text-to-image search, and reverse-image search, actively introduces visual evidence when appropriate,
+and switches between and integrates modalities across multiple hops. We propose ModalSearch-
+Pipeline, a scalable procedure for constructing an interleaved multimodal knowledge graph. It samples
+paths with diverse depths and modality compositions and uses backward question construction to
+obscure entity names and image targets that would expose reasoning shortcuts while retaining
+necessary disambiguating clues, yielding text-only, image-initialized, and arbitrarily interleaved multi-
+hop problems. We train the ModalSearcher Agent with supervised fine-tuning and reinforcement
+learning in a live Web environment, and construct ModalSearch-Bench. Experiments show that
+ModalSearcher-8B improves average accuracy by 16.2 points over Qwen3-VL-8B under the same
+agentic workflow across five multimodal knowledge-intensive QA benchmarks, with consistent gains
+on independently constructed active visual-search benchmarks.
+GitHub: https://github.com/Hans-M-Yin/ModalSearcher
+1
+Introduction
+Multimodal large language models (MLLMs) have made rapid progress on visual understanding, reasoning,
+and multimodal question answering [24, 35]. However, their parametric knowledge is incomplete and becomes
+unreliable for knowledge-intensive or time-sensitive questions. Retrieval-augmented generation (RAG) methods
+address this limitation by introducing external documents or multimodal knowledge bases, but they typically
+rely on a separately maintained index and a fixed retrieval–generation procedure [4, 16, 20]. More recent
+agentic search systems interleave web search with reasoning, allowing a language model to decide when to
+retrieve evidence and how to use it to support subsequent reasoning and answer generation [2].
+Recent work has extended this paradigm to multimodal deep search agents and has demonstrated strong
+performance on multimodal knowledge-intensive QA [5, 9, 15, 31, 32]. Nevertheless, the multimodal search
+problem is often formulated as visual understanding followed by text-centric knowledge search: the input image
+is interpreted at the beginning, after which the remaining reasoning chain is primarily resolved in the text
+space. Some recent methods introduce visual search, but the visual evidence is frequently assigned to a fixed
+1
+arXiv:2611.06131v1  [cs.AI]  4 Nov 2026
+
+
+position in the trajectory or explicitly indicated by the question [41]. These settings underrepresent the multi-
+step cross-modal planning required in real-world information-seeking tasks, where an agent must organize
+interleaved textual and visual searches, decide when to switch modalities, and synthesize heterogeneous
+evidence over multiple steps to reach a well-supported answer to the original user query.
+We identify this missing capability as autonomous cross-modal search. Given a question and the evidence
+collected so far, an agent should maintain its information need and decide whether to reason directly, perform
+text-to-text search, retrieve an image through text-to-image search, or perform reverse-image search. The
+decision should depend on the expected usefulness of each modality: textual search may expose entities or
+relations, whereas visual search may reveal clues absent from textual records. The agent must therefore decide
+not only what to search, but also which modality to use and when to switch modalities, while integrating the
+resulting evidence over multiple hops.
+To address this issue, we introduce ModalSearch-Pipeline, a scalable procedure for constructing cross-modal
+multi-hop search data. It begins with interleaved multimodal graph construction, which alternates text-node
+and image-node expansion. Text nodes undergo relation-aware textual expansion and retrievability-aware
+visual expansion; only stably retrievable images receive text-to-image incoming edges, while retrieval-ambiguous
+images may be retained as initial visual inputs. Image-node expansion uses verified visual entity linking,
+allowing visual evidence to appear at intermediate positions in a reasoning chain. We then sample paths
+with diverse depths and modality compositions. Finally, the pipeline merges intermediate text–image–text
+relations and applies backward question rewriting to obscure entity names and image targets that would
+expose reasoning shortcuts, while preserving necessary disambiguating clues and avoiding explicit modality-
+switch instructions. The resulting questions support text-only, image-initialized, and arbitrarily interleaved
+multimodal reasoning while requiring the agent to discover the appropriate evidence through search.
+Building on this data, we develop the ModalSearcher Agent, which interacts with a real search environment
+through text-to-text search, text-to-image search, reverse-image search, and URL reading. At each round, the
+agent observes retrieved evidence, identifies its remaining information need, and either answers or invokes
+another tool. We train the agent in two stages: supervised fine-tuning teaches ReAct-style tool use [33] and
+evidence-grounded reasoning, while reinforcement learning further optimizes multi-round search decisions in
+the environment. The graph paths are used during question construction and expert-trajectory generation,
+but are not exposed to the agent at inference time. We also construct the ModalSearch-Bench, a curated
+benchmark designed to stress autonomous modality selection and cross-modal evidence integration.
+Experiments show that ModalSearcher-8B improves over Qwen3-VL-8B by 19.8 and 15.8 percentage points on
+the independently constructed VisBrowse [42] and BrowseComp-V3 [39] benchmarks, respectively, providing
+evidence of transfer beyond the construction procedure used by ModalSearch-Pipeline. On five established
+multimodal QA and knowledge-search benchmarks, the model achieves an average score of 57.0, improving over
+Qwen3-VL-8B by 16.2 points. ModalSearch-Bench complements these external evaluations with a controlled
+assessment under the same construction paradigm as the training data. Ablations of the data pipeline, search
+tools, and training stages support the value of interleaved modality paths and modality-aware tool decisions
+for the observed gains. Our contributions are summarized as follows:
+• We introduce ModalSearch-Pipeline and ModalSearch-Bench.
+The pipeline constructs an interleaved
+multimodal graph, samples modality-diverse reasoning paths, and synthesizes questions with implicit visual
+dependencies and controllable search depth; the benchmark evaluates autonomous modality selection and
+cross-modal evidence integration.
+• We formulate multimodal deep search as autonomous cross-modal search and develop the ModalSearcher
+Agent, which decides what to search, which modality to use based on its evolving information need.
+• We train the ModalSearcher Agent and use benchmarks and ablations to evaluate the contributions of
+generated data, multimodal tools, and training.
+2
+Related Work
+2.1
+Agentic Search
+To alleviate the limitations of parametric knowledge and solve knowledge-intensive tasks, early retrieval-
+augmented generation (RAG) methods relied on a pre-built external knowledge base or document index [4,
+16]. An independent retriever searched for relevant information before generation and injected it into the
+2
+
+
+Figure 1 Comparison of multimodal search task formulations: input-image understanding, explicitly specified visual-
+search targets, and autonomous acquisition of visual evidence during reasoning.
+(a) Image as Input (Previous)
+(b) Image as Target (Previous)
+(c) Interleave Multimodal Search
+Question: On what date did the wife of the 
+man who took over the management of the 
+zoo in the image in 1991 become an 
+Australian citizen?
+Question: ...Search for an image of this 
+multinational investigative team's 2003 
+weapons inspection at a desert site showing 
+team members examining munitions. In 
+the image, how many inspectors are 
+visible standing among the ordnance?
+Question: In a 2018 demonstration for 
+gender equality at a French film festival, 
+the actress standing to the right of a jury 
+member played a role in  a film adapted 
+from a science fiction novel, how was her 
+character's dark velvet scarf fastened?
+Reasoning Hop Chain
+Visual Evidence (Image)
+Text Evidence (Text Knowledge)
+Text Evidence (Text Knowledge)
+context [10, 20]. These methods require maintenance of the knowledge base and retrieval system, and
+their fixed retrieval–generation procedure is difficult to adapt to open-domain long-horizon tasks. With
+the development of tool-augmented agents, recent work has explicitly interleaved web search with the
+reasoning process of large language models, allowing them to issue searches dynamically according to their
+current reasoning state and integrate external evidence [2]. For example, Search-o1 uses agentic RAG to
+generate search queries when the model encounters knowledge uncertainty and to reason further over retrieved
+documents [22]. R1-Searcher and Search-R1 use outcome-based reinforcement learning to train models to
+learn search invocation, query generation, and search-result utilization [19, 26]. DeepResearcher, WebThinker,
+and WebSailor extend training or inference to the real open Web and study multi-round search, browsing, and
+evidence integration under noisy, redundant, and incomplete webpage observations [21, 23, 43]. MiroThinker
+further explores sustained interaction in long-horizon deep-research agents through context management and
+interactive scaling [28]. Together, these studies show that interleaving search behavior with reasoning can
+improve factuality and reliability on knowledge-intensive, multi-hop, and open-domain long-horizon tasks
+while mitigating hallucinations caused by missing knowledge [34, 36].
+2.2
+Multimodal Deep Search Agents
+Inspired by text-only search agents, recent work has extended agentic search to multimodal large language
+models and improved performance on knowledge-intensive visual QA [6, 9, 12, 37]. MMSearch-R1 [31] trains
+MLLMs to invoke text-to-image and text-to-text search tools through reinforcement learning, while Vision-
+DeepResearch [15], OpenSearch-VL [5], and MM-DeepResearch [32] construct multimodal search trajectories
+for multi-hop reasoning. Other methods use cached search results or offline sandboxes to improve training
+efficiency and stability [18]. Despite this progress, many existing formulations remain largely text-centric:
+visual search is primarily used to recognize entities or local regions in the input image, while subsequent
+multi-hop retrieval and reasoning are conducted in the text space [14, 25, 41]. VisBrowse and BrowseComp-V3
+evaluate active image retrieval, sharing our goal of acquiring new visual information during reasoning [39, 42].
+Our training data support task-driven visual search interleaved with textual retrieval. Visual-Seeker [41] also
+uses visual search, but its visual target is usually fixed and may be explicitly indicated in the question. InterLV-
+Search [13] evaluates interleaved multimodal search in which retrieved visual evidence guides subsequent
+retrieval. Our work focuses on graph-based supervision synthesis and agent training, complemented by
+ModalSearch-Bench. We study task-driven autonomous cross-modal search, where the agent determines
+the search modality and target from its evolving information need [40]. Our formulation jointly addresses
+modality selection, modality switching, and cross-modal evidence integration, and is supported by data that
+cover different search depths and interleaved textual and visual reasoning.
+3
+Method
+Our method centers on ModalSearch-Pipeline, a scalable data-synthesis pipeline for autonomous cross-modal
+search. The pipeline comprises three stages. First, interleaved multimodal graph construction combines two
+text-node operations, namely relation-aware textual expansion and retrievability-aware visual expansion,
+3
+
+
+Figure 2
+Overview of the proposed data-synthesis pipeline. The pipeline constructs an interleaved multimodal
+knowledge graph, samples modality-diverse reasoning paths, and synthesizes questions that obscure shortcuts and
+visual targets while retaining necessary disambiguating clues and avoiding explicit modality-switch instructions.
+(a) Interleaved Multimodal Graph Construction
+Text Node 
+Image Node 
+Iterative Graph
+Construction
+2 006 UEFA Champions League
+His first UEFA Champions League
+FC Barcelona
+Club he played for during 20s.
+Diego Maradona
+Another player with the same nationality 
+(Analysis: ambiguous relationship)
+
+Text Candidate 1
+Wikipedia: Lionel Messi
+2006
+UEFA...
+Wiki
+Page
+Lionel
+Messi
+Relation-Aware Textual 
+Expansion
+Node Expansion
+Content Matching
+Image content matches 
+the search description.
+Retrieval Stability
+Consistent visual content 
+across search results.
+Image Candidate 1
+The
+photo...
+Text Node
+Web Search
+Results
+Text Candidate
+Image Candidate
+Node Reuse
+Retrievability-Aware Visual 
+Expansion
+Text-Node Expansion
+Newly Expanded
+Nodes
+[Page Title]
+Lionel Messi
+The football player walking towards the 
+corner.
+Qatar Airways
+The brand displayed on the advertising 
+board along the sideline at that moment.
+Arrowhead Stadium
+The stadium shown in the image.
+...
+Target
+ Lionel Messi
+Lionel
+Messi
+MLLM confirms that 
+the player walking to 
+the corner is Messi. 
+Image Evidence: ...
+Text Evidence: ...
+This photo shows 
+Messi ...
+Interleaved
+Multimodal Graph
+Image Node
+Wikipedia
+Entity Recognition
+Verified Visual Entity Linking
+(b) Path Sampling & Processing
+(c) Question Synthesis
+(1) Constrained Path Sampling
+Backward Rewriting
+Backward Rewriting
+Curated
+ Dataset
+• Avoid cycles and entity leakage
+• Control image-node spacing
+• Sample modality compositions
+• Penalize repeated edge use
+(1) Terminal Question
+(2) Backward Rewriting
+(3) Starting-Node Rewriting
+start with text node
+Wiki page/ Final image
+Current
+Question
+relationship
+between 
+Obscure starting entity
+Question
+Writer Model
+Entities, targets &
+modality cues 
+hidden
+Writer Model
+Wiki
+Content
+Rewrite
+H ide Entity         with 
+Remove Redundant Clues
+Grammar Refinement
+Question Candidates
+Question + Image
+Image
+Student Model
+(2) Merge Relations Around Images
++
+Insert image 
+Bridge question & image
+Next Question
+Iterate
+Terminal question
+start with image node
+Name: 2006 UEFA Champions League
+Wikipedia: [URL]
+Source: Lionel Messi
+Relationship: His first UEFA 
+Champions League title
+Description: The 
+photo Messi 
+posted on 
+Instagram of 
+himself sleeping 
+while hugging the 
+World Cup trophy.
+Source: Lionel Messi
+The
+photo...
+Source
+page
+Image
+Question
+with starting 
+entity revealed
+with image-node expansion through verified visual entity linking. Second, we sample reasoning paths with
+diverse depths and modality compositions. Third, question synthesis combines edge descriptions along
+text–image–text subpaths and applies backward question rewriting to obscure entity names and visual targets
+that would expose reasoning shortcuts, while preserving necessary disambiguating clues and avoiding explicit
+modality-switch instructions. The resulting data are used to train the ModalSearcher Agent with supervised
+fine-tuning and reinforcement learning in a live web environment. Importantly, the graph serves only as an
+offline scaffold for data synthesis and trajectory generation; it’s not exposed to the agent as a retrieval index
+at inference time.
+3.1
+Interleaved Multimodal Graph Construction
+We represent the graph as G = (V, E), where V = Vt ∪Vi consists of text nodes Vt and image nodes Vi. For
+an entity a, let w(a) denote its Wikipedia article; the corresponding text node is vt(a) = (a, w(a)). An image
+node is represented as vi = (xi, di, ci), where xi is the image content, di is its textual description, and ci is
+source-webpage metadata. We partition the directed edges into three modality-based categories: text-to-text,
+text-to-image, and image-to-text, giving E = Et→t ∪Et→i ∪Ei→t. Each directed edge e = (vs, r, vd) is
+annotated with a natural-language relation description r, which expresses the semantic or visual association
+between the source and destination nodes and provides a clue for subsequent question synthesis.
+Starting from multiple seed nodes, graph construction alternates between text-node expansion and image-node
+expansion. Before a node is scheduled for expansion, we check whether it already exists in the graph. Existing
+nodes are reused, while unseen nodes are added to the expansion queue; once a proposed neighbor and its
+relation are validated, a directed edge is inserted between the source and destination nodes. This iterative
+procedure connects locally proposed neighbors into a graph rather than producing isolated reasoning chains.
+Text-node expansion follows two complementary branches. In relation-aware textual expansion, we extract
+4
+
+
+the local hyperlink structure from w(a) to construct neighboring entities ˆa, forming the candidate set
+Ct(a) = {vt(ˆa)}. For each candidate, an MLLM (see Table 7) uses the local textual context to identify the
+linked entity and generate the semantic relation between a and ˆa. Candidates with weak semantic associations,
+ambiguous relations, or non-entity targets are removed. For every retained candidate, we construct or reuse
+vt(ˆa) and add e = (vt(a), r, vt(ˆa)) ∈Et→t. Thus, neighboring nodes and their relations are proposed and
+validated jointly. In retrievability-aware visual expansion, an MLLM identifies paragraphs in w(a) that describe
+visual content retrievable through text, such as a scene, event, or artwork, and converts them into candidate
+image descriptions or search queries. According to the visual and referential consistency of the returned results,
+we partition image nodes into the stably retrievable set V stable
+i
+and the retrieval-ambiguous set V amb
+i
+, where
+Vi = V stable
+i
+˙∪V amb
+i
+. If the results for di refer to the same visual content, we add e = (vt(a), r, vi) ∈Et→i.
+Retrieval-ambiguous images receive no text-to-image incoming edge because their descriptions may lead
+to substantially different yet plausible results, but they may still be retained as initial visual nodes. This
+asymmetric connectivity separates whether an image is useful in the graph from whether it can be reached
+reliably from a textual description.
+Image-node expansion proceeds through verified visual entity linking. Given vi = (xi, di, ci), an MLLM
+proposes entities appearing in the image using its visual content, description, and source-page context. Each
+candidate entity a′ is linked to a corresponding Wikipedia article and further verified using the article body
+and images. If vt(a′) already exists, we reuse it; otherwise, we add it to Vt and schedule it for subsequent
+expansion. We then construct e = (vi, r, vt(a′)) ∈Ei→t, where r describes the visual or semantic relation
+between the entity and the image, such as its spatial position, event participation, scene membership, or
+relation to an artwork.
+Alternating these two forms of node expansion, together with modality-typed edge construction and node
+reuse, yields an interleaved graph that supports text-to-text, text-to-image, and image-to-text transitions
+over multiple hops. In particular, image nodes are not restricted to initial inputs or terminal evidence:
+verified image-to-text links allow them to appear at intermediate positions and support paths with arbitrary
+text–image interleaving. Further details on retrievability assessment, visual entity linking, and graph assembly
+are provided in Appendix A.
+3.2
+Path Sampling and Question Synthesis
+After constructing the graph, we sample reasoning paths with controllable depths and modality compositions.
+We randomly sample an initial node v0 ∈V and a target depth L ∈{Kmin, . . . , Kmax}, and then perform
+a constrained random walk along outgoing edges to obtain π = (v0, v1, . . . , vL). The sampler avoids cycles,
+semantic repetition, overused edges, and relations that prematurely expose later entities, while controlling
+the spacing of image nodes. These constraints produce diverse text-only, image-initialized, and interleaved
+multimodal paths rather than merely following the most frequent graph relations.
+Before writing a question, we process intermediate text–image–text subpaths. For vt(a) →vi →vt(a′),
+the image represents a specific scene, event, or artwork associated with a, while vt(a′) represents an entity
+appearing in that image. An LLM combines the two edge descriptions into a composed relation description ˜r,
+represented as vt(a)
+˜r−→vt(a′) for question synthesis, while retaining the original image-mediated subpath as
+the supporting evidence. The composed description refers to the relevant scene, event, or artwork without
+explicitly mentioning the image node or instructing the agent to perform text-to-image search. This rewriting
+is intended to make the visual evidence dependency implicit and encourage autonomous modality selection; it
+does not by itself rule out alternative textual solution paths.
+We next generate a terminal question qL according to the modality of vL. If vL = vt(a), an LLM generates a
+knowledge question from w(a); if vL = vi, an MLLM generates a question about visual attributes or relations
+in the image. If the starting node v0 is an image, its content x0 is provided as the initial visual input. All
+other image nodes are withheld and must be retrieved by the agent according to its evolving information need.
+Finally, backward question rewriting transforms qL recursively from the end of the path toward its start. For
+each edge vn−1
+rn
+−→vn, n = L, . . . , 1, the predecessor and relation are used to replace the explicit reference to
+vn in qn with an indirect description, yielding qn−1. Redundant or path-irrelevant content is removed, while
+clues necessary for solvability and answer uniqueness are retained. For a textual starting node v0 = vt(a),
+an MLLM further replaces a with an indirect description derived from w(a); for an image starting node, its
+description is replaced by “this image.” The final question ˜q0 obscures entity names and image-search targets
+5
+
+
+that would enable search shortcuts and avoids explicit modality-switch instructions. Together, these steps
+preserve the need for the agent to determine what evidence is missing, which modality is most informative,
+and when to switch modalities.
+ModalSearch-Bench construction.
+To obtain a held-out evaluation set, we independently construct a new
+20,035-node multimodal knowledge graph with the same ModalSearch-Pipeline procedure and a disjoint set of
+initial seed nodes, including seeds from domains not covered by the training graph. We apply the same path-
+sampling and backward question-rewriting steps to this graph and sample 900 candidate questions covering
+different reasoning depths and modality-path types. Experts retain 300 questions after individually verifying
+their answers, correctness, and solvability against Wikipedia and removing ambiguous cases. We distinguish
+Input-only questions, whose reference visual evidence is provided in the initial input, from Search-required
+questions, which call for actively searching for new visual information during reasoning to advance the solution.
+The benchmark contains 100 Input-only and 200 Search-required questions, with broadly balanced reasoning
+depths. Its graph nodes, paths, and questions are kept disjoint from all training data and used exclusively to
+evaluate autonomous cross-modal search, including modality selection, modality switching, and cross-modal
+evidence integration; further details are provided in Appendix B.
+3.3
+Agentic Search and Training
+The ModalSearcher Agent uses a ReAct-based interaction framework over a live web environment. Unlike the
+offline graph transitions, the runtime tools operate on the open web and are selected autonomously based on
+the agent’s information need. At each round, the agent either answers directly or invokes one of four tools:
+• t2t_search(query) performs text-to-text search and returns the top K results;
+• t2i_search(query) performs text-to-image search and returns the top K images;
+• i2i_search(image, region) reverse-searches the cropped region for K related images;
+• read_url(url) reads webpages/PDFs as Markdown or downloads images.
+The search tools return titles, snippets, image information, and URLs. The agent assesses relevance, reads
+selected sources, and incrementally integrates evidence.
+Supervised fine-tuning.
+We sample questions and their corresponding reasoning paths from the interleaved
+multimodal graph. For each sample, the question, ground-truth answer, and path transitions vn−1
+rn
+−→vn are
+provided to an expert model as offline auxiliary information. Using only the same tools available to the target
+agent, the expert interacts with the real search environment and generates ReAct-formatted trajectories. We
+discard trajectories with incorrect answers, failed tool calls, or insufficient evidence and use the retained
+samples for SFT. In our experiments, GPT-5.4 generates the expert trajectories. The auxiliary graph paths
+are never provided to the target model at inference time.
+Reinforcement learning.
+Starting from the SFT model, we use RLOO [1] to optimize the agent’s multi-round
+search decisions in the real web environment. For each question, we sample a group of K trajectories
+{τ1, . . . , τK}. Let r(τi) denote the trajectory-level reward, whose design is described below. RLOO uses the
+average reward of the other trajectories in the same group as a leave-one-out baseline:
+bi =
+1
+K −1
+K
+X
+j=1
+j̸=i
+r(τj),
+Ai = r(τi) −bi,
+where Ai is held fixed during the policy update. Let B denote a batch of trajectories, with advantages
+computed within their question groups. For token yi,t in a trajectory of token-sequence length Ti, hi,t contains
+the question and preceding multimodal interaction history, including tool observations. The mask mi,t is 1
+for model-generated response tokens participating in optimization and 0 for prompt, tool-observation, and
+padding tokens. The token-mean policy-gradient surrogate averages over all unmasked response tokens in B:
+LRLOO(θ) = −
+P
+i∈B
+PTi
+t=1 mi,tAi log πθ(yi,t | hi,t)
+P
+i∈B
+PTi
+t=1 mi,t
+.
+6
+
+
+Table 1 Performance on multimodal knowledge-intensive QA and web-search benchmarks, including MMSearch [17],
+BrowseComp-VL [8], VDR-Bench [38], FVQA [30], and LiveVQA [7]. Bold and underline mark the best and second-best
+scores in each column within each group, respectively.
+Model
+VDR
+MMSearch
+LiveVQA
+BC-VL
+FVQA
+Avg
+Direct Reasoning
+GPT-5 [29]
+9.8
+35.1
+44.4
+48.6
+54.4
+38.5
+Gemini-2.5-Pro [27]
+8.0
+39.8
+60.3
+43.1
+60.7
+42.4
+Claude-4-Sonnet
+2.0
+18.7
+38.5
+29.3
+35.3
+24.8
+Qwen3-VL-8B [3]
+2.4
+15.0
+41.7
+21.8
+27.9
+21.8
+Qwen3-VL-32B [3]
+4.0
+23.7
+49.7
+28.3
+35.6
+28.3
+Agentic Workflow
+GPT-5 [29]
+22.3
+65.7
+73.3
+49.1
+69.0
+55.9
+Claude-4-Sonnet
+13.6
+70.3
+69.7
+44.1
+69.0
+53.3
+Gemini-2.5-Pro [27]
+18.8
+67.8
+70.0
+45.2
+68.3
+54.0
+Qwen3-VL-8B [3]
+15.2
+52.0
+53.0
+31.6
+51.9
+40.7
+Qwen3-VL-32B [3]
+17.1
+58.3
+64.3
+37.1
+60.1
+47.4
+Deep Search Agent
+MMSearch-R1-7B [31]
+2.9
+53.8
+48.4
+20.9
+58.4
+36.9
+DeepEyes-v2-7B [11]
+7.8
+63.7
+–
+–
+60.6
+–
+WebWatcher-7B [9]
+10.3
+49.1
+51.2
+21.2
+–
+–
+WebWatcher-32B [9]
+–
+55.3
+58.7
+27.0
+–
+–
+SenseNova-MARS-8B [6]
+19.4
+67.4
+56.2
+35.1
+67.1
+49.0
+ODE-8B [14]
+20.4
+66.0
+–
+41.9
+64.7
+–
+MM-DeepResearch-8B [32]
+-
+67.8
+65.0
+37.9
+69.2
+-
+OpenSearch-VL-8B [5]
+20.8
+64.5
+59.6
+37.6
+71.5
+50.8
+ModalSearcher-8B (Ours)
+26.2
+70.3
+70.3
+48.1
+69.9
+57.0
+∆vs Qwen3-VL-8B
++11.0
++18.3
++17.3
++16.5
++18.0
++16.2
+This reduction does not first normalize each trajectory by its individual response length. We define the reward
+of trajectory τi as
+r(τi) = αracc(τi) + βrfmt(τi),
+where racc is 1 when the final answer is judged to be correct and 0 otherwise, and rfmt is 1 when all tool calls
+follow the predefined interaction format and 0 otherwise. For rollouts terminated by repeated agent-caused
+format or tool-call errors, we override this reward with 0.1; tool-instability failures receive 0, as detailed in
+Appendix C.3. During training, we cache tool-call results within each group, which improves the stability of
+web search to some extent and reduces the training cost.
+4
+Experiments
+4.1
+Experiment Setup
+Datasets and evaluation benchmarks.
+We construct an approximately 16K-example SFT dataset and
+use 5.8K additional pipeline-generated examples for RL, covering diverse reasoning depths, domains, and
+modality-path types. The SFT set combines 13.5K pipeline-generated examples with 1.3K examples from
+the FVQA training split and 1.2K from the LiveVQA training split to broaden question-type coverage and
+reduce the risk of overfitting. GPT-5.4 generates the SFT search trajectories. We evaluate multimodal
+deep-search ability on MMSearch [17], BrowseComp-VL [8], VDR-Bench [38], FVQA [30], and LiveVQA [7],
+and autonomous cross-modal search on VisBrowse [42], BrowseComp-V3 [39], and ModalSearch-Bench. FVQA
+is included to assess knowledge-intensive visual question answering.
+7
+
+
+Table 2 Performance on autonomous cross-modal search benchmarks, including VisBrowse [42] and BrowseComp-
+V3 [39]. The first two rows use direct answering; “w/ tools” denotes tool-augmented evaluation. IO and SR denote
+Input-only (100 questions) and Search-required (200 questions). Bold and underlined scores mark the best and
+second-best open-source results. We report the mean accuracy over 5 runs.
+Model
+VisBrowse
+BrowseComp
+-V3
+ModalSearch
+Avg.
+IO
+SR
+Avg.
+GPT-5 [29]
+30.2
+13.8
+66.0
+37.8
+47.2
+30.4
+Gemini-2.5-Pro [27]
+23.4
+13.5
+53.5
+29.5
+37.5
+24.8
+GPT-5 (w/ tools)
+51.5
+26.2
+73.0
+54.8
+60.9
+46.2
+Gemini-2.5-Pro (w/ tools)
+38.5
+25.3
+59.4
+47.3
+51.3
+38.4
+OpenSearch-VL-8B [5]
+11.2
+–
+15.5
+10.9
+12.4
+–
+Qwen3-VL-8B [3]
+13.6
+5.5
+9.6
+15.5
+13.5
+10.9
+Qwen3-VL-32B [3]
+21.9
+11.0
+29.8
+26.6
+27.7
+20.2
+ModalSearcher-8B
+33.4
+21.3
+62.6
+37.4
+45.8
+33.5
+Baseline models.
+We select both closed-source and open-source agentic search models as baselines. The
+closed-source models include GPT-5 [29], Claude-4-Sonnet, and Gemini-2.5-Pro [27]. The open-source models
+include Qwen3-VL-8B and Qwen3-VL-32B [3], SenseNova-MARS-8B [6], ODE-8B [14], OpenSearch-VL-8B [5],
+MMSearch-R1-7B [31], DeepEyes-V2-7B [11], WebWatcher-7B [9], and MM-DeepResearch-8B [32]. For general
+models without native search capabilities, we evaluate them in the same tool environment.
+Implementation details.
+We use Qwen3-VL-8B [3] as the base model. The SFT learning rate is set to 2×10−5
+for 4 epochs, and the RL learning rate is set to 1 × 10−6 for 4 epochs. Unless otherwise specified, we use
+GPT-4o as the judge model during evaluation and follow the inference sampling configuration recommended
+by Qwen3-VL [3]. For evaluation results, we report mean accuracy over five inference repeated runs. Further
+implementation details are provided in Appendix C.
+4.2
+Main Results
+ModalSearcher improves multimodal knowledge-intensive QA. Table 1 compares ModalSearcher-8B with
+baseline methods on several benchmarks that emphasize visual understanding and knowledge-intensive question
+answering. Under a unified evaluation protocol, we compare direct reasoning, agentic workflows, and trained
+deep-search agents. At a comparable parameter scale, ModalSearcher-8B achieves leading performance on
+multiple benchmarks and surpasses closed-source models on some of them. Compared with Qwen3-VL-8B
+evaluated directly under the same agentic framework and tool environment, ModalSearcher-8B improves
+average performance by 16.2 points and substantially outperforms existing open-source deep-search agents.
+Compared with OpenSearch-VL [5], which is trained on data synthesized by its own pipeline, ModalSearcher
+achieves higher average accuracy on multimodal knowledge-intensive QA benchmarks and consistent gains on
+the shared active visual-search benchmarks (Tables 1 and 2), supporting the effectiveness of ModalSearch-
+Pipeline. On FVQA, ModalSearcher achieves 69.9%, compared with 71.5% for OpenSearch-VL. Further
+ablations in Sec. 5 show that ModalSearcher-8B trained with SFT alone already matches or exceeds most
+baselines, indicating that the constructed training data effectively improves search ability.
+ModalSearcher transfers to independent visual-search benchmarks. Table 2 combines independent visual-
+search benchmarks with ModalSearch-Bench to assess external transfer and performance under our task-
+construction paradigm. On the independently constructed VisBrowse and BrowseComp-V3 visual-search
+benchmarks, ModalSearcher-8B achieves 33.4% and 21.3% accuracy, improving over Qwen3-VL-8B by 19.8
+and 15.8 percentage points, respectively. It surpasses Qwen3-VL-32B by 11.5 and 10.3 points on these two
+benchmarks. These consistent gains support transfer of active visual-search ability beyond our question-
+construction pipeline. The tool ablation in Sec. 5 shows that removing text-to-image search reduces accuracy on
+VisBrowse by 9.2 points, supporting the role of actively acquired visual evidence on an independent benchmark.
+ModalSearch-Bench provides a controlled evaluation on held-out graph nodes, paths, and questions generated
+using the same construction procedure as the training data. On ModalSearch-Bench, ModalSearcher-8B
+8
+
+
+Table 3
+Ablation of cross-modal data generation. All 7K variants use only pipeline-generated data; Full (16K)
+additionally includes FVQA and LiveVQA training examples.
+Training data
+MMSearch
+BC-VL
+VisBrowse
+LiveVQA
+ModalSearch
+Avg.
+Full (16K)
+64.3
+44.9
+28.9
+68.3
+39.3
+49.1
+Full (7K subset)
+63.0
+41.9
+26.6
+69.1
+37.3
+47.6
+Input-only (7K)
+63.6
+39.8
+21.3
+67.4
+33.0
+45.0
+Text-only (7K)
+58.7
+37.9
+19.5
+60.3
+28.7
+41.0
+Figure 3 Search-tool usage and agentic framework ablation. (a) Search-tool proportions, with raw invocation counts
+annotated. Red bars have a fixed width; each blue bar’s width is scaled by the ModalSearcher-to-Qwen total-call
+ratio within that benchmark. Only t2t_search, t2i_search, and i2i_search are counted; read_url is excluded. (b)
+Benchmark accuracy under progressively restricted tool settings, including no-tool answering; each legend item pairs
+the Qwen3-VL-8B (red) and ModalSearcher-8B (blue) colors.
+BC-VL
+MMSearch
+ModalSearch
+VisBrowse
+0
+25
+50
+75
+100
+Tool usage (%)
+3,343
+19
+36
+3,601
+40
+330
+1,265
+96
+32
+970
+67
+179
+4,065
+518
+42
+2,813
+534
+298
+1,866
+177
+15
+1,505
+609
+243
+Qwen3-VL-8B
+t2t
+t2i
+i2i
+ModalSearcher-8B
+t2t
+t2i
+i2i
+(a) Search-tool usage
+MMSearch
+BC-VL
+VisBrowse
+ModalSearch
+Avg
+10
+20
+30
+40
+50
+Accuracy
+52.0
+31.6
+13.6
+13.5
+27.7
+48.0
+29.3
+9.5
+10.0
+24.2
+44.3
+27.3
+11.2
+10.7
+23.4
+15.0
+21.8
+8.9
+10.3
+14.0
+Qwen3-VL-8B
+MMSearch
+BC-VL
+VisBrowse
+ModalSearch
+Avg
+0
+10
+20
+30
+40
+50
+60
+70
+70.3
+48.1
+33.4
+45.8
+49.4
+68.7
+47.1
+24.2
+37.3
+44.3
+53.0
+41.8
+21.3
+33.3
+37.4
+15.8
+21.1
+11.8
+8.7
+14.4
+ModalSearcher-8B
+Full tools
+w/o t2i_search
+w/o t2i_search+i2i_search
+No-tool answering
+(b) Tool ablation
+achieves 62.6% on Input-only and 37.4% on Search-required, yielding 45.8% overall accuracy. The 21.9-point
+gain over Qwen3-VL-8B on Search-required, together with improved visual-target alignment and coverage
+(Table 4) and the visual-tool ablations (Figure 3), supports our central motivation: training agents to actively
+acquire and use new visual information to advance reasoning. ModalSearch-Bench complements the external
+evaluations with a controlled assessment of active visual-information acquisition and use during reasoning. Its
+shared construction paradigm may contribute to the observed gains; the improvements on VisBrowse and
+BrowseComp-V3 provide evidence that the training benefit extends beyond our generated questions.
+5
+Ablation Studies
+We conduct ablation studies from three perspectives: multimodal data generation, the agentic framework,
+and the training method.
+Cross-modal data generation.
+The core design of ModalSearch-Pipeline is to sample reasoning paths
+containing different modality nodes from the interleaved multimodal knowledge graph. To validate the role
+of interleaved modality paths, we construct two data variants. For Input-only, we remove non-initial image
+nodes and retain visual evidence only at the beginning of the reasoning chain, then sample 7K examples for
+SFT with all other settings unchanged. For Text-only, we remove all image nodes and separately sample 7K
+purely textual multi-hop search examples for SFT; these examples are excluded from the main SFT and RL
+data statistics. For an equal-size comparison, the full modality configuration is also retrained on a randomly
+sampled 7K subset of the 13.5K pipeline-generated SFT examples. All three 7K settings use only generated
+data; the Full (16K) setting additionally includes the FVQA and LiveVQA training examples described in
+Sec. 4.1. Results are reported in Table 3.
+Compared with the random Full (7K) subset, the Full (16K) training mixture improves ModalSearch
+(37.3→39.3), BC-VL (41.9→44.9), VisBrowse (26.6→28.9), and Avg. (47.6→49.1), while MMSearch and
+LiveVQA remain comparable. This comparison reflects both more generated examples and the addition of
+auxiliary training data, rather than isolating data scale alone. At the same 7K budget, Input-only retains
+similar performance on conventional multimodal QA but drops on ModalSearch (33.0), VisBrowse (21.3), and
+9
+
+
+Table 4 Visual-search behavior before and after training on 200 search-required questions with 235 non-initial reference
+image nodes. All rates are percentages; ∆reports point differences computed before rounding. Alignment and coverage
+concern search targets rather than returned-image correctness.
+Model
+t2i
+invocation ↑
+Target
+alignment ↑
+New-target
+alignment ↑
+Node
+coverage ↑
+Repeated
+calls ↓
+Qwen3-VL-8B
+37.9
+40.2
+36.4
+19.1
+70.8
+ModalSearcher-8B
+93.4
+57.5
+56.2
+73.6
+51.6
+∆vs Qwen3-VL-8B
++55.6
++17.3
++19.8
++54.5
+-19.2
+Table 5 Training ablation. Bold and underline mark the
+best and second-best scores. MS/VB: ModalSearch/Vis-
+Browse.
+Setting
+MMSearch BC-VL MS
+VB Avg.
+SFT+RL
+70.3
+48.1
+45.8 33.4 49.4
+SFT-only
+64.3
+44.9
+39.3 28.9
+44.4
+Base
+52.0
+31.6
+13.5 13.6
+27.7
+Figure 4 Accuracy and maximum-turn exceedance rate
+during RL training.
+20
+40
+60
+80
+100
+0.3
+0.4
+0.5
+0.6
+0.7
+Accuracy
+20
+40
+60
+80
+100
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+Exceeded rate
+BC-VL (39.8), suggesting that an initial image alone is insufficient for these search tasks. Removing all image
+nodes in Text-only further degrades every benchmark, reducing ModalSearch to 28.7 and Avg. to 41.0. These
+equal-size comparisons support the value of interleaved training data, with benefits on the external VisBrowse
+and BC-VL benchmarks as well as ModalSearch-Bench.
+Agentic framework.
+We test whether training improves the agent’s use of actively retrieved visual infor-
+mation by combining tool-use statistics with tool-removal interventions. We compare Qwen3-VL-8B and
+ModalSearcher-8B under four settings: the full tool set, without t2i_search, without both t2i_search and
+i2i_search, and no-tool answering. The two visual-tool ablations retain text search and URL reading. In
+the no-tool setting, search is unavailable, leaving no search-returned URLs for read_url; the model answers
+from the provided input and its parametric knowledge.
+Figure 3(a) characterizes how training changes tool allocation. The base model predominantly uses t2t_-
+search across all four benchmarks. After training, the shares of both visual search tools increase on VisBrowse
+and ModalSearch. On MMSearch and BC-VL, reverse-image search also accounts for a larger share, while
+text-to-image search remains infrequent or does not increase in proportion. Total search calls decrease on
+MMSearch and ModalSearch but increase on BC-VL and VisBrowse, indicating that training changes tool
+allocation according to the task. Panel (b) tests whether access to these tools contributes to answer accuracy.
+To examine whether visual searches target the reference evidence, Table 4 analyzes search-required questions
+in ModalSearch-Bench which contains 235 non-initial reference image nodes. Invocation rate measures the
+fraction of questions with at least one t2i_search call. Target alignment is the fraction of calls whose search
+targets explicitly match a reference image node; new-target alignment restricts matches to non-initial nodes
+while retaining all calls as the denominator. Node coverage measures the fraction of distinct non-initial
+reference image nodes targeted by at least one call. Repeated-call rate measures the fraction of calls repeating
+the same search intent.
+After training, visual-search invocation rises from 37.9% to 93.4%, and non-initial target coverage increases
+from 19.1% to 73.6%. Despite more calls overall, target alignment improves from 40.2% to 57.5%, and the
+fraction of all calls aligned with non-initial visual targets rises from 36.4% to 56.2%. The repeated-call
+proportion falls from 70.8% to 51.6%. These results show that training increases targeted visual-search activity
+and reference-target coverage while reducing the proportion of repeated calls. The tool-removal experiment
+then tests whether visual-search access contributes to answering.
+Removing t2i_search reduces ModalSearcher’s accuracy by 9.2 and 8.5 percentage points on VisBrowse
+10
+
+
+and ModalSearch, respectively, compared with 4.1 and 3.5 points for the base model. Removing both visual
+search tools produces larger drops of 12.1 and 12.5 points for ModalSearcher, compared with 2.4 and 2.8
+points for the base model. Thus, ModalSearcher derives a larger accuracy benefit from visual-search access
+on both benchmarks. With text search and URL reading still available, these accuracy drops provide direct
+evidence that visual-search access contributes to task performance. Together with Table 4, they support
+improvements in both targeted visual-search behavior and the performance benefit of visual-search access.
+The corresponding effect on the independently constructed VisBrowse benchmark shows that this benefit is
+not confined to questions synthesized by ModalSearch-Pipeline.
+The contribution also varies across benchmarks: removing t2i_search costs ModalSearcher only 1.6 and 1.0
+points on MMSearch and BC-VL, consistent with their predominantly textual search patterns in panel (a).
+Together, the tool-use and removal results support task-dependent use of visual search and its contribution to
+answering at the benchmark level; they do not assume that every question has an exclusively visual solution.
+Finally, no-tool answering reduces ModalSearcher’s four-benchmark average from 49.4 to 14.4, close to the base
+model’s 14.0. The training benefit is therefore primarily reflected in search action and evidence integration.
+Training method.
+Table 5 separates the contributions of SFT and RL. SFT alone substantially improves
+over the base Qwen3-VL-8B model, increasing MMSearch (52.0 →64.3), BrowseComp-VL (31.6 →44.9), and
+ModalSearch (13.5 →39.3). After initializing from the SFT model, RL further improves these benchmarks by
+6.0, 3.2, and 6.5 points, respectively. These gains show that RL improves accuracy on both ModalSearch-Bench
+and external benchmarks, complementing the evidence for visual-tool utility in Figure 3. The fully trained
+model also reaches 33.4 on VisBrowse, compared with 28.9 after SFT and 13.6 for the base model.
+Figure 4 shows answer accuracy on the training set and the fraction of rollouts truncated at the maximum
+interaction-turn limit during RL. We observe that, before RL, the model repeatedly issues semantically similar
+or even identical search queries when it fails to retrieve key clues, making little further reasoning progress.
+Early in RL training, the truncation rate peaks at nearly 20%. As training progresses, answer accuracy
+generally increases while the truncation rate decreases. These trends indicate that the agent becomes less
+prone to exhausting the interaction budget during training. To further examine this behavioral change, we
+quantify repeated searching in Appendix C.3 and observe an overall decline in repeated-search frequency
+during RL. These training-time observations are consistent with reduced redundant searching and complement
+the held-out accuracy gains in Table 5.
+6
+Conclusion
+We study autonomous cross-modal search for real-world information-seeking tasks that require interleaved
+textual and visual evidence. We introduce ModalSearch-Pipeline, a scalable data-generation framework that
+constructs an interleaved multimodal knowledge graph, samples paths with diverse depths and modality
+compositions, and applies backward question rewriting to obscure entity names and visual targets that would
+expose reasoning shortcuts, while retaining necessary disambiguating clues and avoiding explicit modality-
+switch instructions. Using the resulting data, we train the ModalSearcher Agent through SFT and RL and
+construct ModalSearch-Bench to evaluate cross-modal search across different modality arrangements and
+reasoning depths. ModalSearcher-8B improves average accuracy over Qwen3-VL-8B by 16.2 points across five
+multimodal knowledge-intensive benchmarks and achieves substantial gains on independently constructed
+visual-search benchmarks. Behavioral analysis shows more targeted visual search, broader reference-target
+coverage, and a lower proportion of repeated calls after training. Together with data and tool ablations, these
+results support the value of the data and the contribution of active visual-search access to task performance.
+11
+
+
+References
+[1] Arash Ahmadian, Chris Cremer, Matthias Gallé, Marzieh Fadaee, Julia Kreutzer, Olivier Pietquin, Ahmet
+Üstün, and Sara Hooker. Back to basics: Revisiting REINFORCE-style optimization for learning from human
+feedback in LLMs. In Lun-Wei Ku, Andre Martins, and Vivek Srikumar, editors, Proceedings of the 62nd Annual
+Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 12248–12267, Bangkok,
+Thailand, August 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.acl-long.662. URL
+https://aclanthology.org/2024.acl-long.662/.
+[2] Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, and Hannaneh Hajishirzi. Self-rag: Learning to retrieve,
+generate, and critique through self-reflection, 2023. URL https://arxiv.org/abs/2310.11511.
+[3] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding,
+Chang Gao, Chunjiang Ge, Wenbin Ge, Zhifang Guo, Qidong Huang, Jie Huang, Fei Huang, Binyuan Hui,
+Shutong Jiang, Zhaohai Li, Mingsheng Li, Mei Li, Kaixin Li, Zicheng Lin, Junyang Lin, Xuejing Liu, Jiawei Liu,
+Chenglong Liu, Yang Liu, Dayiheng Liu, Shixuan Liu, Dunjie Lu, Ruilin Luo, Chenxu Lv, Rui Men, Lingchen
+Meng, Xuancheng Ren, Xingzhang Ren, Sibo Song, Yuchong Sun, Jun Tang, Jianhong Tu, Jianqiang Wan,
+Peng Wang, Pengfei Wang, Qiuyue Wang, Yuxuan Wang, Tianbao Xie, Yiheng Xu, Haiyang Xu, Jin Xu, Zhibo
+Yang, Mingkun Yang, Jianxin Yang, An Yang, Bowen Yu, Fei Zhang, Hang Zhang, Xi Zhang, Bo Zheng, Humen
+Zhong, Jingren Zhou, Fan Zhou, Jing Zhou, Yuanzhi Zhu, and Ke Zhu. Qwen3-vl technical report, 2025. URL
+https://arxiv.org/abs/2511.21631.
+[4] Sebastian Borgeaud, Arthur Mensch, Jordan Hoffmann, Trevor Cai, Eliza Rutherford, Katie Millican, George Bm
+Van Den Driessche, Jean-Baptiste Lespiau, Bogdan Damoc, Aidan Clark, Diego De Las Casas, Aurelia Guy, Jacob
+Menick, Roman Ring, Tom Hennigan, Saffron Huang, Loren Maggiore, Chris Jones, Albin Cassirer, Andy Brock,
+Michela Paganini, Geoffrey Irving, Oriol Vinyals, Simon Osindero, Karen Simonyan, Jack Rae, Erich Elsen, and
+Laurent Sifre. Improving language models by retrieving from trillions of tokens. In Kamalika Chaudhuri, Stefanie
+Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato, editors, Proceedings of the 39th International
+Conference on Machine Learning, volume 162 of Proceedings of Machine Learning Research, pages 2206–2240.
+PMLR, 17–23 Jul 2022. URL https://proceedings.mlr.press/v162/borgeaud22a.html.
+[5] Shuang Chen, Kaituo Feng, Hangting Chen, Wenxuan Huang, Dasen Dai, Quanxin Shou, Yunlong Lin, Xiangyu
+Yue, Shenghua Gao, and Tianyu Pang. Opensearch-vl: An open recipe for frontier multimodal search agents,
+2026. URL https://arxiv.org/abs/2605.05185.
+[6] Yong Xien Chng, Tao Hu, Wenwen Tong, Xueheng Li, Jiandong Chen, Haojia Yu, Jiefan Lu, Hewei Guo, Hanming
+Deng, Chengjun Xie, Gao Huang, Dahua Lin, and Lewei Lu. Sensenova-mars: Empowering multimodal agentic
+reasoning and search via reinforcement learning, 2026. URL https://arxiv.org/abs/2512.24330.
+[7] Mingyang Fu, Yuyang Peng, Dongping Chen, Zetong Zhou, Benlin Liu, Yao Wan, Zhou Zhao, Philip S Yu, and
+Ranjay Krishna. Seeking and updating with live visual knowledge. Advances in Neural Information Processing
+Systems, 38, 2026.
+[8] Xinyu Geng, Peng Xia, Zhen Zhang, Xinyu Wang, Qiuchen Wang, Ruixue Ding, Chenxi Wang, Jialong Wu, Yida
+Zhao, Kuan Li, Yong Jiang, Pengjun Xie, Fei Huang, and Jingren Zhou. Webwatcher: Breaking new frontier of
+vision-language deep research agent, 2025. URL https://arxiv.org/abs/2508.05748.
+[9] Xinyu Geng, Peng Xia, Zhen Zhang, Xinyu Wang, Qiuchen Wang, Ruixue Ding, Chenxi Wang, Jialong Wu, Yida
+Zhao, Kuan Li, Yong Jiang, Pengjun Xie, Fei Huang, and Jingren Zhou. Webwatcher: Breaking new frontier of
+vision-language deep research agent, 2025. URL https://arxiv.org/abs/2508.05748.
+[10] Kelvin Guu, Kenton Lee, Zora Tung, Panupong Pasupat, and Ming-Wei Chang. Realm: retrieval-augmented
+language model pre-training. In Proceedings of the 37th International Conference on Machine Learning, ICML’20.
+JMLR.org, 2020.
+[11] Jack Hong, Chenxiao Zhao, ChengLin Zhu, Weiheng Lu, and Guohai Xu. Deepeyesv2: Toward agentic multimodal
+model. In International Conference on Learning Representations, volume 2026, pages 114851–114872, 2026.
+[12] Jack Hong, Chenxiao Zhao, ChengLin Zhu, Weiheng Lu, Guohai Xu, and Xing Yu. Deepeyesv2: Toward agentic
+multimodal model, 2026. URL https://arxiv.org/abs/2511.05271.
+[13] Bohan Hou, Jiuning Gu, Jiayan Guo, Ronghao Dang, Sicong Leng, Xin Li, Xuemeng Song, and Jianfei Yang. Interlv-
+search: Benchmarking interleaved multimodal agentic search, 2026. URL https://arxiv.org/abs/2605.07510.
+[14] Shijue Huang, Hangyu Guo, Guanting Dong, Chenxin Li, Junting Lu, Xinyu Geng, Zhaochen Su, Zhenyu Li,
+Shuang Chen, Hongru Wang, and Yi R. Fung. Towards on-policy data evolution for visual-native multimodal
+deep search agents, 2026. URL https://arxiv.org/abs/2605.10832.
+12
+
+
+[15] Wenxuan Huang, Yu Zeng, Qiuchen Wang, Zhen Fang, Shaosheng Cao, Zheng Chu, Qingyu Yin, Shuang Chen,
+Zhenfei Yin, Lin Chen, Zehui Chen, Xu Tang, Yao Hu, Shaohui Lin, Philip Torr, Feng Zhao, and Wanli Ouyang.
+Vision-deepresearch: Incentivizing deepresearch capability in multimodal large language models, 2026. URL
+https://arxiv.org/abs/2601.22060.
+[16] Gautier Izacard and Edouard Grave. Leveraging passage retrieval with generative models for open domain
+question answering.
+In Paola Merlo, Jorg Tiedemann, and Reut Tsarfaty, editors, Proceedings of the 16th
+Conference of the European Chapter of the Association for Computational Linguistics: Main Volume, pages
+874–880, Online, April 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.eacl-main.74.
+URL https://aclanthology.org/2021.eacl-main.74/.
+[17] Dongzhi Jiang, Renrui Zhang, Ziyu Guo, Yanmin Wu, Jiayi Lei, Pengshuo Qiu, Pan Lu, Zehui Chen, Chaoyou Fu,
+Guanglu Song, Peng Gao, Yu Liu, Chunyuan Li, and Hongsheng Li. Mmsearch: Benchmarking the potential of
+large models as multi-modal search engines, 2024. URL https://arxiv.org/abs/2409.12959.
+[18] Zhengbo Jiao, Yiming Cheng, Yilei Jiang, Kaituo Feng, Rui Huang, Tianyi Jiang, Juanxi Tian, Jiapeng li,
+Qunzhong Wang, Tailai Chen, Qianshan Wei, Chuan Xiao, Shanyu Rong, Yangfu Li, Yanhan Zhou, Yunpu Ma,
+Yifan Zhang, and Xiangyu Yue. Searcheyes: Towards frontier multimodal deep search intelligence via search
+world simulation, 2026. URL https://arxiv.org/abs/2607.05943.
+[19] Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan O Arik, Dong Wang, Hamed Zamani, and Jiawei
+Han. Search-r1: Training LLMs to reason and leverage search engines with reinforcement learning. In Second
+Conference on Language Modeling, 2025. URL https://openreview.net/forum?id=Rwhi91ideu.
+[20] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich
+Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, et al. Retrieval-augmented generation for knowledge-intensive
+nlp tasks. Advances in neural information processing systems, 33:9459–9474, 2020.
+[21] Kuan Li, Zhongwang Zhang, Huifeng Yin, Liwen Zhang, Litu Ou, Jialong Wu, Wenbiao Yin, Baixuan Li, Zhengwei
+Tao, Xinyu Wang, Weizhou Shen, Junkai Zhang, Dingchu Zhang, Xixi Wu, Yong Jiang, Ming Yan, Pengjun
+Xie, Fei Huang, and Jingren Zhou. Websailor: Navigating super-human reasoning for web agent, 2025. URL
+https://arxiv.org/abs/2507.02592.
+[22] Xiaoxi Li, Guanting Dong, Jiajie Jin, Yuyao Zhang, Yujia Zhou, Yutao Zhu, Peitian Zhang, and Zhicheng
+Dou. Search-o1: Agentic search-enhanced large reasoning models. In Christos Christodoulopoulos, Tanmoy
+Chakraborty, Carolyn Rose, and Violet Peng, editors, Proceedings of the 2025 Conference on Empirical Methods
+in Natural Language Processing, pages 5420–5438, Suzhou, China, November 2025. Association for Computational
+Linguistics. ISBN 979-8-89176-332-6. doi: 10.18653/v1/2025.emnlp-main.276. URL https://aclanthology.org/
+2025.emnlp-main.276/.
+[23] Xiaoxi Li, Jiajie Jin, Guanting Dong, Hongjin Qian, Yongkang Wu, Ji-Rong Wen, Yutao Zhu, and Zhicheng Dou.
+Webthinker: Empowering large reasoning models with deep research capability. Advances in Neural Information
+Processing Systems, 38:120091–120131, 2026.
+[24] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning, 2023. URL https:
+//arxiv.org/abs/2304.08485.
+[25] Xiangyu Peng, Can Qin, An Yan, Xinyi Yang, Zeyuan Chen, Ran Xu, and Chien-Sheng Wu. Mta-agent: An open
+recipe for multimodal deep search agents, 2026. URL https://arxiv.org/abs/2604.06376.
+[26] Huatong Song, Jinhao Jiang, Yingqian Min, Jie Chen, Zhipeng Chen, Wayne Xin Zhao, Lei Fang, and Ji-
+Rong Wen. R1-searcher: Incentivizing the search capability in llms via reinforcement learning, 2025. URL
+https://arxiv.org/abs/2503.05592.
+[27] Gemini Team. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next
+generation agentic capabilities, 2025. URL https://arxiv.org/abs/2507.06261.
+[28] MiroMind Team, Song Bai, Lidong Bing, Carson Chen, Guanzheng Chen, Yuntao Chen, Zhe Chen, Ziyi Chen,
+Jifeng Dai, Xuan Dong, Wenhan Dou, Yue Deng, Yunjie Fu, Junqi Ge, Chenxia Han, Tammy Huang, Zhenhang
+Huang, Jerry Jiao, Shilei Jiang, Tianyu Jiao, Xiaoqi Jian, Lei Lei, Ruilin Li, Gen Luo, Tiantong Li, Xiang Lin,
+Ziyuan Liu, Zhiqi Li, Jie Ni, Qiang Ren, Pax Sun, Shiqian Su, Chenxin Tao, Bin Wang, Wenhai Wang, Haonan
+Wang, James Wang, Jin Wang, Jojo Wang, Letian Wang, Shizun Wang, Weizhi Wang, Zixuan Wang, Jinfan Xu,
+Sen Xing, Chenyu Yang, Hai Ye, Jiaheng Yu, Yue Yu, Muyan Zhong, Tianchen Zhao, Xizhou Zhu, Yanpeng Zhou,
+Yifan Zhang, and Zhi Zhu. Mirothinker: Pushing the performance boundaries of open-source research agents via
+model, context, and interactive scaling, 2026. URL https://arxiv.org/abs/2511.11793.
+[29] OpenAI Team. Openai gpt-5 system card, 2026. URL https://arxiv.org/abs/2601.03267.
+13
+
+
+[30] Peng Wang, Qi Wu, Chunhua Shen, Anton van den Hengel, and Anthony Dick. Fvqa: Fact-based visual question
+answering, 2017. URL https://arxiv.org/abs/1606.05433.
+[31] Jinming Wu, Zihao Deng, Wei Li, Yiding Liu, Bo You, Bo Li, Zejun MA, and Ziwei Liu. MMSearch-r1: Incentivizing
+LMMs to search. In Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens, editors, Proceedings
+of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages
+2456–2487, San Diego, California, United States, July 2026. Association for Computational Linguistics. ISBN
+979-8-89176-390-6. doi: 10.18653/v1/2026.acl-long.114. URL https://aclanthology.org/2026.acl-long.114/.
+[32] Huanjin Yao, Qixiang Yin, Min Yang, Ziwang Zhao, Yibo Wang, Haotian Luo, Jingyi Zhang, and Jiaxing
+Huang.
+Mm-deepresearch: A simple and effective multimodal agentic search baseline, 2026.
+URL https:
+//arxiv.org/abs/2603.01050.
+[33] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. ReAct:
+Synergizing reasoning and acting in language models. In The Eleventh International Conference on Learning
+Representations, 2023. URL https://openreview.net/forum?id=WE_vluYUL-X.
+[34] Zhihan Yin, Jianxin Liang, Yueqian Wang, Yifeng Yao, Huishuai Zhang, and Dongyan Zhao. Freak: A fine-grained
+hallucination evaluation benchmark for advanced mllms, 2026. URL https://arxiv.org/abs/2603.19765.
+[35] Zhihan Yin, Jianxin Liang, Yifeng Yao, Nonghai Zhang, Bingyue Peng, Chunguang Qie, Huishuai Zhang, and
+Dongyan Zhao. Mira: Reinforcing multimodal reasoning via deceptive contextual augmentation, 2026. URL
+https://arxiv.org/abs/2611.03087.
+[36] Tao Yu, Zhengbo Zhang, Zhiheng Lyu, Junhao Gong, Hongzhu Yi, Xinming Wang, Yuxuan Zhou, Jiabing
+Yang, Ping Nie, Yan Huang, and Wenhu Chen.
+Browseragent: Building web agents with human-inspired
+web browsing actions.
+Transactions on Machine Learning Research, 2026.
+ISSN 2835-8856.
+URL https:
+//openreview.net/forum?id=X4CfZPSEHE. Reproducibility Certification, J2C Certification.
+[37] Hansi Zeng, Zoey Li, Yifan Gao, Chenwei Zhang, Xiaoman Pan, Tao Yang, Fengran Mo, Jiacheng Lin, Xian Li,
+and Jingbo Shang. Synplanresearch-r1: Encouraging tool exploration for deep research with synthetic plans, 2026.
+URL https://arxiv.org/abs/2603.07853.
+[38] Yu Zeng, Wenxuan Huang, Zhen Fang, Shuang Chen, Yufan Shen, Yishuo Cai, Xiaoman Wang, Zhenfei Yin, Lin
+Chen, Zehui Chen, et al. Vision-deepresearch benchmark: Rethinking visual and textual search for multimodal
+large language models. arXiv preprint arXiv:2602.02185, 2026.
+[39] Huanyao Zhang, Jiepeng Zhou, Bo Li, Bowen Zhou, Yanzhe Shan, Haishan Lu, Zhiyong Cao, Jiaoyang Chen,
+Yuqian Han, Zinan Sheng, Zhengwei Tao, Hao Liang, Jialong Wu, Yang Shi, Yuanpeng He, Jiaye Lin, Qintong
+Zhang, Guochen Yan, Runhao Zhao, Zhengpin Li, Xiaohan Yu, Lang Mei, Chong Chen, Wentao Zhang, and Bin
+Cui. Browsecomp-v3: A visual, vertical, and verifiable benchmark for multimodal browsing agents, 2026. URL
+https://arxiv.org/abs/2602.12876.
+[40] Huanyao Zhang, Jiepeng Zhou, Runhao Zhao, Yanzhe Shan, Jiaoyang Chen, Bowen Zhou, Bo Li, Fang Wang,
+Jialong Wu, Zhengwei Tao, Lang Mei, Xiaohan Yu, Liyan Liu, Chong Chen, and Wentao Zhang. Deepvoyager-vl:
+Incentivizing vision-in-the-loop search for long-horizon multimodal agents, 2026. URL https://arxiv.org/abs/
+2608.01827.
+[41] Zhengbo Zhang, Changtao Miao, Jinbo Su, Zhaowen Zhou, Chunxia Zhang, Xukai Wang, Ruiqi Liu, Kaiyuan
+Zheng, Jiansheng Cai, Bo Zhang, Zhe Li, Shiming Xiang, and Ying Yan. Visual-seeker: Towards visual-native
+multimodal agentic search via active visual reasoning, 2026. URL https://arxiv.org/abs/2606.15231.
+[42] Zhengbo Zhang, Jinbo Su, Zhaowen Zhou, Changtao Miao, Yuhan Hong, Qimeng Wu, Yumeng Liu, Feier Wu,
+Yihe Tian, Yuhao Liang, Zitong Shan, Wanke Xia, Yi-Fan Zhang, Bo Zhang, Zhe Li, Shiming Xiang, and
+Ying Yan. Visbrowse-bench: Benchmarking visual-native search for multimodal browsing agents, 2026. URL
+https://arxiv.org/abs/2603.16289.
+[43] Yuxiang Zheng, Dayuan Fu, Xiangkun Hu, Xiaojie Cai, Lyumanshan Ye, Pengrui Lu, and Pengfei Liu. DeepRe-
+searcher: Scaling deep research via reinforcement learning in real-world environments. In Christos Christodoulopou-
+los, Tanmoy Chakraborty, Carolyn Rose, and Violet Peng, editors, Proceedings of the 2025 Conference on
+Empirical Methods in Natural Language Processing, pages 414–431, Suzhou, China, November 2025. Associ-
+ation for Computational Linguistics. ISBN 979-8-89176-332-6. doi: 10.18653/v1/2025.emnlp-main.22. URL
+https://aclanthology.org/2025.emnlp-main.22/.
+14
+
+
+Figure 5 Comparison of the data-construction strategies used by our pipeline and prior multimodal search settings.
+The comparison highlights differences in modality transitions, visual-evidence use, and the degree to which the search
+target is exposed in the question.
+OpenSearch-VL
+Vision-DeepResearch
+Visual-Seeker
+Question: On what date did the wife of the man 
+who took over management of Australia Zoo in 
+1991 become an Australian citizen?
+The search process relies solely on textual 
+knowledge; the image is used only for the 
+initial understanding step.
+Search Eyes
+Question: Look at the image. The subject is 
+connected, through several degrees of separation, 
+to a specific entity. The trail crosses into the 
+domain of spatial relationships along the way. 
+What entity do you arrive at? (image emitted)
+An overly vague question description.
+Ambiguity in the question.
+Insufficient search depth.
+Ours Method
+Question: During a speech given by a head of state to a 
+legislative body, in response to the military action 
+sanctioned by the shorter man in the formal suit seen in the 
+image standing next to MacArthur, what object sits on the 
+desk directly in front of the bald man seated in the high-
+backed chair behind the speaker?
+Question: The man in the green costume and yellow hat, seated 
+behind the glass in the image wrote and directed a satirical biopic 
+about a powerful U.S. vice president whose influence helped propel a 
+major Middle Eastern conflict launched in 2003. That war prompted 
+the formation of an international factfinding mission tasked with 
+hunting for banned arms programs; separately, a British government 
+inquiry into pre-war intelligence relied heavily on that same 
+mission’s conclusion that no significant stockpiles existed. Search for 
+an image of this multinational investigative team’s 2003 weapons 
+inspection at a desert site showing team members examining 
+munitions. In the image, how many inspectors are visible standing or 
+crouching among the ordnance?
+the shortcut is exposed (highlighted in red).
+Clear signs of manual intervention in the search 
+process (e.g., “search for that image”).
+Image search appears only at the very end.
+No ambiguity or vagueness, and no redundant 
+shortcuts.
+Natural question phrasing.
+Cross-modal and deep transition chain.
+Question: This person is the artist 
+behind a music video released in 2025, 
+featuring a desert backdrop and directed 
+by a filmmaker known for high-concept 
+visuals. What is the name of the song 
+and the album it was released on?
+The search process relies 
+solely on textual knowledge; 
+the image is used only for the 
+initial understanding step.
+A
+Data Synthesis Details
+This appendix supplements ModalSearch-Pipeline described in the main paper, including interleaved multi-
+modal graph construction, path sampling, and question synthesis, and provides implementation details.
+A.1
+Text-Node Expansion
+For any text node vt = (a, wa), where a is the entity name and wa is the corresponding Wikipedia article,
+text-node expansion follows two complementary branches: relation-aware textual expansion extracts related
+textual entities, while retrievability-aware visual expansion proposes potential visual descriptions. Unlike
+directly using an existing Wikipedia knowledge graph, we randomly sample from hyperlinks and local textual
+contexts. This reduces dependence on frequent knowledge and common entity relations, increases path diversity,
+and makes it harder for an agent to solve the generated questions directly from parametric knowledge.
+Specifically, we extract the local hyperlink structure from wa and apply rule-based filtering to remove non-
+entity pages, category pages, and clearly irrelevant links. We uniformly sample Kcand candidate entities from
+the remaining links, using Kcand = 50:
+e
+A(a) = {ˆa1, . . . , ˆaKcand}.
+(1)
+For each candidate ˆaj, an MLLM (see Table 7) uses the local context to identify the linked entity and generate
+the semantic relation between a and ˆaj. Because Wikipedia hyperlinks may be noisy—for example, they
+may point to non-entity pages, have weak semantic associations with the source entity, or be ambiguous—we
+further pass the candidate entities and their relation descriptions to an MLLM for quality filtering. According
+to relation relevance, relation clarity, and whether the target page denotes a concrete entity, we retain K′
+high-quality entities from e
+A(a), where K′ ≤Kcand. For each retained entity, we construct vt(ˆaj) = (ˆaj, wˆaj)
+and the edge et→t = (vt(a), rt→t, vt(ˆaj)). Sampling only a limited number of candidates controls MLLM and
+graph-construction costs and prioritizes reasoning depth and richer paths over unconstrained graph width.
+15
+
+
+The text node simultaneously expands into neighboring image nodes. We divide wa into chunks C(wa) =
+{c1, . . . , cm}. An MLLM examines each chunk and determines whether it contains visual content that can be
+matched to an Internet image, such as a specific scene, historical event, famous photograph, visual artwork,
+illustration, poster, cover, or film still. For qualifying chunks, the MLLM generates potential image descriptions
+or retrieval queries, forming a proposal set P(a). Since directly asking an MLLM whether an image is a valid
+downstream node is unstable, construction is divided into visual-description generation, referential-stability
+assessment, and search-result consistency verification.
+Before image search, each d ∈P(a) is screened by an MLLM for whether it can stably identify a particular
+type of visual content. For descriptions that pass this check, Web image search returns multiple candidate
+results, denoted by
+R(d) = {(x1, c1), . . . , (xKimg, cKimg)},
+(2)
+where xj is a candidate image and cj contains source URL, webpage title, image title, alt text, caption, and
+search summary. We first exclude query-mismatched or inaccessible images and form a valid candidate set for
+consistency assessment. Let N(d) denote the number of images in this set, and let M(d) denote the number
+judged by an MLLM (see Table 7) to depict the same main visual content. We regard the description as
+stably retrievable when the consistency model returns a positive judgment and
+N(d) ≥2
+and
+M(d) ≥max
+
+2,
+N(d)
+2
+
+.
+(3)
+The resulting image node is vi = (xi, di, ci) with di = d; we then add et→i = (vt(a), rt→i, vi). Images that fail
+consistency verification are assigned to V amb
+i
+and receive no incoming text-to-image edge, but may still serve
+as initial visual inputs.
+Image referential stability means that a textual description can stably point to particular visual content rather
+than merely describing a broad theme. Under the same search setting, different searchers should obtain results
+concentrated on the same person, event, scene, or artwork. For event and scene images, the description should
+contain a time, location, or other clue that identifies a particular moment. For paintings, posters, covers, and
+film stills, it should identify a specific work or fixed visual object. Generic themes without an author or year,
+recurring events without distinctive temporal or spatial information, and descriptions that identify only a
+broad period or location, such as “a CVPR conference in a certain year” or “a panorama of a bay,” are treated
+as ambiguous. Because referential stability is partly subjective and difficult to formalize strictly, we annotate
+116 image descriptions, comprising 63 stably retrievable positives and 53 retrieval-ambiguous negatives, and
+compare four MLLM judges against human annotations under the same rubric. Gemini-3.5-Flash achieves
+88.79% accuracy (Table 12); the full comparison and judge-selection rationale are provided in Appendix D.1.
+Ambiguous images do not receive text-to-image edges, but can be used as path-starting nodes because the
+initial image is provided to the agent.
+A.2
+Image-Node Expansion
+For an image node vi = (xi, di, ci), we perform verified visual entity linking to identify entities appearing in the
+image and expand them into downstream text nodes. Unlike standard image grounding, our graph-construction
+stage prioritizes entity recall so that potentially useful reasoning entities are not missed. We jointly input
+the original image xi, its description di, and source-page metadata ci to an MLLM. The model uses visual
+content, the description, the source-page title, caption, alt text, search snippet, and related context to identify
+possible entities and generate uniquely referring descriptions. The preliminary entity set is
+A(xi) = {a′
+1, . . . , a′
+n}.
+(4)
+For each candidate a′, we first perform Wikipedia entity linking. We construct entity-search queries from the
+proposed name, entity type, visual evidence, image description, and source-page title, and call the MediaWiki
+API to retrieve a candidate set U(a′). For each candidate article, we obtain its title, summary, canonical
+URL, and available Wikidata QID. Candidates are initially ranked by string and lexical overlap between the
+entity description and candidate title or summary. The candidate list and its context are then passed to an
+MLLM for disambiguation. If candidates remain ambiguous or the evidence is insufficient, we discard the
+match rather than forcing a link.
+16
+
+
+Table 6 Statistics of the source graphs for training-data and benchmark construction. Unique images combine the
+original unique and semi-unique categories; non-unique images combine no-unique, wiki_inline, and previously
+unclassified images.
+Metric
+Training graph
+Benchmark graph
+Text nodes
+35,000
+10,000
+Image nodes
+35,048
+10,035
+Total nodes
+70,048
+20,035
+Text-to-text edges
+53,811
+20,386
+Text-to-image edges
+19,546
+5,915
+Image-to-text edges
+71,154
+13,741
+Total valid edges
+144,511
+40,042
+Unique images
+16,261
+5,814
+Non-unique images
+18,787
+4,221
+For a selected Wikipedia article, we reuse the corresponding text node if its canonical URL already exists;
+otherwise, we add the article to the text-node expansion queue. We then jointly input the original image, the
+article content, and reference images to a verification model. Through cross-image comparison, the model
+determines whether the entity in the original image corresponds to the selected article. Let A⋆(xi) ⊆A(xi) be
+the verified entity set. For each a′ ∈A⋆(xi), we construct vt(a′) = (a′, wa′) and ei→t = (vi, ri→t, vt(a′)), where
+ri→t describes the visual or semantic relation between a′ and the image, such as its position, event participation,
+scene membership, or relation to the recorded artwork. This process forms the typical cross-modal path
+vt →vi →v′
+t. Entity recognition, entity linking, and visual verification solve different problems. Recognition
+aims to discover candidate entities with high recall; linking maps a natural-language description to a concrete
+Wikipedia article; and verification checks whether that article actually corresponds to the entity in the
+image. Only candidates that pass both entity linking and cross-image verification are included in the final
+image-to-text relation set, reducing the effect of erroneous matches on path sampling and question generation.
+A.3
+Graph Assembly and Node Reuse
+We randomly select multiple initial nodes and begin constructing the interleaved multimodal graph. Before
+scheduling a node-expansion task, a hash table checks whether the node already exists in the current graph.
+For a new node, we add its expansion task to a waiting queue and create a deferred edge-completion task.
+Once the node is actually expanded, the deferred task adds the directed edge between the new node and its
+parent. This procedure reuses existing nodes and prevents duplicate expansions.
+A.4
+Graph Statistics
+Table 6 summarizes the source graphs used for training-data and benchmark construction. The training graph
+contains 70,048 nodes and 144,511 valid directed edges, while the independently constructed benchmark graph
+contains 20,035 nodes and 40,042 valid directed edges. The image-category counts use the merged labels from
+the graph records, with previously unclassified images included in the non-unique category. The path-length
+distribution of the generated training data is reported in Table 8, and the modality-path overview is shown in
+Figure 6.
+A.5
+Path Sampling
+On G = (V, E), path sampling starts from a random node v0 and samples a target reasoning depth L ∈
+[Kmin, Kmax], with [Kmin, Kmax] = [1, 4]. At step t, the sampler obtains the outgoing edges of vt and constructs
+Ct = {e = (vt, r, v′) | v′ /∈Ht, e /∈Ut, ϕ(e, Ht) = 1},
+(5)
+where Ht = (v0, . . . , vt) is the path history, Ut is the set of already used edges, and ϕ is the candidate-validity
+function. It imposes graph-structural and modality constraints, avoids repeated nodes and edges, filters edges
+leading to generalized category pages, and excludes structural shortcuts to historical nodes. Qwen3-VL-32B
+serves as the path-validity checking model and checks whether the target name v′ has already been exposed
+in a relation description along Ht; if so, ϕ(e, Ht) = 0.
+17
+
+
+The sampler computes a base weight from the edge’s historical usage and image spacing.
+For edge e,
+w(e | Ht) = γimg(e, Ht)/(1 + αc(e)), where c(e) is the number of previously accepted paths using e and α
+controls the repetition penalty. Let j⋆= max{j | vj ∈Vi} be the most recent image position in the history
+and dt = t −j⋆. To avoid densely clustered image nodes, we use
+γimg(e, Ht) =
+
+
+
+dt
+dt + 1,
+v′ ∈Vi, an image occurs in Ht, and dt > 0,
+1,
+otherwise.
+(6)
+The next edge is sampled with p(e | Ht) = w(e | Ht)/ P
+e′∈Ct w(e′ | Ht) rather than by always selecting the
+highest-weight edge, preserving trajectory diversity. After a path is completed, edge-use counts are updated
+and duplicate paths are removed using their complete node sequences.
+The goal of the pipeline is to train the agent to autonomously select the modality of the clue it needs, rather
+than to follow explicit instructions to search for an image or text fact. Before question synthesis, an MLLM
+therefore scans intermediate image nodes and combines the two natural-language edge descriptions in each
+text–image–text subpath into a composed relation description. This description connects the two text nodes
+for question synthesis and refers to the relevant event, scene, or artwork without explicitly mentioning the
+image. The original image-mediated subpath is retained as the supporting evidence. This rewriting is intended
+to make the visual evidence dependency implicit and encourage the agent to determine which modality to
+search and what content to retrieve; it does not by itself rule out alternative textual solution paths.
+A.6
+Question Synthesis
+Question synthesis uses backward question rewriting, a recursive process that proceeds from the end of a
+reasoning path toward its start. Given π = (v0, v1, . . . , vL), we first generate a terminal question according
+to the modality of vL. If vL = vt(a) = (a, wa), an MLLM reads wa and generates k2 candidate questions.
+Each candidate contains a question q, answer y, and supporting evidence ξ; the question must not directly
+reveal the target entity, an explicit alias, or another identifying description. If vL = vi = (xi, di, ci), the
+MLLM generates k2 questions about observable visual attributes or relations while minimizing dependence on
+source-page metadata or external semantic knowledge.
+We apply modality-specific question evaluation, with answer-based verification when a verification model
+Mv is configured; we use Qwen3-VL-32B as Mv. For a text terminal node, Mv answers each candidate
+without access to the Wikipedia article or other external evidence. Its responses are judged against the
+proposed gold answers, and candidates answered correctly in this closed-book test are removed. A subsequent
+evaluator selects a natural, unambiguous question supported by its article-derived facts. This branch does not
+independently test whether Mv can answer the question when given the article.
+For an image terminal node, answer-based verification performs T = 3 trials per condition, with and without
+the reference image. Let Cwith(q) and Cwithout(q) denote the numbers of correct responses in the two conditions.
+Candidates pass this verification when
+Cwith(q) = T
+and
+Cwithout(q) < T,
+T = 3.
+(7)
+A subsequent evaluator checks referent uniqueness, answer stability, and visual correctness. Among candidates
+that pass both verification and evaluation, we prefer those with fewer correct responses without the image.
+This favors questions that are reliably answerable with visual evidence and less consistently answerable
+from parametric knowledge alone. The evaluator may reject all candidates; otherwise, its selected candidate
+becomes the initial terminal question qL.
+We then recursively rewrite the question backward. For each edge en = (vn−1, rn, vn), the LLM removes
+redundant or path-irrelevant content from rn, obtaining ¯rn, and replaces the explicit reference to vn in qn
+with a relational description defined by vn−1 and ¯rn. Formally, qn−1 = R(qn; vn−1, ¯rn, vn), where R is the
+relation-based iterative rewriting operation. Each rewrite obscures explicit intermediate-node references
+that would enable reasoning shortcuts while preserving names and clues needed for solvability and answer
+uniqueness.
+After rewriting for n = L, L −1, . . . , 1, the question q0 explicitly contains only the starting node and necessary
+reasoning clues. For a textual start node v0 = vt(a) = (a, wa), we input wa to an MLLM (see Table 7) and
+18
+
+
+Table 7 Models and parameters used in ModalSearch-Pipeline. Answer verification is distinct from benchmark answer
+judging. Visual verification uses three trials per condition, with and without the reference image.
+Stage
+Configuration
+Value / Setting
+Graph construction
+Relation-aware textual expansion model
+Qwen3-VL-32B
+Visual expansion, entity recognition, and linking model
+Gemini-2.5-Pro
+Image referential-stability assessment model
+Gemini-3.5-Flash
+Textual neighbor candidate budget Kcand
+50
+Maximum visual proposals per text node
+5
+Retrieved images per query Kimg
+3
+Maximum grounded entities per image
+5
+Path sampling
+Path-validity checking model
+Qwen3-VL-32B
+Path-length range [Kmin, Kmax]
+[1, 4]
+Edge-reuse penalty coefficient α
+1.0
+Question synthesis
+Question synthesis model
+Gemini-2.5-Pro
+Answer-verification model Mv
+Qwen3-VL-32B
+Terminal-question candidates per node k2
+5
+Visual answer-verification trials T
+3 per condition
+ask it to generate an indirect description ˜a that does not reveal the entity name; replacing a with ˜a yields
+˜q0. For an image start node v0 = vi = (x0, d0, c0), we replace the image description with “this image” and
+provide x0 as the visual input. The final question ˜q0 hides entity names and image-search targets when
+their disclosure would enable reasoning shortcuts, while retaining names and clues necessary for solvability
+and answer uniqueness. It avoids explicit modality-switch instructions and is designed to encourage the
+agent to identify its knowledge gaps, plan searches, and integrate evidence across multiple hops. Figure 5
+provides a qualitative comparison with existing question-construction strategies. The generated data (i)
+embeds image nodes in multi-hop reasoning paths, (ii) balances shortcuts caused by redundant information
+against ambiguity caused by insufficient information, and (iii) avoids directly exposing shortcut-enabling
+search targets or prescribing a fixed reasoning trajectory.
+B
+ModalSearch-Bench Details
+ModalSearch-Bench is designed to evaluate multimodal deep-search agents on diverse autonomous cross-modal
+search problems. Unlike benchmarks that organize questions primarily into coarse difficulty levels, it categorizes
+questions by whether their reference solutions call for acquiring new visual information beyond the initial
+input. In Input-only questions, all visual evidence in the reference solution is provided with the question.
+Search-required questions call for the agent to actively search for new visual information during reasoning
+and use it to advance the solution, with or without an initial image. These labels characterize the reference
+evidence paths rather than exclude alternative textual solutions or restrict the tools an agent may invoke.
+Within each category, questions are grouped into 2-hop, 3-hop, and 4-hop subsets to evaluate different search
+depths.
+Following the construction procedure in Sec. 3, we first use a different set of initial seed nodes to build a new
+interleaved multimodal knowledge graph with 20,035 nodes. Its seed nodes are entirely disjoint from those of
+the graph used to construct the training data, and some belong to domains not covered by the training graph.
+Using the same path-sampling and question-synthesis procedure, we randomly sample 900 candidate questions
+spanning different visual-evidence arrangements and the three reasoning depths. Human experts then screen
+these candidates and retain 300 questions. For every retained example, they consult Wikipedia to verify the
+answer, correctness, and solvability of the question and to remove ambiguous cases. The benchmark contains
+100 Input-only and 200 Search-required questions, with a broadly balanced distribution across 2-hop, 3-hop,
+and 4-hop questions. Overall accuracy is computed over all 300 questions rather than by equally averaging
+the two category accuracies. All benchmark graph nodes, paths, and questions are held out from training.
+ModalSearch-Bench therefore provides a controlled evaluation of a multimodal deep-search agent’s ability to
+plan multi-hop searches, select and switch modalities, and integrate cross-modal evidence.
+19
+
+
+Table 8 Reasoning-path length distribution of pipeline-generated training examples. The separately sampled Text-only
+ablation data and the FVQA and LiveVQA examples added to SFT are excluded. Share is computed over the combined
+SFT and RL total.
+Hops
+SFT
+RL
+Total
+Share
+1
+4,493
+1,412
+5,905
+30.45%
+2
+4,721
+2,001
+6,722
+34.67%
+3
+3,545
+1,760
+5,305
+27.36%
+4
+761
+698
+1,459
+7.52%
+Total
+13,520
+5,871
+19,391
+100%
+Figure 6 Overview of the pipeline-generated training data. Left: counts and proportions of Input-only examples,
+whose reference-path visual evidence is provided initially, and Search-required examples, whose reference solutions call
+for actively acquiring new visual information during reasoning. Right: a word cloud of 70 randomly sampled entities,
+illustrating the breadth of covered domains. Auxiliary FVQA and LiveVQA training examples and the separately
+sampled Text-only ablation data are excluded.
+Search-required
+57.61%
+11,172 samples
+input-only
+42.39%
+8,219 samples
+Set (deity)
+Bono
+Great Britain at the Olympics
+A Midsummer Night's Dream 1935 film)
+Villarreal CF
+God the Father
+Middlesbrough F.C.
+Mexico City Metropolitan Cathedral
+NASA
+Rijksmuseum
+COVID19 pandemic
+Fox Broadcasting Company
+Fulham F.C.
+Liverpool F.C.
+National Portrait Gallery, London
+River Thames
+Vatican Museums
+Glastonbury Abbey
+Metropolitan Museum of Art
+National Museum of China
+Temple Mount
+2016 Summer Olympics
+Apollo
+Archbasilica of Saint John Lateran
+COVID19 pandemic in England
+Chevron Corporation
+Ides of March
+Pittsburgh Penguins
+St Patrick's Athletic F.C.
+Stagecoach Group
+The Metaphysical Club
+New York University
+A6 road England)
+Johns Hopkins University
+2004 Chūetsu earthquake
+AGM86 ALCM
+AT&T
+Ritchie Blackmore
+Star of the West
+Stari Ras
+New York City
+Sigismund I the Old
+Sigourney Weaver
+Who Do You Think You Are Spice Girls song)
+Belém Tower
+Canadian Football League
+2013 Bohol earthquake
+Castle Clinton
+Goodbye, Mr. Chips 1939 film)
+River Avon, Bristol
+River Roach
+1992 Summer Olympics
+Bible
+Father Figure George Michael song)
+Summer Palace
+Walk, Don't Run (film)
+Walt Disney World
+2008 Summer Olympics opening ceremony
+Apple Inc.
+Israel Museum
+Kansas City Royals
+Royal Marines Band Service
+Saint Vincent Panels
+Saint-Malo, Quebec
+Western Hockey League
+Wrexham University
+Zeiss (company)
+Zeit Tangerine Dream album)
+İlyas Bey Mosque
+ʻIolani Palace
+C
+Implementation Details
+We use LlamaFactory for supervised fine-tuning (SFT), and the rLLM and verl frameworks for reinforcement
+learning (RL). During SFT, trajectories are collected with GPT-5.4 given a reasoning path and the final
+answer. The model autonomously invokes the available tools and produces trajectories in the ReAct format.
+We describe the training data and implementation settings below.
+C.1
+Training Data Details
+For the data-construction pipeline described in Sec. 3 and Appendix A, the main parameters and configuration
+are summarized in Table 7. Using ModalSearch-Pipeline and the interleaved multimodal knowledge graph
+described in Appendix A.4, we sample 13,520 examples for SFT and 5,871 additional examples for RL
+(reported as 5.8K in the main text). The full SFT set contains approximately 16K examples after adding
+1.3K FVQA and 1.2K LiveVQA training examples, as described in Sec. 4.1. Table 8 reports hop counts
+for the pipeline-generated examples only, excluding these auxiliary datasets. The dataset spans one to four
+graph hops to cover different search depths and modality arrangements; graph-hop counts are distinct from
+agent interaction turns. We group multimodal examples into Input-only and Search-required, using the
+same evidence-based definitions as ModalSearch-Bench in Appendix B. Input-only examples contain visual
+evidence only at the start; Search-required examples call for actively acquiring new visual information during
+reasoning and using it to advance the solution. The generated-data overview comprises 8,219 Input-only
+examples (42.39%) and 11,172 Search-required examples (57.61%). This grouping distinguishes input-image
+understanding from active acquisition of new visual evidence. The 19,391 generated examples used for the
+main SFT and RL experiments are all multimodal. Purely textual examples are sampled separately using the
+same pipeline for the Text-only ablation and are excluded from these counts. The contribution of these data
+settings is evaluated in Sec. 5.
+20
+
+
+Table 9 Selected SFT training configuration.
+Hyperparameter
+Value / Setting
+Model
+Base model
+Qwen3-VL-8B
+Image max pixels
+262,144 (≈512 × 512)
+Flash Attention
+fa2
+Method
+Stage
+SFT
+Do train
+True
+Finetuning type
+Full
+Vision tower frozen
+False
+MM projector frozen
+False
+DeepSpeed
+ZeRO-3
+Mixed precision
+bfloat16
+Training
+Batch size per device
+1
+Effective batch size
+256
+Learning rate
+2.0 × 10−5
+Epochs
+4
+LR scheduler
+Cosine
+Scheduler cycles
+0.5
+Warmup ratio
+0.1
+Table 10 Selected RL training configuration.
+Hyperparameter
+Value / Setting
+Model
+Starting checkpoint
+SFTed Qwen3-VL-8B
+Data
+Training prompt batch size
+96 (mini-batch: 96)
+Total training examples
+5.8K
+Algorithm / Reward
+Advantage estimator
+RLOO
+Accuracy coefficient
+0.9
+Format coefficient
+0.1
+Training
+Total epochs
+4
+Loss aggregation
+Token mean
+Rollout
+Rollout engine
+vLLM
+GPU memory utilization
+0.80
+Tensor parallel size
+1
+Max batched tokens
+8,192
+Parallel tasks / tools
+768 / 768
+Responses per prompt
+6
+C.2
+SFT Details
+The SFT hyperparameters in the provided training configuration are summarized in Table 9. The YAML
+specifies full-parameter fine-tuning of Qwen3-VL-8B with DeepSpeed ZeRO-3 and 16 Ray workers. With a
+per-device batch size of one and 16 accumulation steps, the effective batch size is 256; the cosine scheduler
+uses 0.5 cycles and decays to zero over four epochs.
+C.3
+RL Details
+Starting from the SFT checkpoint, we train on 5.8K additional examples with RLOO for four epochs. The run
+uses an outcome-only reward with a 0.9 answer-accuracy weight and a 0.1 format-validity weight; partial-credit
+and advantage-shaping mechanisms are disabled. The key optimization and rollout settings are summarized
+in Table 10.
+To improve tool-call stability during RL and reduce tool-use cost, we cache tool results within each rollout
+group. Specifically, when a search tool is reused within a group for the same query, we directly return the
+cached search result instead of invoking the tool again. In the actual training runs, the cache hit rate reaches
+18–22%.
+Because the generated rollouts are long and search or page-fetching tools can become unstable under high
+concurrency due to network or service failures, we introduce a set of fallback mechanisms. If an individual format
+check or tool call is temporarily unavailable, the tool returns a textual notice indicating the corresponding
+failure type. If errors occur for three consecutive rounds during reasoning, we attribute the failure. When
+the error is caused by the agent action, such as an invalid model format or malformed tool parameters, we
+terminate the rollout and set the sample reward to 0.1. When the error is caused by tool instability, we also
+terminate the rollout but set the reward to 0. These erroneous samples still participate in the within-group
+advantage computation.
+Before RL, the model may repeatedly issue semantically similar or identical search queries when it fails to
+retrieve key clues, making little further reasoning progress until the rollout is truncated by the maximum-turn
+limit. To quantify this behavior, we track two statistics throughout RL training: (i) the fraction of rollouts
+terminated by the maximum-turn cap, and (ii) the average number of repeated-search events. For a rollout τ,
+with L(τ) interaction turns and maximum allowed length Lmax, the truncation indicator and the training-step
+truncation rate are
+Icap(τ) = I[L(τ) ≥Lmax],
+Ct = 1
+Nt
+Nt
+X
+n=1
+Icap(τn),
+(8)
+21
+
+
+Figure 7 RL training dynamics over 110 training steps: (a) answer accuracy on the training set, (b) the fraction of
+rollouts truncated at the maximum interaction-turn limit, and (c) the average number of repeated-search events per
+rollout. All panels show the same training run (Experiment 2). A repeated search is counted when two queries have
+cosine similarity above 0.9 and at least three of their five returned results overlap.
+20
+40
+60
+80
+100
+(a)
+0.3
+0.4
+0.5
+0.6
+0.7
+Accuracy
+20
+40
+60
+80
+100
+(b)
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+Exceeded rate
+20
+40
+60
+80
+100
+(c)
+0.0
+0.4
+0.8
+1.2
+1.6
+Repeated-search events
+where Nt rollouts are collected at training step t.
+For the repeated-search statistic, consider two search operations s1 = (q1, S1) and s2 = (q2, S2), where qi is the
+issued query and Si contains the five returned search results. We encode each query with Qwen3-Embedding-4B,
+denoting its feature vector by zi = femb(qi), and compute query similarity as
+simq(s1, s2) =
+z⊤
+1 z2
+∥z1∥2∥z2∥2
+.
+(9)
+We measure result overlap by the fraction of identical items among the five results,
+ov(s1, s2) = |S1 ∩S2|
+5
+.
+(10)
+We classify the two operations as a repeated search when both the query similarity and the result overlap
+exceed their respective thresholds:
+Irep(s1, s2) = I[simq(s1, s2) > 0.9 ∧ov(s1, s2) > 0.4] .
+(11)
+Since each result set contains five items, the latter condition corresponds to at least three identical results
+(i.e., more than two matches). For rollout τ, the repeated-search count is R(τ) = P
+(si,sj)∈P(τ) Irep(si, sj),
+where P(τ) denotes the unordered pairs of search operations in that rollout. We report the training-step
+average ¯Rt =
+1
+Nt
+PNt
+n=1 R(τn) over the Nt rollouts collected at step t. The evolution of this statistic is shown
+in Figure 7.
+Figure 7 shows training answer accuracy, the maximum-turn truncation rate, and the average number of
+repeated-search events over 110 RL training steps. Despite fluctuations, answer accuracy shows an overall
+increase, while both the truncation rate and repeated-search count show an overall decline. Together, these
+trends support the conclusion that RL improves multi-round search decisions, reduces redundant searching,
+and makes the agent less prone to unproductive long rollouts.
+C.4
+Inference Configuration
+Unless otherwise specified, all models are evaluated using the sampling parameters summarized in Table 11.
+We use GPT-4o to judge answer correctness with the evaluation prompt in Figure 13. Of the evaluated
+model’s output, only the final summarized answer is passed to the judge; the full reasoning trajectory is
+excluded.
+22
+
+
+Table 11 Sampling parameters used for inference.
+Parameter
+Value
+Parameter
+Value
+greedy
+false
+top_p
+0.8
+top_k
+20
+temperature
+0
+repetition_penalty
+1.0
+presence_penalty
+1.5
+max-turns
+46
+max-seq-lens
+48,000
+Table 12 Visual-retrievability judgments against human annotations on 116 examples: 63 stably retrievable (positive)
+and 53 retrieval-ambiguous (negative). Metric scores are percentages; TP, FP, FN, and TN are confusion-matrix
+counts. Bold marks the best metric score in each column, including ties.
+Model
+Accuracy
+Positive class
+Negative class
+Macro-F1 Confusion matrix
+Precision Recall
+F1
+Precision Recall
+F1
+TP FP FN
+TN
+Gemini-3.5-Flash
+88.79
+82.89
+100.00 90.65
+100.00
+75.47
+86.02
+88.33
+63 13
+0
+40
+GPT-5.4
+86.21
+84.06
+92.06
+87.88
+89.36
+79.25
+84.00
+85.94
+58 11
+5
+42
+Gemini-2.5-Pro
+83.62
+76.83
+100.00 86.90
+100.00
+64.15
+78.16
+82.53
+63 19
+0
+34
+Claude-Sonnet-4.6
+81.03
+74.12
+100.00 85.14
+100.00
+58.49
+73.81
+79.47
+63 22
+0
+31
+D
+More Results
+D.1
+Data Quality Analysis
+The ModalSearch-Pipeline introduces image nodes into a knowledge graph and distinguishes stably retrievable
+images from retrieval-ambiguous images according to whether a textual description reliably identifies the
+visual content. To evaluate this judgment, we randomly sample 116 image nodes and use human annotations
+as the reference labels: 63 examples are stably retrievable (positive) and 53 are retrieval-ambiguous (negative).
+A positive example identifies essentially unique visual content, such as a specific moment in a historical event,
+a particular painting, an album cover, or a film poster, and image search with its description converges to that
+content. Negative examples have ambiguous descriptions or may lead to substantially different photographs,
+such as generalized events or ordinary scenes with different times, viewpoints, or weather conditions.
+We compare Gemini-3.5-Flash, GPT-5.4, Gemini-2.5-Pro, and Claude-Sonnet-4.6 under the same rubric.
+Table 12 reports accuracy and Macro-F1, class-wise precision, recall, and F1 scores, and the corresponding
+confusion-matrix counts. Gemini-3.5-Flash achieves the highest accuracy (88.79%) and Macro-F1 (88.33%),
+with 100% recall on the positive class. It retains all 63 positive examples while incorrectly retaining 13 of the
+53 negative examples, demonstrating strong but imperfect agreement with human judgments. Balancing its
+leading classification accuracy with inference cost, we select Gemini-3.5-Flash as the referential-stability judge
+for the formal data-generation pipeline.
+D.2
+Inference Stability
+Because search tools may return different results across runs and agent outputs are stochastic for multi-turn
+trajectories, benchmark evaluations can exhibit non-negligible variation. To strengthen the reliability of the
+reported results and the conclusions drawn from them, we conduct two complementary stability analyses:
+repeated agent inference and repeated LLM judging on fixed agent outputs. Specifically, we run ModalSearcher-
+8B, Qwen3-VL-8B under the agentic-workflow setting, and Qwen3-VL-32B under the agentic-workflow setting
+five times on BrowseComp-VL, MMSearch, ModalSearch, and VisBrowse. We report the mean accuracy,
+variance, and 95% confidence interval across the five inference runs in Table 13. For both inference and
+repeated judging, variance is the sample variance of accuracy in squared percentage points, using an n −1
+denominator. The 95% confidence interval for the mean is ¯a ± t0.975,4s/
+√
+5, where s is the sample standard
+deviation across the five evaluations. Although agent inference is stochastic, the observed variation is small
+relative to ModalSearcher’s gains over the baselines, supporting the robustness of the main comparative
+conclusions.
+In addition, for one fixed set of final summarized answers from the five inference runs above, we repeat
+the GPT-4o LLM-as-judge evaluation five times. The corresponding results are reported in the same table.
+23
+
+
+Repeated judging generally exhibits lower variance than repeated agent inference, suggesting that judge-output
+randomness is not the dominant source of variation in these evaluations. This analysis measures repeatability
+rather than the correctness of the judge’s decisions.
+Table 13
+Inference and LLM-judge stability over five repeated evaluations. The first group of statistics reports
+repeated agent inference, while the second group reports repeated judging of one fixed inference result.
+Model
+Benchmark
+Inference
+Judge
+Mean
+Variance
+95% CI
+Mean
+Variance
+95% CI
+ModalSearcher-8B
+BrowseComp-VL
+48.1%
+0.7977
+[46.96%, 49.18%]
+48.9%
+0.04397
+[48.66%, 49.18%]
+MMSearch
+70.3%
+1.7444
+[68.63%, 71.91%]
+70.9%
+0.08889
+[70.50%, 71.24%]
+ModalSearch
+45.8%
+5.03333
+[43.01%, 48.59%]
+47.2%
+0.20000
+[46.64%, 47.76%]
+VisBrowse
+33.4%
+5.70708
+[30.41%, 36.34%]
+36.1%
+0.35013
+[35.36%, 36.83%]
+Qwen3-VL-8B (Agentic)
+BrowseComp-VL
+31.6%
+0.69095
+[30.55%, 32.61%]
+31.7%
+0.01884
+[31.51%, 31.85%]
+MMSearch
+52.0%
+0.16667
+[51.49%, 52.51%]
+51.8%
+0.08889
+[51.43%, 52.17%]
+ModalSearch
+13.5%
+3.42222
+[11.24%, 15.83%]
+16.4%
+0.07778
+[16.05%, 16.75%]
+VisBrowse
+13.6%
+2.80102
+[11.53%, 15.69%]
+15.1%
+0.28010
+[14.49%, 15.81%]
+Qwen3-VL-32B (Agentic)
+BrowseComp-VL
+37.1%
+0.31407
+[36.40%, 37.79%]
+36.8%
+0.03141
+[36.62%, 37.06%]
+MMSearch
+58.3%
+0.16667
+[57.83%, 58.84%]
+58.8%
+0.03333
+[58.57%, 59.03%]
+ModalSearch
+27.7%
+3.61111
+[25.31%, 30.03%]
+27.3%
+0.07778
+[26.92%, 27.61%]
+VisBrowse
+21.9%
+1.05038
+[20.62%, 23.17%]
+22.6%
+0.24509
+[21.99%, 23.22%]
+D.3
+More Case Studies
+Figures 8–11 present examples generated by ModalSearch-Pipeline across the Input-only and Search-required
+categories. Figure 9 uses only the initial visual evidence, while the reference paths in Figures 8, 10, and 11
+include additional images to be retrieved during search. By filtering out image nodes, the same pipeline can
+also generate purely textual data, outside this two-category multimodal taxonomy. This flexibility provides a
+unified generation process for unimodal and multimodal multi-hop search problems and offers a scalable recipe
+for training large-scale Web search agents. More broadly, the design of an interleaved multimodal knowledge
+graph provides a basis for extending the pipeline to additional modalities, such as audio and video.
+As a representative example, Figure 8 shows a Search-required instance that also includes an initial image.
+During data construction, the sampled path starts from a street-view image of a theater and connects to
+the movie poster displayed beside its entrance, then to the film The Twilight Saga: Eclipse, its premiere
+in Los Angeles, and a related red-carpet image. The final answer is the color of the suit worn by Robert
+Pattinson. The backward question-construction process hides the movie title and direct identifiers of the
+target image that would expose reasoning shortcuts, while retaining Robert Pattinson and Los Angeles as
+necessary disambiguating clues in the final question. The resulting ideal evidence path therefore requires
+identifying the film from the initial visual clue, retrieving information about its premiere and the associated
+visual evidence, and finally determining that the answer is maroon. This path is a reference evidence chain
+defined during data construction, rather than a fixed trajectory that the agent must follow at inference time.
+We additionally show two real inference trajectories of ModalSearcher-8B on ModalSearch-Bench in Figures 14
+and 15. For Figure 14, the question asks the model to identify the person in an oval portrait, trace the painting
+depicting a meeting between the Georgia Trustees and a Native American delegation, and determine with
+whom the woman in pink later shared tribal leadership after her husband’s death. The agent first performs
+a reverse-image search and identifies the sitter as James Oglethorpe. It then uses text search to verify his
+connection to the Georgia Trustees and to locate the early-eighteenth-century painting depicting the meeting.
+After opening the candidate image, the agent visually confirms the woman in pink and follows the source
+page to identify her as Senauki. It finally searches for Senauki’s biography and finds that, after Tomochichi’s
+death, she shared leadership with his nephew Toonahowi. This trajectory requires the agent to alternate
+between visual identification, textual retrieval, and image-grounded verification.
+For Figure 15, the question asks the model to identify a Japanese university from semantic clues, trace its
+founders to the London law institution whose collection contains a painting of a king, and then determine the
+24
+
+
+Figure 8 A Search-required example generated by ModalSearch-Pipeline, with an initial image and additional visual
+evidence to be retrieved.
+Input
+the movie poster in 
+the display case to 
+the left of the 
+entrance doors is
+The Twilight Saga: 
+Eclipse.
+Search Path
+the image that The 
+Stag Theatre and 
+cinema exterior on 
+London Road in 
+Sevenoaks.
+Red carpet at The 
+Twilight Saga: Eclipse 
+premiere in Los 
+Angeles on June 24, 
+2010.
+The Twilight Saga: Eclipse 
+(Movie)
+a 2010 American romantic fantasy film 
+directed by David Slade from a screenplay 
+by Melissa Rosenberg, based on the 2007 
+novel Eclipse by Stephenie Meyer.
+Question: For the movie advertised on the poster 
+in the display case to the left of the entrance doors 
+in the image, what color was the suit worn by 
+Robert Pattinson at its premiere in Los Angeles?
+Kristen Stewart, 
+Robert Pattinson, and 
+Taylor Lautner posing 
+together on the red 
+carpet at The Twilight 
+Saga: Eclipse premiere 
+in Los Angeles on 
+June 24, 2010.
+Robert Pattinson is 
+the man with brown 
+short hair, wearing 
+maroon suit.
+Answer: Maroon
+Figure 9 An Input-only example generated by ModalSearch-Pipeline, with visual evidence confined to the initial input.
+Input
+Question: The daughter of the shorter crowned 
+figure on the right in this image was married in 
+a building that was later damaged by a fire. 
+During its restoration, a television programme 
+held a competition to design what specific 
+architectural features?
+
+
+The shorter 
+crowned figure on 
+the right, receiving 
+a ring is Eleanor of 
+Provence.
+Search Path
+the image that The wedding of 
+Eleanor and Henry III depicted 
+by Matthew Paris in the 1250s, 
+showing their age gap; he was 
+28, she was 12 or 13.
+Her daughter who 
+became Queen of 
+Scots is Margaret of 
+England.
+Eleanor of Provence 
+Eleanor of Provence (c. 1223 – 24/25 June 1291) 
+was a Provençal noblewoman who became Queen 
+of England as the wife of King Henry III from 1236 
+until his death in 1272. 
+Answer: The children's television programme 
+'Blue Peter' held a competition for children to 
+create designs for new roof bosses in the south 
+transept.
+Margaret of England
+York Minster
+Queen of Alba (Scotland) by marriage to King 
+Alexander III. The second child of King Henry III of 
+England and his wife, Eleanor of Provence,[1] and 
+was born at Windsor Castle.
+
+Anglican cathedral in the city of York, North 
+Yorkshire, England. The minster is the seat of the 
+archbishop of York, the second-highest office of 
+the Church of England, and is the mother church 
+for the diocese of York and the province of York.
+
+She was married to 
+King Alexander III of 
+Scotland in 1251 at 
+York Minster.
+Programme ‘Blue 
+Peter’ held a 
+competition to design 
+roof bosses of York 
+Minster.
+pose of the horse in a related equestrian portrait. The agent first verifies the university as Chuo University
+and traces the founders’ connection to Middle Temple in London. It then identifies the painting as an
+equestrian portrait of King Charles I with his riding master M. de St. Antoine, painted by Anthony van
+Dyck. After retrieving the corresponding image, the agent inspects the visual details and determines that
+the horse’s left foreleg is raised off the ground. Together, these two cases illustrate how ModalSearcher-8B
+25
+
+
+Figure 10 A Search-required example generated by ModalSearch-Pipeline, with interleaved textual and visual evidence.
+Input
+Question: In this image, the man seated next to 
+Robert Mueller wearing a blue tie also appeared 
+in the Situation Room during the monitoring of 
+a raid. Which foreign-policy-related event did 
+another official seated by the table, wearing a 
+light blue shirt with white, describe as the 
+“proudest moment in my public life”?
+
+
+The man in a blue 
+tie seated next to 
+Robert Mueller is 
+John O. Brennan.
+Search Path
+the image that Barack Obama 
+and Robert Mueller in the White 
+House Situation Room during a 
+meeting on the Boston 
+Marathon bombing 
+investigation in April 2013,
+John O. Brennan take 
+part in White House 
+Situation Room 
+monitoring the Osama 
+bin Laden raid on May 
+1, 2011.
+John O. Brennan
+American former intelligence officer who served 
+as the director of the Central Intelligence Agency 
+(CIA) from March 2013 to January 2017. 
+photo of John O. Brennan in the 
+White House Situation Room 
+with President Obama and other 
+officials monitoring the Osama 
+bin Laden raid on May 1, 2011
+Man in a light blue 
+shirt seated at the 
+far left of the 
+conference table is 
+Joe Biden.
+Joe Biden's 
+proudest moment in 
+public life related to 
+foreign policy.
+Answer: Joe Biden's proudest moment in public 
+life related to foreign policy was his role in 
+affecting Balkan policy in the mid-1990s.
+Joe Biden
+ American retired politician who was the 46th 
+president of the United States from 2021 to 2025. 
+A member of the Democratic Party.
+
+Figure 11
+A Search-required example generated by ModalSearch-Pipeline, with no initial image and new visual
+evidence to be retrieved during reasoning.
+Input
+[No Image Input]
+Question: At the golf tournament held at Royal 
+Melbourne Golf Club where Official World 
+Golf Ranking points were awarded for the first 
+time, the individual champion wore a cap 
+bearing a certain company's logo when he won 
+his major championship. Shortly after that 
+company was acquired, it ended a long-term 
+endorsement deal with which professional 
+golfer?
+
+
+
+Individual champion 
+who won with a 
+score of 274 (−10) 
+is Jason Day.
+Search Path
+2013 World Cup of Golf
+The 2013 ISPS Handa World Cup of Golf is a golf 
+tournament that was played 21–24 November at 
+Royal Melbourne Golf Club in Melbourne, Australia. 
+It was the 57th World Cup. 
+He emotionally 
+celebrating on the 
+18th green after 
+winning the 2015 PGA 
+Championship at 
+Whistling Straits.
+Jason Day
+Australian professional golfer who plays on the 
+PGA Tour, where he has won 13 times including the 
+Players Championship in 2016 and the 2015 PGA 
+Championship, his first major.
+The image that Jason Day 
+emotionally celebrating on the 
+18th green after winning the 
+2015 PGA Championship at 
+Whistling Straits.
+The logo on the 
+front of the man's 
+cap is TaylorMade.
+TaylorMade parted 
+with Sergio García 
+after been acquired 
+by KPS Capital 
+Partners. 
+Answer: Days after its sale to KPS Capital 
+Partners was completed, TaylorMade parted 
+company with Sergio García, who had been with 
+the brand for 15 years.
+TaylorMade
+TaylorMade is an American sports equipment 
+manufacturing company based in Carlsbad, 
+California. The company focuses on the golf 
+equipment, producing golf clubs, balls, and clothing.
+26
+
+
+switches modalities at appropriate points and integrates visual and textual evidence when solving interleaved
+multimodal, multi-hop search problems. Unlike the preceding constructed examples, these figures show the
+model’s actual inference trajectories on ModalSearch-Bench.
+E
+Inference and Evaluation Prompts
+This section presents the agent inference and answer-evaluation prompts. Figure 12 shows the system prompt
+used by the multimodal research agent during inference. Figure 13 shows the GPT-4o LLM-as-judge prompt,
+which is aligned with OpenSearch-VL to ensure consistency with its evaluation protocol.
+Figure 12 System prompt used by the multimodal research agent during inference.
+Prompt 7:  Inference System Prompt
+You are a multimodal research agent. Solve the user request through
+explicit step-by-step reasoning and tool use.
+Requirements:
+1. Every factual claim in the visible solution must be supported by the
+question, the image, or toolreturned evidence.
+2. If the evidence is insufficient, state the uncertainty and continue
+searching instead of guessing.
+3. Use at most one tool call per turn.
+4. Prefer tool use whenever identification, external knowledge, or webpage
+inspection is needed.
+5. `resource_id` values use the format `page_` or `image_` followed by 8
+hexadecimal hash characters;copy them exactly from tool output and never
+construct them from Image numbers or search-resultindices.
+6. Throughout the investigation, keep the original question, target entity,
+and requested attribute in mind;treat each identified object as provisional
+until it is verified against the image and all question constraints,and if
+any evidence contradicts the candidate, explicitly reject it and search for
+a new candidate instead ofcontinuing to search for supporting evidence.
+Available tools are provided inside ``.
+Tool-use format:
+Your detailed reasoning for the next step.
+{"name": "tool_name", "arguments": {...}}
+Rules for the four tools:
+- `t2t_search`: use when you need external textual knowledge or candidate
+webpages.
+- `t2i_search`: use when you need candidate images from a textual
+description.
+- `i2i_search`: use when you need to identify an unfamiliar
+object/person/entity in the current image. Ifneeded, pass `region`.
+- `read_url`: use to read a webpage, PDF, or image URL returned by search
+tools. Only `read_url` shouldinclude `arguments.goal`, which explains what
+evidence should be extracted from it.
+Output rules:
+1. If you call a tool, output exactly one `` block.
+2. Always include a `` block before `` or ``.
+3. When you have enough evidence, output:
+<thinking>Your final reasoning.</thinking><answer>Your final answer.
+</answer>
+For each function call, return a json object with function name and
+arguments within XML tags:{"name": , "arguments": }
+Figure 13 Prompt used by GPT-4o for LLM-as-judge evaluation.
+Prompt 8: LLM Judge Prompt
+You are an impartial judge evaluating whether a deep research report
+contains the correct answer. 
+[Question]
+{question} 
+[Correct Answer]
+{correct_answer} 
+[Deep Research Report]
+{response} 
+Task: Determine if the deep research report contains the correct answer
+anywhere in its content. 
+Instructions: 
+1. Read through the entire research report carefully. 
+2. Look for the correct answer anywhere in the report (it may be embedded
+in paragraphs, tables, or
+sections) 
+3. Check if the information in the report is consistent with the correct
+answer.
+4. The answer does NOT need to be in a specific format or labeled as "final
+answer". 
+5. Provide your reasoning.
+6. Answer with "yes" if the report contains the correct answer, "no" if it
+doesn't or contradicts it.
+Output format:
+correct: [yes/no]
+reasoning: [your explanation]
+27
+
+
+Figure 14 A real ModalSearcher-8B inference trajectory on the Search-required category of ModalSearch-Bench,
+involving reverse-image search, text retrieval, and visual verification of a historical painting.
+U
+User question
+In a painting of an early 18th-century meeting between the trustees with whom the man in the provided oval 
+portrait petitioned to establish a new colony in America and a Native American delegation, with whom did the 
+woman in the pink dress standing with the delegation assume joint leadership of her tribe, following the 
+death of her husband, an influential leader of her people?
+A
+01 Agent
+A
+06 Agent
+The question is a multi-step historical chain, so the first task 
+is to identify the man in the oval portrait without guessing from 
+appearance. The portrait itself gives only visual clues: a single 
+man shown in an oval format, with long light-colored hair and 
+18th-century dress. The wording says he petitioned “the trustees” 
+to establish a new colony in America, which suggests a specific 
+colonial context, but I should not assume the man’s name from 
+memory. A reverse-image search on the full portrait is the most 
+direct way to ground the identity, because if this is a known 
+museum or archive image, matching pages may name the sitter and 
+perhaps also mention the trustees or colony. Once the sitter is 
+identified, I can trace the trustees, then the meeting painting, 
+then the woman in pink, and finally the person she later shared 
+tribal leadership with. I will therefore search the full image 
+first.
+The image search returned a very specific candidate: “Audience 
+Given by the Trustees of Georgia to a Delegation of Creek 
+Indians.” That title directly resembles the question’s wording 
+about a meeting between the trustees and a Native American 
+delegation. It also sounds like the kind of painting that might 
+include a woman standing with the delegation. However, I cannot 
+treat the title alone as proof of the scene or of the woman’s 
+identity. The next step is to inspect the image itself to see 
+whether it visually matches the question’s description, especially 
+the woman in a pink dress. If the image is the right painting, I 
+may then inspect its source page for caption or historical context 
+naming the delegation members.
+read_url
+resource_id=image_61b28dfa
+i2i_search
+region=[0, 0, 1000, 1000]
+Goal: Inspect whether this image is the painting described in the question, including a 
+woman in a pink dress standing with a Native American delegation.
+T
+Tool response (excerpt): James Oglethorpe, founder of Georgia colony
+T
+Tool response - image
+A
+02 Agent
+The reverse-image search has produced a strong lead: two separate 
+results explicitly mention “James Oglethorpe” and “Georgia 
+colony.” However, those titles are only search metadata, not 
+inspected evidence. I still need to open a result and verify that 
+the page actually identifies the portrait or the colony context. 
+The SaportaReport result is promising because its title directly 
+pairs “James Oglethorpe” with “Georgia founder,” which matches the 
+question’s wording about petitioning trustees to establish a new 
+colony in America. If the page text confirms that James Oglethorpe 
+is the founder of Georgia, then I can use that grounded name to 
+search for the trustees and the early-18th-century meeting 
+painting. I will inspect that source page first rather than 
+branching into unrelated searches.
+Source metadata
+Image: Wikimedia Commons
+William Verelst, 1734-1736
+Collection: Winterthur Museum
+Georgia Trustees receive a 
+Creek/Yamacraw delegation in 
+London.
+Original page
+https://en.wikipedia.org/
+wiki/Audience_Given_by_the_
+Trustees_of_Georgia_to_a_
+Delegation_of_Creek_Indians
+read_url
+resource_id=page_957a01aa
+Goal: Verify whether this page identifies the oval portrait sitter or explicitly states that 
+James Oglethorpe founded the Georgia colony, so I can use the name in the next step.
+T
+Tool response (excerpt): A portrait of James Oglethorpe, founder of 
+the state of Georgia.
+A
+03 Agent
+The inspected page gives me one grounded fact: it explicitly says 
+“A portrait of James Oglethorpe, founder of the state of Georgia,” 
+and separately says Oglethorpe “founded Georgia as a British 
+colony on Feb. 12, 1733.” This closes the first hop: the man in 
+the oval portrait is James Oglethorpe. The question’s next clue is 
+not about the portrait itself but about “the trustees with whom” 
+he petitioned to establish the colony. I do not yet have inspected 
+evidence for the trustees’ formal name or for the petition, so the 
+next step should target that exact relationship. A text search is 
+more appropriate than image search now, because I need a 
+historical statement connecting Oglethorpe, trustees, and the 
+founding of Georgia.
+t2t_search
+query=James Oglethorpe petitioned trustees establish 
+Georgia colony
+T
+Tool response (excerpt): Georgia Charter Issued to Trustees
+A
+04 Agent
+The text search returned a result whose snippet is especially 
+close to the wording in the question: “Oglethorpe and his 
+associates—who became the Georgia Trustees—petitioned the Privy 
+Council, Parliament's executive body, for a charter in September 
+1730.” This sounds like it may directly identify the “trustees” as 
+the Georgia Trustees and explain the petition. I should inspect 
+that page before using it as evidence, because the question’s next 
+hop depends on knowing exactly which trustees are meant. If the 
+page confirms that Oglethorpe petitioned for a charter to 
+establish Georgia, then I can search for the early-18th-century 
+meeting between those trustees and a Native American delegation.
+read_url
+resource_id=page_bc4f9744
+Goal: Extract evidence about James Oglethorpe and his associates becoming Georgia 
+Trustees and petitioning for a charter to establish Georgia.
+T
+Tool response (excerpt): Oglethorpe and his associates—who became the 
+Georgia Trustees—petitioned the Privy Council
+A
+05 Agent
+I now have inspected evidence for the first two links in the 
+chain: the portrait sitter is James Oglethorpe, and Oglethorpe and 
+his associates became the Georgia Trustees and petitioned for a 
+charter to establish Georgia. The remaining question points to “a 
+painting of an early 18th-century meeting” between those trustees 
+and “a Native American delegation.” To answer the final part, I 
+first need to identify the painting and the woman in pink within 
+it. Since the target is a specific visual scene, an image search 
+is more suitable than a general text search at this stage. I will 
+search for paintings of the Georgia Trustees meeting a Native 
+American delegation, then inspect a promising image or its source 
+page to see whether it matches the described scene and whether the 
+woman in pink can be identified from captions or surrounding text.
+t2i_search
+query=Georgia Trustees meeting Native American 
+delegation painting early 18th century
+T
+Tool response (excerpt): Audience Given by the Trustees of Georgia to 
+a Delegation of Creek Indians
+Agent prose retained; tags removed and calls reformatted. Text tool results excerpted.
+A
+07 Agent
+The downloaded image does match the question’s visual description: 
+it shows a formal indoor meeting with many trustees on one side 
+and a Native American delegation on the other, and there is indeed 
+a woman in a pink dress standing with the delegation. This 
+confirms that the search result is a plausible match for the 
+target painting. What remains unresolved is the woman’s identity 
+and the later leadership question. The source page for this image 
+is likely to contain the painting’s title, caption, and possibly 
+names of the delegation members. I will inspect that page next to 
+extract any text identifying the woman in pink or the delegation.
+read_url
+resource_id=page_f040bacd
+Goal: Read the source page for this painting to identify the scene, the Native American 
+delegation, and especially the woman in pink.
+T
+Tool response (excerpt): Senauki, Tomochichi's wife and the sole 
+woman in the group, wears a pink English-style jacket and petticoats.
+A
+08 Agent
+The source page for the painting closes the visual-identification 
+part of the chain. It identifies the scene as “Audience Given by 
+the Trustees of Georgia to a Delegation of Creek Indians,” says 
+the painting depicts a Lower Creek/Yamacraw delegation meeting 
+with the trustees, and explicitly states that “Senauki, 
+Tomochichi's wife and the sole woman in the group, wears a pink 
+English-style jacket and petticoats.” So the woman in pink is now 
+grounded as Senauki, wife of Tomochichi. The only remaining step 
+is the biographical one: after Tomochichi’s death, with whom did 
+Senauki assume joint leadership of her tribe? I will search for 
+Senauki together with Tomochichi’s death and joint leadership to 
+find a source that directly states the successor or co-leader.
+t2t_search
+query=Senauki Tomochichi wife joint leadership tribe 
+after husband died
+T
+Tool response (excerpt): Senauki and Tomochichi's nephew Toonahowi 
+took charge of the Muscogee tribe.
+A
+09 Agent
+The search results include a promising direct match: one result 
+titled “Senauki” has a snippet saying that after Tomochichi’s 
+death, Senauki and Tomochichi’s nephew Toonahowi took charge of 
+the Muscogee tribe. Another result titled “Tomochichi” says he 
+left Senauki and his nephew Toonahowi in charge of the Yamacraws. 
+These are close to the wording of the question, but snippets are 
+not enough. I should inspect one of these pages to see whether it 
+explicitly states the post-death leadership arrangement. The 
+“Senauki” page looks especially targeted because it is centered on 
+the woman already identified in the painting, so I will read that 
+first.
+read_url
+resource_id=page_0eec05b4
+Goal: Extract the passage about what happened after Tomochichi died, especially who 
+Senauki assumed joint leadership with and what tribe is involved.
+T
+Tool response (excerpt): Senauki and Tomochichi's nephew Toonahowi 
+took charge of the Muscogee tribe.
+A
+10 Agent - Final answer
+The woman in pink is Senauki, identified in the inspected painting 
+source as Tomochichi’s wife. After Tomochichi died, Senauki 
+assumed leadership together with Tomochichi’s nephew, Toonahowi.
+28
+
+
+Figure 15 A real ModalSearcher-8B inference trajectory on the Search-required category of ModalSearch-Bench,
+combining textual entity tracing with retrieval and inspection of new visual evidence.
+U
+A
+User question
+Many of the founders of a Japanese university, whose name means 'middle' or 'central', studied at a certain law school in London where a 
+painting of a king is displayed. In an equestrian portrait by a Flemish artist that depicts this same king with his riding master, which of 
+the horse's legs is raised off the ground?
+01 Agent
+05 Agent
+A
+The question is a multi-hop chain, so I need to resolve it in 
+order rather than guess the king or the horse. The first 
+unresolved entity is the Japanese university: the wording gives 
+a semantic clue that its name means “middle” or “central,” but I 
+should not rely on memory for the university name. The most 
+direct way to ground that clue is a text search using the exact 
+semantic description from the question. Once I have a candidate 
+university from search results, I will inspect a source page to 
+verify that it is indeed a Japanese university and then look for 
+evidence about its founders. After that, I can trace the 
+founders to the London law school, then identify the king from 
+the law school’s painting, and only then move to the Flemish 
+equestrian portrait. I will start with a text search because the 
+first hop is linguistic and institutional, not visual.
+The Middle Temple page gives the key bridge from the London law 
+school to the art clue. It explicitly says the central painting 
+in Middle Temple Hall shows King Charles I “astride his horse 
+and accompanied by M. de St Antoine, his riding master,” and it 
+identifies the artist as Anthony van Dyck, described there as 
+Flemish. That is enough to define the target artwork: a Flemish 
+equestrian portrait of Charles I with his riding master. What 
+remains is purely visual: determine which horse leg is raised 
+off the ground. A text page may not describe the horse’s pose in 
+words, so the most appropriate next step is to search for images 
+of this specific painting and then inspect an actual image 
+rather than infer the leg position from text.
+t2i_search
+query=King Charles I M. de St Antoine riding master 
+Anthony van Dyck equestrian portrait horse leg raised
+t2t_search
+query=Japanese university name means "middle" or 
+"central" founders studied law school London
+Tool response (excerpt)
+Charles I with M. de St Antoine - Wikipedia
+Tool response (excerpt)
+Chuo University: “Chuo”, which literally means middle, center or 
+central.
+06 Agent
+A
+The image search has returned a candidate image titled “Charles 
+I with M. de St Antoine,” which matches the exact relationship 
+named in the Middle Temple source: Charles I with his riding 
+master, M. de St Antoine. At this point, the unresolved part is 
+no longer textual but visual. I need to inspect the actual 
+painting so I can determine the horse’s pose. Reading the image 
+itself is the right tool because the question asks about a leg 
+being raised off the ground, which cannot be answered reliably 
+from surrounding text unless the image is viewed. I will open 
+the image result that directly names “Charles I with M. de St 
+Antoine” and examine the horse’s legs.
+read_url
+resource_id=image_3aec0ca0
+Goal: Inspect the actual painting of Charles I with M. de St Antoine and determine 
+which horse leg is raised off the ground.
+Tool response - image
+T
+T
+A
+T
+02 Agent
+The first search has produced a strong candidate: a result 
+titled “Chuo University,” and its snippet explicitly says the 
+name “Chuo” literally means “middle, center or central.” That is 
+close to the wording in the question, but a snippet alone is not 
+enough evidence. I need to inspect the page itself to confirm 
+the university name and, ideally, also see whether it mentions 
+the founders or their connection to a London law school. If the 
+page only settles the university name, then I will know I need a 
+second hop focused specifically on the founders. Reading the 
+university history page is the most efficient next step because 
+it may close both the name-meaning clue and the founder clue at 
+once.
+read_url
+resource_id=page_7159e07f
+Goal: Verify that Chuo University is the Japanese university whose name means 
+middle/central, and extract any information about its founders or where they 
+studied.
+Tool response (excerpt)
+It is said that the name “Chuo” is derived from “Chuo Ho-in,” the 
+Japanese translation of the venerable English legal training 
+institution Middle Temple where Masujima and other founding fathers 
+of the university studied.
+T
+A
+03 Agent
+The inspected university page closes the first two hops cleanly. 
+It establishes that the university is Chuo University, explains 
+that “Chuo” literally means “central,” and says the name comes 
+from “Chuo Ho-in,” the Japanese translation of Middle Temple, 
+where Masujima and other founding fathers studied. So the London 
+law school is now grounded as Middle Temple. The remaining chain 
+is: find the king depicted in Middle Temple’s painting, then 
+find the Flemish equestrian portrait of that same king with his 
+riding master, then answer which horse leg is raised. Since the 
+question specifically mentions a painting of a king displayed in 
+the law school, the most direct next step is a text search about 
+Middle Temple and a king painting, because that is likely to be 
+described in words on a school page or art page.
+t2t_search
+query=Middle Temple London painting of a king 
+displayed in hall
+Tool response (excerpt)
+The striking central painting shows King Charles I in armour 
+astride his horse and accompanied by M. de St Antoine, his riding 
+master.
+T
+A
+T
+04 Agent
+The search results now point to a very specific candidate: one 
+result says Middle Temple Hall’s central painting shows “King 
+Charles I in armour astride his horse and accompanied by M. de 
+St Antoine, his riding master.” That is especially promising 
+because it links all three remaining elements in one place: the 
+king, the horse, and the riding master. However, I should 
+inspect the page before using it as evidence, because the 
+snippet is only a preview and may omit important context. If the 
+page confirms that the Middle Temple painting is of Charles I 
+with M. de St Antoine, then I can move to the final hop: find 
+the Flemish equestrian portrait of Charles I with his riding 
+master and inspect the horse’s pose.
+read_url
+resource_id=page_f4710591
+Goal: Confirm which king is depicted in the painting displayed in Middle Temple 
+Hall, and whether the page mentions the riding master.
+Tool response (excerpt)
+This composition was produced by the fashionable Flemish artist, 
+Anthony van Dyck, for the king in 1633.
+A
+Source metadata
+Wikimedia Commons
+Anthony van Dyck, 1633
+Charles I with M. de St Antoine, his riding 
+master.
+Original page
+https://en.wikipedia.org/wiki/
+Charles_I_with_M._de_St_Antoine
+07 Agent - Final answer
+The horse’s left foreleg is raised off the ground.
+
+I identified the chain as:
+
+1. The Japanese university is Chuo University, whose name means 
+“central/middle.”
+2. Its founders studied Middle Temple in London.
+3. Middle Temple’s hall painting identifies the king as Charles 
+I with M. de St Antoine, his riding master.
+4. In the inspected equestrian portrait, the horse’s left front 
+leg is lifted, while the right front leg and both hind legs 
+remain on the ground.
+29

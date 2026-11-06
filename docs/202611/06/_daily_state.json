@@ -1,0 +1,281 @@
+{
+  "date": "20261106",
+  "date_label": "",
+  "generated_at": "2026-11-06 00:44:22 UTC",
+  "recommend_exists": true,
+  "run_count": 1,
+  "papers": [
+    {
+      "paper_id": "2611.05601v1",
+      "route": "202611/06/2611.05601v1-ridge-state-conditioned-reward-blending-for-behavioral-coverage-in-deep-rl-game-agents",
+      "title": "RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "面向游戏智能体的深度强化学习奖励混合方法",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06483v1",
+      "route": "202611/06/2611.06483v1-what-does-multi-turn-reinforcement-learning-really-improve-in-llm-agents",
+      "title": "What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "分析多轮智能体强化学习在轮次与采样预算下的收益",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06704v1",
+      "route": "202611/06/2611.06704v1-where-it-breaks-diagnosing-perception-memory-and-decision-failures-of-a-vision-language-agent-in-pac-man",
+      "title": "Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 9.0,
+      "evidence": "视觉语言智能体玩吃豆人，结合强化学习策略研究诊断感知、记忆与决策失效",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06395v1",
+      "route": "202611/06/2611.06395v1-gist-gibbs-targeted-hierarchical-data-selection-for-offline-rlvr",
+      "title": "GIST: Gibbs-Targeted Hierarchical Data Selection for Offline RLVR",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "面向离线可验证奖励强化学习的Gibbs目标分层数据选择",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06543v1",
+      "route": "202611/06/2611.06543v1-using-experience-twice-dynamic-process-rubrics-for-privileged-token-level-credit-assignment",
+      "title": "Using Experience Twice: Dynamic Process Rubrics for Privileged Token-Level Credit Assignment",
+      "section": "deep",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 8.0,
+      "evidence": "借助过程评分规则实现令牌级信用分配",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05929v1",
+      "route": "202611/06/2611.05929v1-diversity-aware-experience-replay-via-statistical-leverage-scores",
+      "title": "Diversity-Aware Experience Replay via Statistical Leverage Scores",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向离策略深度强化学习的多样性感知回放采样，提升探索与样本效率",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05942v1",
+      "route": "202611/06/2611.05942v1-reward-budgeting-reduces-premature-convergence-in-reinforcement-learning-for-llm-reasoning",
+      "title": "Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向大模型推理强化学习的奖励预算优势构造",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06244v1",
+      "route": "202611/06/2611.06244v1-rubric-curriculum-rl-exploiting-the-generation-verification-gap-in-non-verifiable-domains",
+      "title": "Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "通过评分标准课程将可验证奖励强化学习扩展到不可验证领域",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06445v1",
+      "route": "202611/06/2611.06445v1-sumone-a-simple-and-efficient-summarizer-for-plug-and-play-agent-memory",
+      "title": "SUMONE: A Simple and Efficient Summarizer for Plug-and-Play Agent Memory",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向长程智能体记忆压缩的任务无关摘要器，使用GRPO训练",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06523v1",
+      "route": "202611/06/2611.06523v1-h2marl-hierarchical-heterogeneous-multi-agent-reinforcement-learning-for-humanoid-robot-control",
+      "title": "H^2MARL: Hierarchical Heterogeneous Multi-agent Reinforcement Learning for Humanoid Robot Control",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "分层异构多智能体强化学习",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06854v1",
+      "route": "202611/06/2611.06854v1-visual-token-routing-learning-to-keep-tokens-that-matter",
+      "title": "Visual Token Routing: Learning to keep tokens that matter",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "game-llm-rl"
+        }
+      ],
+      "score": 7.0,
+      "evidence": "面向视觉语言计算机使用智能体的稀疏视觉token路由，适用于游戏等长程任务",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05562v1",
+      "route": "202611/06/2611.05562v1-near-minimax-sample-complexity-for-multi-objective-reinforcement-learning-under-generative-models",
+      "title": "Near-Minimax Sample Complexity for Multi-Objective Reinforcement Learning under Generative Models",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "生成模型下多目标强化学习的近极小极大样本复杂度",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05666v1",
+      "route": "202611/06/2611.05666v1-revisiting-critic-estimation-in-soft-actor-critic-algorithms",
+      "title": "Revisiting Critic Estimation in Soft Actor-Critic Algorithms",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "重新审视软演员-评论家深度强化学习的评论家设计以提升稳定性",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05827v1",
+      "route": "202611/06/2611.05827v1-tandembench-benchmarking-decision-models-for-multi-agent-collaboration",
+      "title": "TandemBench: Benchmarking Decision Models for Multi-Agent Collaboration",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "面向多智能体协作与团队计划选择的基准",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.05953v1",
+      "route": "202611/06/2611.05953v1-graph-mediated-large-language-model-systems-in-the-agentic-era-reasoning-knowledge-retrieval-execution-and-coordination",
+      "title": "Graph-Mediated Large Language Model Systems in the Agentic Era: Reasoning, Knowledge, Retrieval, Execution, and Coordination",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "综述图结构在大模型智能体系统中的推理、记忆与协作",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06131v1",
+      "route": "202611/06/2611.06131v1-modalsearcher-weaving-visual-evidence-into-autonomous-cross-modal-deep-search",
+      "title": "ModalSearcher: Weaving Visual Evidence into Autonomous Cross-Modal Deep Search",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "智能体多模态搜索与动态工具选择",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    },
+    {
+      "paper_id": "2611.06254v1",
+      "route": "202611/06/2611.06254v1-harnessflow-mcts-guided-harness-optimization-for-llm-agents",
+      "title": "HarnessFlow: MCTS-Guided Harness Optimization for LLM Agents",
+      "section": "quick",
+      "tags": [
+        {
+          "kind": "query",
+          "label": "rl-agents"
+        }
+      ],
+      "score": 6.0,
+      "evidence": "用MCTS策略优化大模型智能体执行框架",
+      "first_seen_at": "2026-11-06 00:44:22 UTC",
+      "updated_at": "2026-11-06 00:44:22 UTC"
+    }
+  ]
+}

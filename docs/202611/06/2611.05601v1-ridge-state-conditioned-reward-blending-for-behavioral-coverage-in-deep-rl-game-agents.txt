@@ -1,0 +1,196 @@
+Title: RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents
+
+URL Source: https://arxiv.org/pdf/2611.05601v1
+
+Published Time: Thu, 05 Nov 2026 01:18:11 GMT
+
+Number of Pages: 4
+
+Markdown Content:
+# RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents 
+
+AL Muqshith Mohammed Shifan, Kevin Christopher Chua, Ali Neshati, Loutfouz Zaman, Cristiano Politowski 
+
+Ontario Tech University 
+
+{mohamealmusqi.mohamedshifan, kevinchristopher.chua}@ontariotechu.net {ali.neshati, loutfouz.zaman, cristiano.politowski}@ontariotechu.ca 
+
+Abstract —A deep RL agent trained on a fixed persona reward plays one way: an Explorer keeps exploring while starving, a Survivor hoards on an empty map. Since each persona fixes its own reward, automated playtesting trains N agents for N
+
+styles. Changing reward composition mid-episode runs into the switching-stability dilemma: Proximal Policy Optimization (PPO) degrades under non-stationary rewards. We present RIDGE ,a single-agent architecture that sidesteps the dilemma with two design choices: a state-conditioned blender that computes softmax-normalized sigmoid weights from slow-moving state variables, and a multi-head critic that trains one value head per persona on its own stationary signal. On Crafter with four personas, one R IDGE agent acquires both branches of the wood-tier crafting/combat split that no fixed-persona baseline solves jointly, and a sharpness ablation confirms state-conditioning drives the gain. We position these results as demonstrations of the blending mechanism’s dynamics across n = 3 seeds per condition; larger multi-seed sweeps remain future work. 
+
+Index Terms —reinforcement learning, automated playtesting, procedural personas, reward shaping, PPO, Crafter 
+
+I. I NTRODUCTION 
+
+A starving player stops exploring to find food and then resumes once he is satiated. Human players do this naturally, and automated playtesters need to cover the same kind of within-episode shift, yet a deep RL agent trained on a fixed reward plays one way: an Explorer keeps exploring while starving, a Survivor hoards on an empty map. Game devel-opers work around this by defining procedural personas [1]: they pair each agent with a different reward composition, train one agent per persona, then take the union of behaviors at deployment. This scales linearly ( N personas cost N training runs and N× environment steps), but it also misses the within-episode dynamics that motivated the personas in the first place. In a Crafter-like open-world survival setting [2], an Explorer rewards map novelty, a Survivor health and hunger maintenance, a Craftsman tool-building, and a Warrior combat engagement, while a real player moves between all four within a single playthrough. The natural fix is to change reward composition during 
+
+an episode, conditioned on agent state. Prior work avoids this because in-episode reward shifts break Proximal Pol-icy Optimization (PPO). Li [3] formalizes the problem as the switching-stability dilemma : PPO’s value function needs a quasi-stationary signal, so hard reward switches break convergence. He documents the effect in Large Language Model (LLM)-guided satellite scheduling, where near-constant weights outperform carefully tuned dynamic ones. Moalla et al. [4] reach the same conclusion from the representation side: PPO under non-stationarity loses feature rank and ca-pacity. An in-episode persona blender therefore has to shift rewards in a way that PPO can still handle. RIDGE (Reactive Inter-persona Dynamic Goal Engine) ad-dresses this gap with two design choices. (i) Smooth blending 
+
+computes softmax-normalized sigmoid weights from slow-moving state variables (health, hunger, crafting progress, enemy proximity), so the effective reward varies smoothly between nearby states. (ii) A multi-head critic keeps one value head per persona. Each head trains on a stationary per-persona reward signal, regardless of how the blender weights evolve, which isolates value-function learning from the shifting mixture. This paper makes three contributions. (1) A state-conditioned blender coupled with a multi-head critic, designed to address the switching-stability dilemma in persona-based playtesting. (2) Preliminary Crafter evidence that one R IDGE 
+
+agent acquires both branches of the wood-tier crafting/combat split that no fixed-persona baseline solves jointly, with n = 3 
+
+seeds per condition. (3) A sharpness ablation showing that state-conditioning, not the persona set alone, drives the result, plus a direct comparison to achievement distillation [5] in Sec-tion VI: complementary mechanisms, different deliverables. II. R ELATED WORK 
+
+Personas for playtesting. Holmgård et al. [1] introduced procedural personas, and later work [6] extended them. Both encode play styles as utility functions with fixed weights. Ariyurek et al. [6] argue against static personas and pro-pose a developing persona whose goals progress over time, together with an Alternative Path Finder that adjusts the PPO reward for trajectory diversity. Their changes act between episodes; R IDGE ’s act within an episode and condition on state. Curiosity-driven coverage agents [7] go after broader behavioral reach through intrinsic exploration bonuses, not persona blending. The closest contemporary works supply the blending signal externally. MultiGAIL [8] trains one agent to imitate multiple persona policies from human demonstrations, conditioned on an external blending coefficient set at inference time. Cilan and Özgövde [9] condition a single PPO policy arXiv:2611.05601v1 [cs.LG] 3 Nov 2026 on an external behavior-target vector. R IDGE computes the blending signal internally from game state, so the mixture reflects behavioral need rather than user prior. 
+
+Adaptive reward weighting and multi-head critics. The closest architectural precedent is HDPG [10], a multi-head critic for bipedal locomotion where each head estimates a single reward component and a weight schedule (training progress) combines them. R IDGE uses the same multi-head pattern, but with semantically interpretable persona heads and weights that vary with state within each episode . Com-pared to standard Multi-Objective Reinforcement Learning (MORL) [11], [12], which treats scalarization weights as ex-ternal configuration, R IDGE performs state-conditioned scalar-ization with internal weights. This also separates R IDGE from hard intra-episode switching, whose abrupt transitions trigger Li’s dilemma. 
+
+PPO non-stationarity. Li [3] formalizes the switching-stability dilemma: near-constant reward weights ( 342 Mbps) outperform tuned dynamic weights ( 103 Mbps) because PPO requires a quasi-stationary signal for value-function conver-gence. Moalla et al. [4] address the representation-side coun-terpart with Proximal Feature Optimization. RIDGE ’s two design choices target the value-function side of the same phe-nomenon: smooth blending keeps the aggregate reward quasi-stationary, and the multi-head critic isolates each persona’s value estimate from the shifting mixture. 
+
+Crafter benchmark methods. Several methods target Crafter [2] directly, including achievement distillation [5]. Two caveats matter when comparing absolute scores. Moon et al. [5] report PPO baselines using an Importance-Weighted Actor-Learner Architecture (IMPALA) [13] ResNet encoder (4M parameters) reaching 15 .60% , far above the ∼ 4% PPO Hafner [2] reports under a simpler Convolutional Neural Net-work (CNN); Moon’s headline 21 .79% uses 9M parameters and a 1M-parameter variant scores 17 .07% , so the gain reflects both model scale and the contrastive auxiliary loss. These methods optimize raw achievement under Crafter’s default sparse reward. RIDGE instead prioritizes broad behavioral coverage within-episode, guided by designer-authored persona shaping. Section VI returns to Moon et al. directly. III. M ETHOD 
+
+RIDGE has three components: designer-authored persona reward functions, a state-conditioned blender, and a multi-head critic. 
+
+Persona rewards. Let P = {E, S, C, W } denote Explorer, Survivor, Craftsman, and Warrior. Each persona defines a reward rit : ( st, a t, s t+1 ) 7 → R that scores the transition from the perspective of its play style. Explorer rewards novel-tile dis-covery with a decaying per-tile bonus. Craftsman and Warrior reward newly unlocked crafting and combat achievements re-spectively, with magnitudes scaled by tech-tree depth. Survivor combines per-step shaping over the vital vector (ht, f t, d t, e t)
+
+(health, food, drink, energy) with cliff penalties below per-vital thresholds and event bonuses (e.g., wake_up ). A designer can read each ri and recognize the intended play style. We release coefficients and full per-persona definitions with the codebase, along with all training data and trained checkpoints. 1
+
+State-conditioned blender. At each step the blender pro-duces normalized weights ˜wt ∈ ∆|P|− 1 (the simplex of non-negative weights summing to one) from a small set of slow-moving state features. For persona i, a scalar activation 
+
+σit ∈ [0 , 1] summarizes that style’s relevance in st. The raw weight is a sigmoid centered at a per-persona bias bi,
+
+wit = sig  α k i (σit − bi), ˜wit = wit
+
+P 
+
+> j∈P
+
+wjt
+
+, (1) with sig( x) = (1 + e−x)−1, α > 0 a global sharpness shared across personas, and ki a per-persona scale. The activation signals are σEt = novelty( st), σSt = 1 − min( ht, f t, d t, e t),
+
+σCt = craft _progress( st), and σWt = enemy _proximity( st),each bounded in [0 , 1] and increasing when the corresponding style becomes more relevant. Two properties matter. First, ˜wt varies continuously with state, so the effective aggregate ¯rt = P 
+
+> i
+
+˜witrit varies smoothly between nearby states and is quasi-stationary in Li’s [3] sense. Second, R IDGE computes weights internally from state, which distinguishes it from MultiGAIL-style imitation [8] and HDPG-style schedules [10]; both supply the blending signal externally. The sharpness α controls transition abruptness: 
+
+α → 0 collapses to a uniform mixture ( ˜wi = 1 /|P| ), while 
+
+α → ∞ approaches a hard argmax over σit and recovers the hard-switching regime Li warns against. 
+
+Multi-head critic and PPO objective. A single policy 
+
+πθ (at | st) acts in the environment. On top of a shared encoder we maintain |P| value heads {V iϕ }, one per persona, each trained against per-persona returns Rit = P 
+
+> k≥0
+
+γkrit+k via Generalized Advantage Estimation (GAE) [14]. Each V iϕ sees a stationary reward signal ri regardless of how ˜wt evolves, which isolates value-function learning from non-stationarity in the aggregate. This is the failure mode Li identifies, and the value-side counterpart of Moalla et al.’s [4] representation collapse. The PPO policy update uses a blended advantage :we combine per-persona advantages Ait = Rit − V iϕ (st) as 
+
+¯At = P 
+
+> i
+
+˜witAit and substitute into the standard clipped surro-gate. Value heads train with LV (ϕ) = P 
+
+> i
+
+Et[( V iϕ (st) − Rit)2].Algorithm 1 summarizes a training step. IV. E XPERIMENTAL SETUP 
+
+We evaluate on Crafter [2] under the benchmark’s standard 
+
+1M environment-step training budget; Crafter’s 22 achieve-ments partition into four categories (collection, crafting, com-bat, survival) that align with our persona set. These achieve-ments are not independent: most sit on a sequential tech tree, reachable only once prerequisites are met (e.g. Place Table gates both wood-tier tools, which gate stone- and iron-tier tools), so a low rate on a deep achievement re-flects the whole preceding chain. We implement PPO [15] in PyTorch, with all conditions sharing encoder, optimizer (Adam), rollout length, batch size, GAE coefficient, PPO 
+
+> 1Code, data, and checkpoints: https://github.com/Code-SorceryLab/RIDGE.
+
+Algorithm 1 RIDGE training step 
+
+Require: Policy πθ ; value heads {V iϕ }i∈P ; persona rewards 
+
+{ri}; activations {σi}; biases {bi}; scales {ki}; sharpness 
+
+α; PPO clip ϵ; optimizer epochs K
+
+1: Collect rollout τ = {(st, a t, s t+1 )}T −1
+
+t=0 with πθ
+
+2: for t = 0 , . . . , T −1 do 
+
+3: wit ← sig( αk i(σi(st) − bi)) {Eq. 1} 
+
+4: ˜wit ← wit/P
+
+j wjt ; rit ← ri(st, a t, s t+1 )
+
+5: end for 
+
+6: Compute per-persona returns Rit and advantages Ait via GAE on each ri with V iϕ
+
+7: Blend: ¯At ← P
+
+i ˜witAit
+
+8: for K optimizer epochs do 
+
+9: Update θ on PPO-clipped objective with advantage ¯At
+
+and entropy bonus 
+
+10: Update ϕ on LV (per-head MSE) 
+
+11: end for 
+
+clip, and entropy bonus; they differ only in reward signal, blender sharpness, and critic head count. Conditions: R IDGE 
+
+(α = 1 .0, four heads); four single-head fixed-persona baselines (Explorer/Survivor/Craftsman/Warrior); a sharpness ablation 
+
+α ∈ { 0.0, 0.5, 1.5, 2.0} on the R IDGE architecture. The α = 0 .0
+
+condition collapses to a uniform mixture ( ˜wi = 1 /|P| ), which is the same four persona rewards combined linearly with fixed equal weights; this is our no-state-conditioning ablation, cor-responding to the uniform-weight case of linear-scalarization MORL [11], [12]. 
+
+Seed budget. PPO results carry substantial seed vari-ance [16], so we run n = 3 seeds for every condition: the RIDGE default ( α = 1 .0), all sharpness ablation values ( α ∈{0.0, 0.5, 1.5, 2.0}), and the four fixed-persona baselines. The pickaxe/sword pattern holds across seeds, and the wood-tier coverage effect sizes are large; we treat these as demonstra-tions of the blending dynamics rather than definitive claims, with a larger multi-seed sweep planned for the extended version. V. R ESULTS 
+
+Cross-branch coverage in a single agent (Fig. 1). The clearest result is the wood-tier crafting/combat split. All three conditions reach Place Table, the shared prerequisite for both wood-tier tools: RIDGE (0.75 ), Craftsman (0.90 ), Warrior (0.88 ). After that prerequisite the specialists diverge: Crafts-man makes Wood Pickaxe at 0.70 but Wood Sword at only 
+
+0.16 , while Warrior is the mirror with 0.79 on sword and 0.12 
+
+on pickaxe. R IDGE crosses the branch within a single trained agent and reaches 0.32 Wood Pickaxe and 0.26 Wood Sword. Each specialist’s reward gives no incentive for the off-branch skill; R IDGE ’s composition shifts within episodes, so the agent meets both incentives in proportion to state. R IDGE sits below each specialist on its own branch ( 0.32 vs. 0.70 pickaxe, 
+
+0.26 vs. 0.79 sword), the expected coverage/specialization trade-off. The same mechanism appears in a smaller Survival case: R IDGE reaches Wake Up at 0.66 (vs. Explorer 0.15 ,RIDGE Explorer Survivor Craftsman Warrior All-Ones                                                                                                               
+
+> Collect Coal Collect Diamond Collect Drink Collect Iron Collect Sapling Collect Stone Collect Wood Defeat Skeleton Defeat Zombie Eat Cow Eat Plant Make Iron Pickaxe Make Iron Sword Make Stone Pickaxe Make Stone Sword Make Wood Pickaxe Make Wood Sword Place Furnace Place Plant Place Stone Place Table Wake Up
+> 0.01 0.01 0.00 0.04 0.01 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.42 0.46 0.36 0.29 0.29 0.12 0.00 0.00 0.00 0.00 0.00 0.00 0.76 0.86 0.42 0.68 0.45 0.11 0.07 0.02 0.00 0.24 0.03 0.00 0.86 0.78 0.44 0.97 0.96 0.12 0.00 0.00 0.01 0.01 0.00 0.00 0.01 0.03 0.00 0.03 0.06 0.00 0.11 0.04 0.01 0.02 0.09 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.01 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.32 0.13 0.01 0.70 0.12 0.00 0.26 0.07 0.02 0.16 0.79 0.00 0.00 0.00 0.00 0.03 0.00 0.00 0.74 0.84 0.30 0.64 0.26 0.09 0.04 0.01 0.00 0.19 0.01 0.00 0.75 0.48 0.12 0.90 0.88 0.00 0.66 0.15 0.97 0.15 0.01 0.39
+> Per-Achievement Success Rate (last 100 episodes)
+> 0.0 0.2 0.4 0.6 0.8 1.0 Success Rate
+
+Fig. 1: Per-achievement success rate over the final 100 
+
+episodes. R IDGE is the only condition with substantial success on both Make Wood Pickaxe and Make Wood Sword. Mean over n = 3 seeds per condition. 
+
+Craftsman 0.15 , Warrior 0.01 ). Wake Up fires when the agent sleeps to recover low energy, rewarding vital management rather than item acquisition, and R IDGE reaches it despite Survivor’s mean blender weight sitting around 8% , because the blender spikes Survivor’s weight when vitals drop and policy-gradient signal accumulates over those intervals. 
+
+State-conditioning ablation (Fig. 2). The sharpness sweep tests whether state-conditioning contributes beyond the per-sona set itself. At α = 0 .0 (uniform mixture, no state condi-tioning) the agent receives the same four persona rewards with equal weights and clearly underperforms all state-conditioned variants α ∈ { 0.5, 1.0, 1.5, 2.0} by roughly 30 –50% relative on aggregate score throughout training. Within the conditioned range, the sharper settings ( α = 1 .5, 2.0) edge out the α = 1 .0
+
+default, though the differences sit within the seed bands. Two conclusions follow. First , state-conditioning, not the persona set alone, drives the result: the same rewards under uniform weighting perform worse than under state-conditioned rout-ing. Second , the gap between uniform and state-conditioned conditions is wide and consistent across seeds; the precise 0K 200K 400K 600K 800K 1.0M Training Steps 0123456Crafter Score (%)  Hafner 2022      
+
+> RIDGE Blend Sharpness Ablation (RQ3)
+> =0.0 (uniform) (n=3)
+> =0.5 (soft) (n=3)
+> =1.0 (default) (n=3)
+> =1.5 (n=3)
+> =2.0 (sharp) (n=3)
+
+Fig. 2: Sharpness ablation, Crafter score over training. Uni-form mixture ( α = 0 ) clearly underperforms; state-conditioned variants cluster well above it. n = 3 seeds for all conditions; shaded bands are min/max. 0K 200K 400K 600K 800K 1.0M Training Steps 10 2  
+
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> Value Loss (log scale)
+> Training Stability Value Loss over Time
+> RIDGE (n=3) Explorer (n=3) Survivor (n=3) Craftsman (n=3) Warrior (n=3) All-Ones (n=3)
+
+Fig. 3: Value loss over training (log scale). R IDGE maintains stable value-function learning under blended rewards, compa-rable to the most stable specialist (Explorer). n = 3 seeds per condition; shaded bands are min/max. within-conditioned optimum needs further seeds to pin down. 
+
+Value-function stability (Fig. 3). RIDGE ’s value loss stays at ≈ 0.04 throughout training, comparable to Explorer-only and below Craftsman and Warrior. Survivor-only sits an order of magnitude higher (0.3–0.5), because its dense action-independent vital-shaping reward yields returns the single value head struggles to fit. With four per-persona heads each seeing a stationary signal, R IDGE ’s value-loss trajectory tracks the most stable specialist rather than degrading toward the non-stationary aggregate, which is direct evidence for the multi-head critic design choice. VI. D ISCUSSION 
+
+Relationship to achievement distillation [5]. The canon-ical Crafter comparator at 1M steps is Moon et al. [5], who reach 21 .79% Hafner-canonical score with 9M parameters via contrastive auxiliary losses on the encoder. RIDGE is not on this axis. We report a 6.30% Hafner-canonical score for reproducibility, not as a competitive benchmark on this metric. Moon optimizes raw achievement under Crafter’s de-fault sparse reward, modifying what the agent knows ; R IDGE 
+
+optimizes behavioral coverage under designer-authored per-sona shaping, modifying what the agent wants . For automated playtesting, an aggregate achievement score from an agent locked to one play style provides less value to a designer than a coverage profile across styles, which is what the wood-tier split demonstrates. The two mechanisms are independent in principle and complementary in practice: contrastive losses on a R IDGE -blended reward, or R IDGE blending on a distilled encoder, are both unexplored. VII. C ONCLUSION 
+
+RIDGE combines a smooth state-conditioned blend over persona rewards with a critic carrying one value head per persona, letting a single PPO agent shift between play styles within an episode without breaking value-function learning. In Crafter, one R IDGE agent reaches both the Wood Pickaxe and Sword, a split no fixed-persona baseline solves, and a sharpness ablation confirms state-conditioning, not the persona set alone, drives the gain. Three extensions would tighten these claims further. While we now report n = 3 seeds across all conditions, additional seeds would replace the current min/max bands with confi-dence intervals. A hard-switch run ( α → ∞ ) would put Li’s dilemma [3] under direct test; our α = 2 .0 approaches but does not reach it. Finally, a single-head version of R IDGE would separate the multi-head critic’s contribution from the smooth blend’s contribution. While Crafter is currently the only tested environment, these initial results demonstrate R IDGE ’s poten-tial for training highly adaptable agents. REFERENCES 
+
+[1] C. Holmgård et al. , “Automated playtesting with procedural personas through MCTS with evolved heuristics,” IEEE Transactions on Games , vol. 11, no. 4, pp. 352–362, 2019. [2] D. Hafner, “Benchmarking the spectrum of agent capabilities,” in International Conference on Learning Representations (ICLR) , 2022. [3] Y. Li, When adaptive rewards hurt: Causal probing and the switching-stability dilemma in LLM-guided LEO satellite scheduling , 2026. [4] S. Moalla et al. , “No representation, no trust: Connecting representation, col-lapse, and trust issues in PPO,” in Advances in Neural Information Processing Systems (NeurIPS) , 2024. [5] S. Moon et al. , “Discovering hierarchical achievements in reinforcement learn-ing via contrastive learning,” in Advances in Neural Information Processing Systems (NeurIPS) , 2023. [6] S. Ariyurek, E. Surer, and A. Betin-Can, “Playtesting: What is beyond per-sonas,” IEEE Transactions on Games , 2022. [7] C. Gordillo et al. , “Improving playtesting coverage via curiosity driven re-inforcement learning agents,” in IEEE Conference on Games (CoG) , 2021, pp. 1–8. [8] W. Ahlberg et al. , “Generating personas for games with multimodal adversarial imitation learning,” in IEEE Conference on Games (CoG) , 2023, pp. 1–8. [9] A. Cilan and A. Özgövde, Learning controllable and diverse player behaviors in multi-agent environments , 2025. [10] C. Huang et al. , “Reward-adaptive reinforcement learning: Dynamic policy gradient optimization for bipedal locomotion,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 6, pp. 7686–7695, 2023. [11] H. Mossalam et al. , “Multi-objective deep reinforcement learning,” in NIPS Workshop on Deep Reinforcement Learning , 2016. [12] K. Van Moffaert and A. Nowé, “Multi-objective reinforcement learning using sets of Pareto dominating policies,” Journal of Machine Learning Research ,vol. 15, pp. 3483–3512, 2014. [13] L. Espeholt et al. , “IMPALA: Scalable distributed deep-RL with importance weighted actor-learner architectures,” in Proceedings of the 35th International Conference on Machine Learning (ICML) , 2018. [14] J. Schulman et al. , High-dimensional continuous control using generalized advantage estimation , 2016. [15] J. Schulman et al. , Proximal policy optimization algorithms , 2017. [16] P. Henderson et al. , “Deep reinforcement learning that matters,” in Proceedings of the Thirty-Second AAAI Conference on Artificial Intelligence , 2018.

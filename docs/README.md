@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-11-05</span>
+      <span class="dpr-home-dashboard-kicker">2026-11-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 18 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 17 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-11-05 00:18:00 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-11-06 00:44:22 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日从18篇论文中精读6篇、速读12篇，重点锁定RLVR训练中的“首要偏差”与跨3D游戏世界的分层目标动作学习。最值得看的是9.0分的《On the Primacy Bias in RLVR Training》，其次是8.0分的AceAction-5M；速读中的奖励缩放与交互式HTML生成也可按兴趣跟进。普通读者可先读9.0分这篇建立问题意识，再结合AceAction-5M理解分层目标如何落地。</p>
+<p>今日共生成 17 篇推荐（精读 5 篇，速读 12 篇）</p>
+<p>精读：《RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents》（9.0/10）, 《What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?》（9.0/10）</p>
+<p>速读：《Diversity-Aware Experience Replay via Statistical Leverage Scores》（7.0/10）, 《Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning》（7.0/10）, 《Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains》（7.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +81,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="On the Primacy Bias in RLVR Training">On the Primacy Bias in RLVR Training</span></li><li><span class="dpr-home-dashboard-paper-title" title="AceAction-5M: Hierarchical Goals for Generalist Action Learning Across 3D Game Worlds">AceAction-5M: Hierarchical Goals for Generalist Action Learning Across 3D Game Worlds</span></li><li><span class="dpr-home-dashboard-paper-title" title="Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards">Cooperative Multi-Agent Reinforcement Learning with Submodular Trajectory Rewards</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents">RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?">What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?</span></li><li><span class="dpr-home-dashboard-paper-title" title="Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man">Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +97,9 @@
     <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ReSI-Math: Exploring Recoverable Capability Frontiers for Efficient Reasoning Improvement">ReSI-Math: Exploring Recoverable Capability Frontiers for Efficient Reasoning Improvement</span></li><li><span class="dpr-home-dashboard-paper-title" title="Density-Aware Reward Scaling: A Reinforcement Learning Framework for Reward-Proportional Sampling">Density-Aware Reward Scaling: A Reinforcement Learning Framework for Reward-Proportional Sampling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Catalyzing Interactive HTML Generation Capabilities via High-Fidelity Reinforcement Learning">Catalyzing Interactive HTML Generation Capabilities via High-Fidelity Reinforcement Learning</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Diversity-Aware Experience Replay via Statistical Leverage Scores">Diversity-Aware Experience Replay via Statistical Leverage Scores</span></li><li><span class="dpr-home-dashboard-paper-title" title="Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning">Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains">Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>12</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>10</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
 </section>
 </div>
 
