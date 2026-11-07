@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-11-06</span>
+      <span class="dpr-home-dashboard-kicker">2026-11-07</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 17 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-11-06 00:44:22 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-11-07 00:39:44 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,10 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 17 篇推荐（精读 5 篇，速读 12 篇）</p>
-<p>精读：《RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents》（9.0/10）, 《What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?》（9.0/10）</p>
-<p>速读：《Diversity-Aware Experience Replay via Statistical Leverage Scores》（7.0/10）, 《Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning》（7.0/10）, 《Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains》（7.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>今日无新推荐，系统未产出可展示论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents">RIDGE: State-Conditioned Reward Blending for Behavioral Coverage in Deep RL Game Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?">What Does Multi-Turn Reinforcement Learning Really Improve in LLM Agents?</span></li><li><span class="dpr-home-dashboard-paper-title" title="Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man">Where It Breaks: Diagnosing Perception, Memory, and Decision Failures of a Vision-Language Agent in Pac-Man</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">12 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Diversity-Aware Experience Replay via Statistical Leverage Scores">Diversity-Aware Experience Replay via Statistical Leverage Scores</span></li><li><span class="dpr-home-dashboard-paper-title" title="Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning">Reward Budgeting Reduces Premature Convergence in Reinforcement Learning for LLM Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains">Rubric Curriculum RL: Exploiting the Generation-Verification Gap in Non-Verifiable Domains</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">rl-agents <strong>10</strong></span><span class="dpr-home-dashboard-tag">game-llm-rl <strong>2</strong></span></div>
+
 </section>
 </div>
 
